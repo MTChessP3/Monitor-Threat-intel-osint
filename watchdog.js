@@ -1,80 +1,59 @@
-/**
- * Process watchdog - keeps Next.js server running.
- * If the server dies, restarts it automatically.
- */
+// Simple watchdog - restarts the server if it crashes
 const { spawn } = require('child_process');
 const http = require('http');
 
-const PORT = 3000;
-const CHECK_INTERVAL = 5000; // Check every 5 seconds
-const MAX_RESTARTS = 10;
-let restartCount = 0;
-let serverProcess = null;
+function checkServer() {
+  return new Promise((resolve) => {
+    const req = http.get('http://127.0.0.1:3000/', (res) => {
+      resolve(res.statusCode === 200);
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(3000, () => { req.destroy(); resolve(false); });
+  });
+}
 
 function startServer() {
-  console.log(`[Watchdog] Starting Next.js server (attempt ${restartCount + 1})...`);
-
-  serverProcess = spawn('npx', ['next', 'start', '-p', '3000', '-H', '0.0.0.0'], {
-    cwd: '/home/z/my-project',
-    stdio: 'pipe',
-    detached: false,
+  console.log(`[${new Date().toISOString()}] Starting server...`);
+  const child = spawn('node', ['.next/standalone/server.js'], {
+    cwd: process.cwd(),
+    env: { ...process.env, NODE_ENV: 'production' },
+    detached: true,
+    stdio: 'ignore'
   });
-
-  serverProcess.stdout?.on('data', (data) => {
-    const msg = data.toString().trim();
-    if (msg) console.log(`[Next.js] ${msg}`);
-  });
-
-  serverProcess.stderr?.on('data', (data) => {
-    const msg = data.toString().trim();
-    if (msg) console.error(`[Next.js] ${msg}`);
-  });
-
-  serverProcess.on('exit', (code) => {
-    console.log(`[Watchdog] Server exited with code ${code}`);
-    serverProcess = null;
-  });
+  child.unref();
+  return child.pid;
 }
 
-function checkServer() {
-  const req = http.request({
-    hostname: '127.0.0.1',
-    port: PORT,
-    path: '/',
-    method: 'GET',
-    timeout: 5000,
-  }, (res) => {
-    if (res.statusCode === 200) {
-      // Server is healthy
-      restartCount = 0; // Reset on successful check
-    } else {
-      console.log(`[Watchdog] Server returned ${res.statusCode}`);
+async function main() {
+  // Check if already running
+  if (await checkServer()) {
+    console.log('Server already running');
+  } else {
+    const pid = startServer();
+    // Wait for server to be ready
+    for (let i = 0; i < 15; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      if (await checkServer()) {
+        console.log(`Server started (PID: ${pid})`);
+        break;
+      }
     }
-    res.resume();
-  });
+  }
 
-  req.on('error', () => {
-    // Server is down
-    if (!serverProcess && restartCount < MAX_RESTARTS) {
-      restartCount++;
-      console.log(`[Watchdog] Server is down, restarting...`);
-      startServer();
-    } else if (restartCount >= MAX_RESTARTS) {
-      console.error(`[Watchdog] Max restarts reached. Giving up.`);
+  // Watchdog loop
+  setInterval(async () => {
+    if (!(await checkServer())) {
+      console.log(`[${new Date().toISOString()}] Server down, restarting...`);
+      const pid = startServer();
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        if (await checkServer()) {
+          console.log(`[${new Date().toISOString()}] Server restarted (PID: ${pid})`);
+          break;
+        }
+      }
     }
-  });
-
-  req.on('timeout', () => {
-    req.destroy();
-  });
-
-  req.end();
+  }, 15000);
 }
 
-// Initial start
-startServer();
-
-// Check periodically
-setInterval(checkServer, CHECK_INTERVAL);
-
-console.log('[Watchdog] Started. Monitoring server on port ' + PORT);
+main();
