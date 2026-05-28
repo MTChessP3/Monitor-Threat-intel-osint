@@ -30,8 +30,14 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files (contains secrets - NEVER commit)
+.env
+.env.local
+.env.production
+.env*.local
+
+# Allow .env.example to be committed
+!.env.example
 
 # vercel
 .vercel
@@ -39,25 +45,32 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Z AI config (contains API keys)
+.z-ai-config
+
+# Logs
+*.log
+
+# Local dev artifacts
 local-*
 .claude
-.z-ai-config
-*.log
-dev.log
-dev.out.log
 test
 prompt
 
-server.log
-watchdog.log
+# Server/PM2 scripts (local only)
 watchdog.js
+watchdog-keepalive.sh
 run-server.sh
 start-server.sh
+start.sh
 backend-server.js
 unified-server.js
 ai-backend.js
 ai-worker.js
 watchdog-server.js
+server.pid
+Caddyfile
 
 # Local SQLite database
 db/
@@ -65,3 +78,18 @@ db/
 
 # Skills directory
 /skills/
+
+# Upload directory (user files)
+/upload/
+
+# Download directory (generated files)
+/download/
+
+# Agent context
+/agent-ctx/
+
+# Worklog
+worklog.md
+
+# Examples
+/examples/

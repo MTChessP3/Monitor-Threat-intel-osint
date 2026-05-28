@@ -4,6 +4,25 @@ import ZAI from 'z-ai-web-dev-sdk';
 export const maxDuration = 60;
 
 // ============================================================================
+// ZAI SDK HELPER - Uses environment variables instead of .z-ai-config file
+// This makes it compatible with Vercel's serverless environment
+// ============================================================================
+async function createZAI(): Promise<InstanceType<typeof ZAI>> {
+  // Try environment variables first (for Vercel deployment)
+  if (process.env.ZAI_BASE_URL && process.env.ZAI_API_KEY) {
+    return new ZAI({
+      baseUrl: process.env.ZAI_BASE_URL,
+      apiKey: process.env.ZAI_API_KEY,
+      chatId: process.env.ZAI_CHAT_ID || '',
+      token: process.env.ZAI_TOKEN || '',
+      userId: process.env.ZAI_USER_ID || '',
+    });
+  }
+  // Fallback to ZAI.create() which reads from .z-ai-config file (local dev)
+  return ZAI.create();
+}
+
+// ============================================================================
 // THREAT INTELLIGENCE DATABASE (from scripts/analyze.js)
 // Comprehensive threat intelligence database for Colombia VIP protection
 // ============================================================================
@@ -427,7 +446,7 @@ async function handleAnalyze(data: { urls?: string[]; searchQueries?: string[] }
   const urls = data.urls || [];
   const searchQueries = data.searchQueries || [];
 
-  const zai = await ZAI.create();
+  const zai = await createZAI();
   const allRawData: Array<{
     sourceName: string; sourceUrl: string; snippet: string;
     hostname: string; searchQuery: string; category: string; date: string;
@@ -682,7 +701,7 @@ Responde SOLO con JSON valido:
 async function handleGenerateReport(data: { templateContent?: string; analysis: Record<string, unknown> }) {
   const { templateContent = '', analysis } = data;
 
-  const zai = await ZAI.create();
+  const zai = await createZAI();
 
   const threatsDetail = ((analysis.threats || []) as Array<{ title: string; description: string; severity: string; category: string }>).map((t, i) =>
     `AMENAZA ${i + 1} [${(t.severity || 'medio').toUpperCase()}] - ${t.title}:\n${t.description}\nCategoria: ${t.category || 'seguridad'}\nSeveridad: ${t.severity || 'medio'}`
@@ -844,7 +863,7 @@ async function handleUpdateReport(data: {
 }) {
   const { existingContent, additionalUrls = [], additionalNews = '', additionalContext = '', templateContent = '' } = data;
 
-  const zai = await ZAI.create();
+  const zai = await createZAI();
   const collectedData: Array<{ sourceName: string; sourceUrl: string; snippet: string; date: string }> = [];
 
   // Search additional URLs
