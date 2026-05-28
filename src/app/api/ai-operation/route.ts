@@ -43,8 +43,10 @@ export async function POST(request: Request) {
     writeFileSync(tmpFile, JSON.stringify(inputData), 'utf-8');
 
     // Pass temp file path as argument - scripts read from it
+    // Analyze can take up to 5 minutes with retries, generate-report up to 3 minutes
+    const timeout = operation === 'analyze' ? 360000 : 240000;
     const { stdout, stderr } = await execFileAsync('node', [scriptPath, tmpFile], {
-      timeout: 180000,
+      timeout,
       maxBuffer: 20 * 1024 * 1024,
       cwd: process.cwd(),
       env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=512' },

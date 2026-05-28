@@ -59,6 +59,8 @@ interface AnalysisResult {
   summary: string;
   recommendations: string[];
   sources: Array<{ title: string; url: string; relevance: string }>;
+  rawData?: Array<{ sourceName: string; sourceUrl: string; snippet: string; hostname: string; searchQuery: string; category: string; date: string }>;
+  rawDataText?: string;
 }
 
 interface Report {
@@ -339,15 +341,23 @@ export default function Home() {
     setAnalysisResult(null);
 
     try {
-      setAnalysisStep('Recopilando información de fuentes...');
+      setAnalysisStep('Consultando fuentes de inteligencia OSINT...');
       setAnalysisProgress(10);
       await new Promise(r => setTimeout(r, 300));
 
-      setAnalysisStep('Buscando información relevante...');
-      setAnalysisProgress(25);
+      setAnalysisStep(`Buscando en ${activeSourcesCount} fuentes activas...`);
+      setAnalysisProgress(20);
 
       const urls = sources.filter(s => s.active).map(s => s.url);
-      const queries = searchQuery.trim() ? searchQuery.split(',').map(q => q.trim()) : ['amenazas seguridad VIP protección'];
+      const queries = searchQuery.trim()
+        ? searchQuery.split(',').map(q => q.trim()).filter(q => q.length > 0)
+        : [
+            'amenazas seguridad ejecutivos Colombia 2025 2026',
+            'ciberseguridad phishing ejecutivos Colombia 2025 2026',
+            'secuestro extorsión empresarios Colombia 2025 2026',
+            'protección VIP riesgos digitales Colombia 2025 2026',
+            'criminalidad organizada Colombia directivos 2025 2026'
+          ];
 
       const res = await fetch('/api/ai-operation', {
         method: 'POST',
@@ -355,8 +365,8 @@ export default function Home() {
         body: JSON.stringify({ operation: 'analyze', data: { urls, searchQueries: queries } }),
       });
 
-      setAnalysisStep('Procesando datos con inteligencia artificial...');
-      setAnalysisProgress(60);
+      setAnalysisStep('Analizando datos recopilados con IA...');
+      setAnalysisProgress(50);
 
       if (res.ok) {
         const data = await res.json();
