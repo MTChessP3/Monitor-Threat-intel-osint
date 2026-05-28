@@ -340,11 +340,11 @@ export default function Home() {
 
     try {
       setAnalysisStep('Recopilando información de fuentes...');
-      setAnalysisProgress(15);
-      await new Promise(r => setTimeout(r, 500));
+      setAnalysisProgress(10);
+      await new Promise(r => setTimeout(r, 300));
 
       setAnalysisStep('Buscando información relevante...');
-      setAnalysisProgress(35);
+      setAnalysisProgress(25);
 
       const urls = sources.filter(s => s.active).map(s => s.url);
       const queries = searchQuery.trim() ? searchQuery.split(',').map(q => q.trim()) : ['amenazas seguridad VIP protección'];
@@ -356,7 +356,7 @@ export default function Home() {
       });
 
       setAnalysisStep('Procesando datos con inteligencia artificial...');
-      setAnalysisProgress(70);
+      setAnalysisProgress(60);
 
       if (res.ok) {
         const data = await res.json();
@@ -365,10 +365,17 @@ export default function Home() {
         setAnalysisProgress(100);
         toast.success('Análisis completado exitosamente');
       } else {
-        toast.error('Error en el análisis');
+        let errorMsg = 'Error en el análisis';
+        try {
+          const errorData = await res.json();
+          errorMsg = errorData.error || errorMsg;
+        } catch {
+          // Use default error message
+        }
+        toast.error(errorMsg, { duration: 8000 });
       }
     } catch {
-      toast.error('Error de conexión durante el análisis');
+      toast.error('Error de conexión durante el análisis. Intente nuevamente.', { duration: 8000 });
     } finally {
       setIsAnalyzing(false);
     }
@@ -587,6 +594,14 @@ export default function Home() {
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
+          {/* Quick Upload Button in Sidebar */}
+          <button
+            onClick={() => { setActiveTab('plantillas'); setTimeout(() => fileInputRef.current?.click(), 300); }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold gold-gradient text-background mb-3 hover:opacity-90 transition-all"
+          >
+            <Upload className="w-4 h-4" />
+            Subir Plantilla
+          </button>
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -645,6 +660,14 @@ export default function Home() {
                 </button>
               </div>
               <nav className="p-4 space-y-1">
+                {/* Quick Upload Button in Mobile Sidebar */}
+                <button
+                  onClick={() => { setActiveTab('plantillas'); setSidebarOpen(false); setTimeout(() => fileInputRef.current?.click(), 300); }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold gold-gradient text-background mb-3 hover:opacity-90 transition-all"
+                >
+                  <Upload className="w-4 h-4" />
+                  Subir Plantilla
+                </button>
                 {navItems.map((item) => (
                   <button
                     key={item.id}
@@ -904,57 +927,71 @@ export default function Home() {
                 transition={{ duration: 0.3 }}
                 className="space-y-6"
               >
+                {/* PROMINENT FILE UPLOAD SECTION */}
+                <Card className="border-2 border-amber-500/40 bg-card/80 shadow-lg shadow-amber-500/10">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Upload className="w-5 h-5 text-amber-500" />
+                      Subir Documento Oficial (Plantilla)
+                    </CardTitle>
+                    <CardDescription className="text-sm">
+                      Suba su documento oficial o plantilla aqui. El sistema la llenara automaticamente con la informacion de inteligencia recopilada de las fuentes y noticias.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Large File Upload Area */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.docx,.txt,.md"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingFile}
+                      className="w-full flex flex-col items-center justify-center gap-4 p-10 rounded-xl border-3 border-dashed border-amber-500/60 hover:border-amber-500 bg-amber-500/5 hover:bg-amber-500/10 transition-all duration-300 cursor-pointer group"
+                    >
+                      {isUploadingFile ? (
+                        <>
+                          <Loader2 className="w-12 h-12 text-amber-500 animate-spin" />
+                          <span className="text-base text-muted-foreground font-medium">Procesando archivo...</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-16 h-16 rounded-full bg-amber-500/15 flex items-center justify-center group-hover:bg-amber-500/25 transition-colors">
+                            <Upload className="w-8 h-8 text-amber-500" />
+                          </div>
+                          <div className="text-center">
+                            <p className="text-lg font-bold text-foreground">HAGA CLIC AQUI PARA SUBIR SU PLANTILLA</p>
+                            <p className="text-sm text-muted-foreground mt-2">Formatos soportados: PDF, DOCX, TXT, MD</p>
+                          </div>
+                        </>
+                      )}
+                    </button>
+                    {uploadedFileName && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                        <CheckCircle className="w-5 h-5 text-emerald-400" />
+                        <div>
+                          <span className="text-sm font-medium text-emerald-400">{uploadedFileName} cargado exitosamente</span>
+                          <p className="text-xs text-muted-foreground mt-0.5">El contenido se ha cargado en el campo de texto abajo. Puede editarlo si lo desea.</p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* New Template Form */}
                   <Card className="border-border bg-card/80">
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
                         <Plus className="w-4 h-4 text-amber-500" />
-                        Documento Oficial del Informe
+                        Configurar y Guardar Plantilla
                       </CardTitle>
-                      <CardDescription>Entregue su documento o plantilla oficial y el sistema la llenará con información de inteligencia</CardDescription>
+                      <CardDescription>Si subio un archivo, el contenido ya esta cargado. Ajuste el nombre y guarde la plantilla.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {/* File Upload Area */}
-                      <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">Subir Documento Oficial</Label>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept=".pdf,.docx,.txt,.md"
-                          onChange={handleFileUpload}
-                          className="hidden"
-                        />
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={isUploadingFile}
-                          className="w-full flex flex-col items-center justify-center gap-3 p-6 rounded-lg border-2 border-dashed border-border hover:border-amber-500/50 bg-muted/20 hover:bg-amber-500/5 transition-all duration-300 cursor-pointer group"
-                        >
-                          {isUploadingFile ? (
-                            <>
-                              <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
-                              <span className="text-sm text-muted-foreground">Procesando archivo...</span>
-                            </>
-                          ) : (
-                            <>
-                              <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
-                                <Upload className="w-6 h-6 text-amber-500" />
-                              </div>
-                              <div className="text-center">
-                                <p className="text-sm font-medium text-foreground">Haga clic para subir su plantilla</p>
-                                <p className="text-xs text-muted-foreground mt-1">PDF, DOCX, TXT o MD</p>
-                              </div>
-                            </>
-                          )}
-                        </button>
-                        {uploadedFileName && (
-                          <div className="flex items-center gap-2 p-2 rounded-md bg-emerald-500/10 border border-emerald-500/20">
-                            <CheckCircle className="w-4 h-4 text-emerald-400" />
-                            <span className="text-xs text-emerald-400">{uploadedFileName} cargado</span>
-                          </div>
-                        )}
-                      </div>
-
                       <div className="space-y-2">
                         <Label className="text-xs text-muted-foreground">Nombre de la Plantilla</Label>
                         <Input
@@ -969,7 +1006,7 @@ export default function Home() {
                         <Textarea
                           value={templateContent}
                           onChange={(e) => setTemplateContent(e.target.value)}
-                          placeholder={`Suba su archivo o pegue aquí su documento oficial. El sistema lo llenará automáticamente con la información de inteligencia recopilada.\n\n# INFORME EJECUTIVO DE PROTECCIÓN VIP\n\n## Resumen Ejecutivo\n...\n\n## Amenazas Detectadas\n...`}
+                          placeholder={`Suba su archivo arriba o pegue aqui su documento oficial. El sistema lo llenara automaticamente con la informacion de inteligencia recopilada.\n\n# INFORME EJECUTIVO DE PROTECCION VIP\n\n## Resumen Ejecutivo\n...\n\n## Amenazas Detectadas\n...`}
                           className="min-h-48 bg-muted/30 border-border focus:border-amber-500/50 font-mono text-xs"
                         />
                       </div>

@@ -19,10 +19,11 @@ export async function POST(request: Request) {
     );
 
     return NextResponse.json(analysis);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error in analysis:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error al realizar el análisis de inteligencia';
     return NextResponse.json(
-      { error: 'Error al realizar el análisis de inteligencia' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

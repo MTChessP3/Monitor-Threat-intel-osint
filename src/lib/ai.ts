@@ -15,10 +15,29 @@ export async function webSearch(query: string, num: number = 10) {
   return result;
 }
 
-export async function webReader(url: string) {
+export async function webReader(url: string): Promise<string> {
   const zai = await getAI();
-  const result = await zai.functions.invoke("web_reader", { url });
-  return result;
+  try {
+    const result = await zai.functions.invoke("web_reader", { url });
+    if (typeof result === 'string') return result;
+    if (result && typeof result === 'object') {
+      // Try to extract content from the reader result
+      if (result.content) return typeof result.content === 'string' ? result.content : JSON.stringify(result.content);
+      if (result.html) return typeof result.html === 'string' ? result.html : JSON.stringify(result.html);
+      if (result.text) return typeof result.text === 'string' ? result.text : JSON.stringify(result.text);
+      return JSON.stringify(result);
+    }
+    return JSON.stringify(result);
+  } catch (error) {
+    console.error(`web_reader failed for ${url}:`, error);
+    // Fallback: try web search as alternative
+    try {
+      const searchResult = await zai.functions.invoke("web_search", { query: url, num: 3 });
+      return JSON.stringify(searchResult);
+    } catch {
+      throw new Error(`No se pudo leer la URL: ${url}`);
+    }
+  }
 }
 
 export async function chatCompletion(messages: { role: string; content: string }[]) {
@@ -51,31 +70,54 @@ export async function analyzeIntelligence(
   searchQueries: string[]
 ): Promise<AnalysisResult> {
   const collectedData: string[] = [];
+  const errors: string[] = [];
 
-  // Fetch content from URLs
-  for (const url of urls) {
+  // Fetch content from URLs (with parallel processing for speed)
+  const urlPromises = urls.map(async (url) => {
     try {
       const readerResult = await webReader(url);
-      const content = typeof readerResult === 'string'
-        ? readerResult
-        : JSON.stringify(readerResult);
-      collectedData.push(`Fuente URL: ${url}\n${content.substring(0, 3000)}`);
-    } catch {
-      collectedData.push(`Error al leer URL: ${url}`);
+      return `Fuente URL: ${url}\n${readerResult.substring(0, 3000)}`;
+    } catch (err) {
+      errors.push(`URL no accesible: ${url}`);
+      return null;
+    }
+  });
+
+  const urlResults = await Promise.allSettled(urlPromises);
+  for (const result of urlResults) {
+    if (result.status === 'fulfilled' && result.value) {
+      collectedData.push(result.value);
     }
   }
 
-  // Search for relevant news
-  for (const query of searchQueries) {
+  // Search for relevant news (with parallel processing)
+  const searchPromises = searchQueries.map(async (query) => {
     try {
       const searchResult = await webSearch(query, 5);
       const content = typeof searchResult === 'string'
         ? searchResult
         : JSON.stringify(searchResult);
-      collectedData.push(`Búsqueda: ${query}\n${content.substring(0, 3000)}`);
-    } catch {
-      collectedData.push(`Error en búsqueda: ${query}`);
+      return `Búsqueda: ${query}\n${content.substring(0, 3000)}`;
+    } catch (err) {
+      errors.push(`Búsqueda fallida: ${query}`);
+      return null;
     }
+  });
+
+  const searchResults = await Promise.allSettled(searchPromises);
+  for (const result of searchResults) {
+    if (result.status === 'fulfilled' && result.value) {
+      collectedData.push(result.value);
+    }
+  }
+
+  if (collectedData.length === 0) {
+    throw new Error('No se pudo obtener información de ninguna fuente. Verifique las URLs y consultas de búsqueda.');
+  }
+
+  // Add error context if some sources failed
+  if (errors.length > 0) {
+    collectedData.push(`Nota: Algunas fuentes no estuvieron disponibles:\n${errors.join('\n')}`);
   }
 
   // Use AI to analyze collected data
