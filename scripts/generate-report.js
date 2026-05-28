@@ -1,4 +1,4 @@
-// Generate report - runs as child process (memory optimized)
+// Generate report - runs as child process
 const ZAI = require('z-ai-web-dev-sdk').default;
 
 const input = JSON.parse(process.argv[2] || '{}');
@@ -7,62 +7,93 @@ const input = JSON.parse(process.argv[2] || '{}');
   const zai = await ZAI.create();
   const { templateContent, analysis } = input;
 
-  // Build detailed threats section
   const threatsDetail = (analysis.threats || []).map(t =>
-    `- [${t.severity?.toUpperCase() || 'MEDIO'}] ${t.title}: ${t.description} (Categoría: ${t.category || 'seguridad'})`
+    `[${(t.severity || 'medio').toUpperCase()}] ${t.title}: ${t.description} (${t.category || 'seguridad'})`
   ).join('\n');
 
-  // Build recommendations section
-  const recommendations = (analysis.recommendations || []).map(r => `- ${r}`).join('\n');
+  const recommendations = (analysis.recommendations || []).slice(0, 8).join('; ');
 
-  // Build sources section
-  const sourcesList = (analysis.sources || []).map(s => `- ${s.title || s.url}: ${s.relevance || 'Fuente de inteligencia'}`).join('\n');
+  const sourcesList = (analysis.sources || []).map(s =>
+    `${s.title || s.url}: ${s.relevance || ''}`
+  ).join('; ');
 
-  // Template guidance
-  const templateGuidance = templateContent && templateContent.trim().length > 10
-    ? `PLANTILLA OFICIAL DEL USUARIO (DEBE SEGUIR esta estructura y llenar las secciones con la información de inteligencia recopilada):\n${templateContent.substring(0, 3000)}\n\nINSTRUCCIÓN CRÍTICA: Usa la estructura de la plantilla anterior y LLENA cada sección con la información de inteligencia real. Mantén los títulos y formato de la plantilla.`
-    : 'Usa el formato estándar de informe de inteligencia ejecutiva VIP que se proporciona a continuación.';
+  let rawDataSummary = '';
+  if (analysis.rawDataText) {
+    rawDataSummary = analysis.rawDataText.substring(0, 3000);
+  } else if (analysis.rawData && analysis.rawData.length > 0) {
+    rawDataSummary = analysis.rawData.slice(0, 12).map((item, i) =>
+      `[${i+1}] ${item.sourceName}: ${item.snippet}`
+    ).join('\n');
+  }
 
-  const prompt = `Genera un INFORME DE INTELIGENCIA EJECUTIVA VIP completo y profesional en formato Markdown en español.
+  const hasTemplate = templateContent && templateContent.trim().length > 50;
 
-${templateGuidance}
+  let prompt;
 
-DATOS DEL ANÁLISIS DE INTELIGENCIA:
-- Nivel de Riesgo General: ${analysis.overallRiskLevel || 'medio'}
-- Resumen: ${analysis.summary || 'Sin resumen disponible'}
+  if (hasTemplate) {
+    prompt = `Genera un informe de inteligencia ejecutiva en Markdown espanol usando EXACTAMENTE esta plantilla:
 
-AMENAZAS DETECTADAS:
-${threatsDetail || 'No se detectaron amenazas específicas'}
+---
+${templateContent.substring(0, 4500)}
+---
+
+DATOS DE INTELIGENCIA RECOPILADOS DE FUENTES REALES:
+- Nivel de Riesgo: ${analysis.overallRiskLevel || 'medio'}
+- Resumen: ${analysis.summary || 'Sin resumen'}
+
+AMENAZAS DETECTADAS (de fuentes reales):
+${threatsDetail || 'No se detectaron amenazas especificas'}
+
+INFORMACION ESPECIFICA DE FUENTES:
+${rawDataSummary || 'Ver fuentes consultadas'}
 
 RECOMENDACIONES:
-${recommendations || 'Monitoreo continuo recomendado'}
+${recommendations || 'Monitoreo continuo'}
 
-FUENTES DE INTELIGENCIA:
+FUENTES CONSULTADAS:
 ${sourcesList || 'Fuentes clasificadas'}
 
-REQUISITOS DEL INFORME:
-1. Encabezado con clasificación y fecha
-2. Resumen ejecutivo detallado (mínimo 3 párrafos)
-3. Evaluación del nivel de amenaza con justificación
-4. Análisis detallado de cada amenaza detectada
-5. Matriz de riesgos con probabilidad e impacto
-6. Recomendaciones operativas específicas y accionables
-7. Protocolos de seguridad sugeridos
-8. Conclusiones y próximos pasos
-9. Lista de fuentes consultadas
+INSTRUCCIONES CRITICAS:
+1. USA LA ESTRUCTURA EXACTA DE LA PLANTILLA - mismos titulos, mismas secciones, mismo orden
+2. Manten intactas las secciones legales (Confidencialidad, Descargo)
+3. LLENA cada seccion vacia con informacion REAL de las fuentes
+4. En Hallazgos Clave: lista TODOS los hallazgos con referencias a fuentes
+5. En Evidencia Tecnica: incluye datos especificos (URLs, fechas, cifras)
+6. En Monitoreo de amenazas: diagnostico basado en datos reales
+7. En Conclusiones: resumen con datos concretos y proximos pasos
+8. En Referencias: TODAS las fuentes con URLs
+9. Menciona de que fuente viene cada dato
+10. NO inventes informacion - solo datos de las fuentes
+11. Se EXTENSO y PROFESIONAL`;
 
-Genera el informe completo en Markdown con formato profesional. Sé extenso y detallado.`;
+  } else {
+    prompt = `Genera informe de inteligencia ejecutiva profesional en Markdown.
+
+Nivel de Riesgo: ${analysis.overallRiskLevel || 'medio'}
+Resumen: ${analysis.summary || 'Sin resumen'}
+
+AMENAZAS:
+${threatsDetail || 'No detectadas'}
+
+FUENTES:
+${rawDataSummary.substring(0, 2000)}
+
+RECOMENDACIONES:
+${recommendations}
+
+Menciona fuentes especificas. Extenso y profesional.`;
+  }
 
   const completion = await zai.chat.completions.create({
     messages: [
-      { role: 'system', content: 'Eres un redactor senior de informes de inteligencia ejecutiva VIP. Generas informes profesionales, detallados y bien estructurados en formato Markdown en español. Los informes deben ser extensos, con análisis profundo y recomendaciones accionables.' },
+      { role: 'system', content: 'Eres un redactor senior de informes de inteligencia ejecutiva y ciberseguridad. Generas informes detallados y profesionales basados en datos reales. NUNCA inventas informacion. Siempre mencionas la fuente de cada dato. Formato Markdown en espanol.' },
       { role: 'user', content: prompt }
     ],
-    temperature: 0.4,
-    max_tokens: 4000,
+    temperature: 0.3,
+    max_tokens: 3000,
   });
 
-  const content = completion.choices?.[0]?.message?.content || 'Error al generar el informe. Por favor intente nuevamente.';
+  const content = completion.choices?.[0]?.message?.content || 'Error al generar informe.';
   process.stdout.write(JSON.stringify({ content }));
 })().catch(e => {
   process.stderr.write(e.message);
