@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+db
+prisma/dev.db
+upload
+download
+skills
+agent-ctx
+*.db
+*.log

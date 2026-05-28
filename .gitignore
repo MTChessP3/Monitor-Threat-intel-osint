@@ -93,3 +93,5 @@ worklog.md
 
 # Examples
 /examples/
+db/custom.db
+.env*

@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Search, BarChart3, Activity, Eye, ChevronRight,
   Loader2, CheckCircle, XCircle, Menu, X, Zap, Target, TrendingUp,
   BookOpen, Newspaper, Play, RefreshCw, ExternalLink, Pencil, FileDown,
-  Upload
+  Upload, CheckSquare, Square, Filter, ListChecks, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -121,8 +121,11 @@ export default function Home() {
   const [sourceType, setSourceType] = useState('web');
   const [sourceCategory, setSourceCategory] = useState('seguridad');
 
+  // Source selection for analysis
+  const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(new Set());
+
   // Analysis states
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
@@ -331,8 +334,12 @@ export default function Home() {
 
   // Analysis
   const handleAnalyze = async () => {
-    if (!searchQuery.trim() && sources.length === 0) {
-      toast.error('Añada fuentes o consultas de búsqueda');
+    const hasSelectedSources = selectedSourceIds.size > 0;
+    const hasSelectedCategories = selectedCategories.size > 0;
+    const allActiveSources = sources.filter(s => s.active);
+
+    if (!hasSelectedSources && allActiveSources.length === 0 && !hasSelectedCategories) {
+      toast.error('Seleccione fuentes o categorías de análisis');
       return;
     }
 
@@ -345,19 +352,28 @@ export default function Home() {
       setAnalysisProgress(10);
       await new Promise(r => setTimeout(r, 300));
 
-      setAnalysisStep(`Buscando en ${activeSourcesCount} fuentes activas...`);
+      // Use selected sources, or all active sources if none specifically selected
+      const activeSources = hasSelectedSources
+        ? sources.filter(s => selectedSourceIds.has(s.id))
+        : allActiveSources;
+      const urls = activeSources.map(s => s.url);
+
+      setAnalysisStep(`Buscando en ${activeSources.length} fuente(s) seleccionada(s)...`);
       setAnalysisProgress(20);
 
-      const urls = sources.filter(s => s.active).map(s => s.url);
-      const queries = searchQuery.trim()
-        ? searchQuery.split(',').map(q => q.trim()).filter(q => q.length > 0)
-        : [
-            'amenazas seguridad ejecutivos Colombia 2025 2026',
-            'ciberseguridad phishing ejecutivos Colombia 2025 2026',
-            'secuestro extorsión empresarios Colombia 2025 2026',
-            'protección VIP riesgos digitales Colombia 2025 2026',
-            'criminalidad organizada Colombia directivos 2025 2026'
-          ];
+      // Build queries from selected categories or defaults
+      let queries: string[];
+      if (hasSelectedCategories) {
+        queries = Array.from(selectedCategories).map(catId => categorySearchMap[catId]).filter(Boolean);
+      } else {
+        queries = [
+          'amenazas seguridad ejecutivos Colombia 2025 2026',
+          'ciberseguridad phishing ejecutivos Colombia 2025 2026',
+          'secuestro extorsión empresarios Colombia 2025 2026',
+          'protección VIP riesgos digitales Colombia 2025 2026',
+          'criminalidad organizada Colombia directivos 2025 2026'
+        ];
+      }
 
       const res = await fetch('/api/ai-operation', {
         method: 'POST',
@@ -624,8 +640,80 @@ export default function Home() {
     }
   };
 
+  // Industry classification categories for analysis
+  const industryCategories = [
+    { id: 'amenazas-vip', label: 'Amenazas Seguridad VIP', icon: Shield, color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+    { id: 'conflictos-politicos', label: 'Conflictos Políticos', icon: AlertTriangle, color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+    { id: 'riesgos-ejecutiva', label: 'Riesgos Protección Ejecutiva', icon: Shield, color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+    { id: 'ciberseguridad', label: 'Ciberseguridad', icon: Globe, color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+    { id: 'crimen-organizado', label: 'Crimen Organizado', icon: Target, color: 'bg-rose-500/20 text-rose-400 border-rose-500/30' },
+    { id: 'secuestro-extorsion', label: 'Secuestro y Extorsión', icon: AlertTriangle, color: 'bg-red-600/20 text-red-500 border-red-600/30' },
+    { id: 'fraude-corporativo', label: 'Fraude Corporativo', icon: FileText, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    { id: 'seguridad-fisica', label: 'Seguridad Física', icon: Shield, color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    { id: 'inteligencia-competitiva', label: 'Inteligencia Competitiva', icon: Brain, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+    { id: 'seguridad-informacion', label: 'Seguridad de la Información', icon: Globe, color: 'bg-sky-500/20 text-sky-400 border-sky-500/30' },
+    { id: 'geopolitica', label: 'Geopolítica', icon: Globe, color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
+    { id: 'riesgos-financieros', label: 'Riesgos Financieros', icon: TrendingUp, color: 'bg-green-500/20 text-green-400 border-green-500/30' },
+    { id: 'seguridad-digital', label: 'Seguridad Digital', icon: Globe, color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
+    { id: 'proteccion-datos', label: 'Protección de Datos', icon: Shield, color: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
+    { id: 'seguridad-viajes', label: 'Seguridad en Viajes', icon: Activity, color: 'bg-lime-500/20 text-lime-400 border-lime-500/30' },
+  ];
+
+  // Map category IDs to search queries
+  const categorySearchMap: Record<string, string> = {
+    'amenazas-vip': 'amenazas seguridad ejecutivos VIP Colombia 2025 2026',
+    'conflictos-politicos': 'conflictos políticos Colombia impacto seguridad 2025 2026',
+    'riesgos-ejecutiva': 'riesgos protección ejecutiva directivos Colombia 2025 2026',
+    'ciberseguridad': 'ciberseguridad phishing ataques ejecutivos Colombia 2025 2026',
+    'crimen-organizado': 'criminalidad organizada Colombia directivos empresarios 2025 2026',
+    'secuestro-extorsion': 'secuestro extorsión empresarios Colombia 2025 2026',
+    'fraude-corporativo': 'fraude corporativo estafa empresa Colombia 2025 2026',
+    'seguridad-fisica': 'seguridad física protección ejecutiva Colombia 2025 2026',
+    'inteligencia-competitiva': 'inteligencia competitiva espionaje industrial Colombia 2025 2026',
+    'seguridad-informacion': 'seguridad información filtración datos Colombia 2025 2026',
+    'geopolitica': 'geopolítica Colombia riesgos regionales 2025 2026',
+    'riesgos-financieros': 'riesgos financieros lavado activos Colombia 2025 2026',
+    'seguridad-digital': 'seguridad digital amenazas cibernéticas Colombia 2025 2026',
+    'proteccion-datos': 'protección datos privacidad información Colombia 2025 2026',
+    'seguridad-viajes': 'seguridad viajes riesgos movilidad ejecutivos Colombia 2025 2026',
+  };
+
+  // Toggle source selection
+  const toggleSourceSelection = (id: string) => {
+    setSelectedSourceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllSources = () => {
+    if (selectedSourceIds.size === sources.length) {
+      setSelectedSourceIds(new Set());
+    } else {
+      setSelectedSourceIds(new Set(sources.map(s => s.id)));
+    }
+  };
+
+  // Toggle category selection
+  const toggleCategory = (id: string) => {
+    setSelectedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllCategories = () => {
+    if (selectedCategories.size === industryCategories.length) {
+      setSelectedCategories(new Set());
+    } else {
+      setSelectedCategories(new Set(industryCategories.map(c => c.id)));
+    }
+  };
+
   // Stats
-  const activeSourcesCount = sources.filter(s => s.active).length;
+  const activeSourcesCount = selectedSourceIds.size > 0 ? selectedSourceIds.size : sources.filter(s => s.active).length;
   const detectedThreats = analysisResult?.threats?.length || 0;
   const currentRiskLevel = analysisResult?.overallRiskLevel || 'bajo';
 
@@ -1242,10 +1330,20 @@ export default function Home() {
                         <Newspaper className="w-4 h-4 text-amber-500" />
                         Fuentes Registradas
                       </CardTitle>
-                      <Badge variant="outline" className="text-xs">
-                        {sources.length} fuente(s)
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {selectedSourceIds.size > 0 && (
+                          <Badge className="text-xs gold-gradient text-background font-semibold">
+                            {selectedSourceIds.size} seleccionada(s)
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-xs">
+                          {sources.length} fuente(s)
+                        </Badge>
+                      </div>
                     </div>
+                    <CardDescription className="text-xs">
+                      Seleccione las fuentes que desea utilizar para el análisis e informe de inteligencia
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     {loadingSources ? (
@@ -1259,50 +1357,85 @@ export default function Home() {
                         <p className="text-xs mt-1">Añada fuentes para comenzar el análisis</p>
                       </div>
                     ) : (
-                      <ScrollArea className="max-h-96">
-                        <div className="space-y-2">
-                          {sources.map((source) => (
-                            <div
-                              key={source.id}
-                              className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/20 hover:bg-muted/30 transition-colors"
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${categoryColors[source.category] || 'bg-gray-500/20 text-gray-400'}`}>
-                                  {source.type === 'rss' ? <Activity className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium truncate">{source.name}</p>
-                                    <Badge variant="outline" className="text-xs shrink-0">{source.type.toUpperCase()}</Badge>
-                                    <Badge className={`text-xs shrink-0 ${categoryColors[source.category] || ''}`}>
-                                      {source.category}
-                                    </Badge>
-                                  </div>
-                                  <p className="text-xs text-muted-foreground truncate max-w-xs lg:max-w-lg">
-                                    {source.url}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <a
-                                  href={source.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                                >
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                                <button
-                                  onClick={() => handleDeleteSource(source.id)}
-                                  className="p-2 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
+                      <>
+                        {/* Select All Bar */}
+                        <div className="flex items-center justify-between mb-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                          <button
+                            onClick={toggleSelectAllSources}
+                            className="flex items-center gap-2 text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors"
+                          >
+                            {selectedSourceIds.size === sources.length ? (
+                              <CheckSquare className="w-4 h-4" />
+                            ) : (
+                              <Square className="w-4 h-4" />
+                            )}
+                            {selectedSourceIds.size === sources.length ? 'Deseleccionar todas' : 'Seleccionar todas'}
+                          </button>
+                          <span className="text-xs text-muted-foreground">
+                            Las fuentes seleccionadas se usarán para el análisis
+                          </span>
                         </div>
-                      </ScrollArea>
+                        <ScrollArea className="max-h-96">
+                          <div className="space-y-2">
+                            {sources.map((source) => {
+                              const isSelected = selectedSourceIds.has(source.id);
+                              return (
+                                <div
+                                  key={source.id}
+                                  className={`flex items-center justify-between p-4 rounded-lg border transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/15'
+                                      : 'border-border bg-muted/20 hover:bg-muted/30'
+                                  }`}
+                                  onClick={() => toggleSourceSelection(source.id)}
+                                >
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    {/* Checkbox */}
+                                    <div className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                                      isSelected
+                                        ? 'border-amber-500 bg-amber-500'
+                                        : 'border-muted-foreground/40'
+                                    }`}>
+                                      {isSelected && <CheckCircle className="w-3.5 h-3.5 text-background" />}
+                                    </div>
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${categoryColors[source.category] || 'bg-gray-500/20 text-gray-400'}`}>
+                                      {source.type === 'rss' ? <Activity className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <p className={`text-sm font-medium truncate ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}>{source.name}</p>
+                                        <Badge variant="outline" className="text-xs shrink-0">{source.type.toUpperCase()}</Badge>
+                                        <Badge className={`text-xs shrink-0 ${categoryColors[source.category] || ''}`}>
+                                          {source.category}
+                                        </Badge>
+                                      </div>
+                                      <p className="text-xs text-muted-foreground truncate max-w-xs lg:max-w-lg">
+                                        {source.url}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                    <a
+                                      href={source.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                    <button
+                                      onClick={() => handleDeleteSource(source.id)}
+                                      className="p-2 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      </>
                     )}
                   </CardContent>
                 </Card>
@@ -1327,42 +1460,121 @@ export default function Home() {
                       Análisis de Inteligencia con IA
                     </CardTitle>
                     <CardDescription>
-                      Configure las fuentes y consultas para el análisis automatizado
+                      Seleccione las clasificaciones de la industria a investigar y las fuentes a consultar
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">Consultas de Búsqueda (separadas por coma)</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="amenazas seguridad VIP, conflictos políticos, riesgos protección ejecutiva"
-                          className="bg-muted/30 border-border focus:border-amber-500/50"
-                        />
-                        <Button
-                          onClick={handleAnalyze}
-                          disabled={isAnalyzing}
-                          className="gold-gradient text-background font-semibold hover:opacity-90 shrink-0"
+                  <CardContent className="space-y-6">
+                    {/* Industry Classification Categories - Dynamic Menu */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-semibold flex items-center gap-2">
+                          <Filter className="w-4 h-4 text-amber-500" />
+                          Clasificaciones de la Industria
+                        </Label>
+                        <button
+                          onClick={toggleSelectAllCategories}
+                          className="flex items-center gap-1.5 text-xs font-medium text-amber-400 hover:text-amber-300 transition-colors"
                         >
-                          {isAnalyzing ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          {selectedCategories.size === industryCategories.length ? (
+                            <>
+                              <CheckSquare className="w-3.5 h-3.5" />
+                              Deseleccionar todas
+                            </>
                           ) : (
-                            <Play className="w-4 h-4 mr-2" />
+                            <>
+                              <Square className="w-3.5 h-3.5" />
+                              Seleccionar todas
+                            </>
                           )}
-                          Analizar
-                        </Button>
+                        </button>
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        Seleccione las áreas de inteligencia que desea investigar. Cada categoría generará una búsqueda especializada.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {industryCategories.map((cat) => {
+                          const isSelected = selectedCategories.has(cat.id);
+                          const IconComp = cat.icon;
+                          return (
+                            <button
+                              key={cat.id}
+                              onClick={() => toggleCategory(cat.id)}
+                              className={`flex items-center gap-2.5 p-3 rounded-lg border text-left transition-all duration-200 ${
+                                isSelected
+                                  ? `border-amber-500/50 bg-amber-500/10 shadow-sm shadow-amber-500/10`
+                                  : 'border-border bg-muted/20 hover:bg-muted/30'
+                              }`}
+                            >
+                              <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-amber-500/20 text-amber-400' : cat.color}`}>
+                                <IconComp className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-xs font-medium leading-tight ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                  {cat.label}
+                                </p>
+                              </div>
+                              <div className={`shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                                isSelected
+                                  ? 'border-amber-500 bg-amber-500'
+                                  : 'border-muted-foreground/30'
+                              }`}>
+                                {isSelected && <CheckCircle className="w-2.5 h-2.5 text-background" />}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {selectedCategories.size > 0 && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge className="text-xs gold-gradient text-background font-semibold">
+                            {selectedCategories.size} categoría(s) seleccionada(s)
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            → Se generarán {selectedCategories.size} búsquedas especializadas
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Active Sources Summary */}
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Globe className="w-3 h-3" />
-                      <span>{activeSourcesCount} fuentes activas serán analizadas</span>
-                      <Button variant="link" size="sm" className="text-amber-500 p-0 h-auto text-xs" onClick={() => setActiveTab('fuentes')}>
-                        Gestionar fuentes
-                      </Button>
+                    <Separator />
+
+                    {/* Selected Sources Summary */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-semibold flex items-center gap-2">
+                        <ListChecks className="w-4 h-4 text-amber-500" />
+                        Fuentes Seleccionadas para el Análisis
+                      </Label>
+                      {selectedSourceIds.size > 0 ? (
+                        <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge className="text-xs gold-gradient text-background font-semibold">
+                              {selectedSourceIds.size} fuente(s)
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">serán consultadas en el análisis</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {sources
+                              .filter(s => selectedSourceIds.has(s.id))
+                              .map(s => (
+                                <Badge key={s.id} variant="outline" className="text-xs border-amber-500/30 text-amber-400">
+                                  {s.name}
+                                </Badge>
+                              ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-lg bg-muted/20 border border-border">
+                          <p className="text-xs text-muted-foreground">
+                            No ha seleccionado fuentes específicas. Se usarán todas las fuentes activas ({sources.filter(s => s.active).length} disponible(s)).
+                          </p>
+                          <Button variant="link" size="sm" className="text-amber-500 p-0 h-auto text-xs mt-1" onClick={() => setActiveTab('fuentes')}>
+                            Ir a seleccionar fuentes →
+                          </Button>
+                        </div>
+                      )}
                     </div>
+
+                    <Separator />
 
                     {/* Template Selection */}
                     <div className="space-y-2">
@@ -1380,6 +1592,21 @@ export default function Home() {
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {/* Analyze Button */}
+                    <Button
+                      onClick={handleAnalyze}
+                      disabled={isAnalyzing}
+                      className="w-full gold-gradient text-background font-semibold hover:opacity-90"
+                      size="lg"
+                    >
+                      {isAnalyzing ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Play className="w-4 h-4 mr-2" />
+                      )}
+                      {isAnalyzing ? 'Analizando...' : `Iniciar Análisis${selectedCategories.size > 0 ? ` (${selectedCategories.size} categorías)` : ''}`}
+                    </Button>
 
                     {/* Progress */}
                     {isAnalyzing && (
@@ -1517,12 +1744,31 @@ export default function Home() {
                             <Search className="w-4 h-4 text-amber-500" />
                             Fuentes Consultadas
                           </CardTitle>
+                          <CardDescription className="text-xs">
+                            {selectedSourceIds.size > 0
+                              ? `${selectedSourceIds.size} fuente(s) seleccionada(s) para este análisis`
+                              : 'Fuentes encontradas durante la investigación'}
+                          </CardDescription>
                         </CardHeader>
                         <CardContent>
                           <ScrollArea className="max-h-64">
                             <div className="space-y-2">
+                              {/* Show user-selected sources first */}
+                              {selectedSourceIds.size > 0 && sources.filter(s => selectedSourceIds.has(s.id)).map((source) => (
+                                <div key={`sel-${source.id}`} className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                                  <CheckCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium truncate">{source.name}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{source.url}</p>
+                                    <Badge className={`text-xs mt-0.5 ${categoryColors[source.category] || ''}`}>
+                                      {source.category}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              ))}
+                              {/* Then show AI-discovered sources */}
                               {analysisResult.sources.map((source, i) => (
-                                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/20">
+                                <div key={`ai-${i}`} className="flex items-start gap-3 p-3 rounded-lg bg-muted/20">
                                   <Globe className="w-4 h-4 text-sky-500 mt-0.5 shrink-0" />
                                   <div className="min-w-0">
                                     <p className="text-sm font-medium truncate">{source.title}</p>

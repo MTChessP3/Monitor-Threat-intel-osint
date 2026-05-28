@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 -H ::",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint .",
@@ -12,8 +12,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev --name init",
     "db:reset": "prisma migrate reset",
-    "db:seed": "npx tsx prisma/seed.ts",
-    "vercel-build": "prisma generate && prisma migrate deploy && next build"
+    "db:seed": "npx tsx prisma/seed.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
