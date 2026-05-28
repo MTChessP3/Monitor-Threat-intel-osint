@@ -1,51 +1,73 @@
-// Generate report - runs as child process
+// Generate report - reads input from temp file (path passed as argv[2])
 const ZAI = require('z-ai-web-dev-sdk').default;
-
-const input = JSON.parse(process.argv[2] || '{}');
+const fs = require('fs');
 
 (async () => {
+  const inputFile = process.argv[2];
+  let input = {};
+  try {
+    const raw = fs.readFileSync(inputFile, 'utf-8');
+    input = JSON.parse(raw);
+  } catch (e) {
+    process.stderr.write('Error reading input: ' + e.message);
+    process.exit(1);
+  }
+
   const zai = await ZAI.create();
   const { templateContent, analysis } = input;
 
   const threatsDetail = (analysis.threats || []).map(t =>
-    `[${(t.severity || 'medio').toUpperCase()}] ${t.title}: ${t.description} (${t.category || 'seguridad'})`
-  ).join('\n');
+    `[${(t.severity || 'medio').toUpperCase()}] ${t.title}:\n${t.description}\nCategoria: ${t.category || 'seguridad'}`
+  ).join('\n\n');
 
-  const recommendations = (analysis.recommendations || []).slice(0, 8).join('; ');
+  const recommendations = (analysis.recommendations || []).map((r, i) => `${i + 1}. ${r}`).join('\n');
 
   const sourcesList = (analysis.sources || []).map(s =>
-    `${s.title || s.url}: ${s.relevance || ''}`
-  ).join('; ');
+    `- ${s.title || s.url}: ${s.relevance || 'Fuente consultada'}`
+  ).join('\n');
 
   let rawDataSummary = '';
   if (analysis.rawDataText) {
-    rawDataSummary = analysis.rawDataText.substring(0, 3000);
+    rawDataSummary = analysis.rawDataText.substring(0, 5000);
   } else if (analysis.rawData && analysis.rawData.length > 0) {
-    rawDataSummary = analysis.rawData.slice(0, 12).map((item, i) =>
-      `[${i+1}] ${item.sourceName}: ${item.snippet}`
-    ).join('\n');
+    rawDataSummary = analysis.rawData.slice(0, 15).map((item, i) =>
+      `[${i + 1}] Fuente: ${item.sourceName}\n    URL: ${item.sourceUrl}\n    Contenido: ${item.snippet}\n    Busqueda: ${item.searchQuery}`
+    ).join('\n\n');
   }
 
   const hasTemplate = templateContent && templateContent.trim().length > 50;
 
-  let prompt;
+  let systemPrompt = `Eres el REDACTOR JEFE de informes de inteligencia ejecutiva de una agencia de proteccion VIP. Tienes experiencia redactando informes clasificados para ejecutivos C-suite y directores de seguridad.
+
+CARACTERISTICAS:
+- Lenguaje tecnico pero accesible para ejecutivos
+- Cada dato se atribuye a su fuente especifica
+- Analisis profundo y detallado
+- Recomendaciones accionables con prioridad
+- Formato Markdown profesional
+- NUNCA inventas informacion
+- Si hay poca informacion, indicas limitaciones`;
+
+  let userPrompt;
 
   if (hasTemplate) {
-    prompt = `Genera un informe de inteligencia ejecutiva en Markdown espanol usando EXACTAMENTE esta plantilla:
+    userPrompt = `Genera un INFORME DE INTELIGENCIA EJECUTIVA usando EXACTAMENTE la estructura de la plantilla.
 
+PLANTILLA OFICIAL (USA ESTA ESTRUCTURA):
 ---
-${templateContent.substring(0, 4500)}
+${templateContent.substring(0, 6000)}
 ---
 
-DATOS DE INTELIGENCIA RECOPILADOS DE FUENTES REALES:
-- Nivel de Riesgo: ${analysis.overallRiskLevel || 'medio'}
-- Resumen: ${analysis.summary || 'Sin resumen'}
+NIVEL DE RIESGO: ${analysis.overallRiskLevel || 'medio'}
 
-AMENAZAS DETECTADAS (de fuentes reales):
-${threatsDetail || 'No se detectaron amenazas especificas'}
+RESUMEN DEL ANALISIS:
+${analysis.summary || 'Sin resumen'}
 
-INFORMACION ESPECIFICA DE FUENTES:
-${rawDataSummary || 'Ver fuentes consultadas'}
+AMENAZAS DETECTADAS:
+${threatsDetail || 'No se detectaron amenazas'}
+
+INFORMACION DE FUENTES:
+${rawDataSummary || 'Informacion limitada'}
 
 RECOMENDACIONES:
 ${recommendations || 'Monitoreo continuo'}
@@ -53,44 +75,48 @@ ${recommendations || 'Monitoreo continuo'}
 FUENTES CONSULTADAS:
 ${sourcesList || 'Fuentes clasificadas'}
 
-INSTRUCCIONES CRITICAS:
-1. USA LA ESTRUCTURA EXACTA DE LA PLANTILLA - mismos titulos, mismas secciones, mismo orden
-2. Manten intactas las secciones legales (Confidencialidad, Descargo)
-3. LLENA cada seccion vacia con informacion REAL de las fuentes
-4. En Hallazgos Clave: lista TODOS los hallazgos con referencias a fuentes
-5. En Evidencia Tecnica: incluye datos especificos (URLs, fechas, cifras)
-6. En Monitoreo de amenazas: diagnostico basado en datos reales
-7. En Conclusiones: resumen con datos concretos y proximos pasos
-8. En Referencias: TODAS las fuentes con URLs
-9. Menciona de que fuente viene cada dato
-10. NO inventes informacion - solo datos de las fuentes
-11. Se EXTENSO y PROFESIONAL`;
+INSTRUCCIONES:
+1. USA LA ESTRUCTURA EXACTA DE LA PLANTILLA
+2. Manten secciones legales intactas
+3. LLENA cada seccion con informacion REAL de las fuentes
+4. Menciona de que fuente viene cada dato
+5. Se EXTENSO y PROFESIONAL - minimo 2000 palabras
+6. Formato Markdown con headers, listas y negritas
+7. NO inventes informacion
+
+REDACTA EL INFORME:`;
 
   } else {
-    prompt = `Genera informe de inteligencia ejecutiva profesional en Markdown.
+    userPrompt = `Genera un INFORME DE INTELIGENCIA EJECUTIVA profesional para proteccion VIP.
 
-Nivel de Riesgo: ${analysis.overallRiskLevel || 'medio'}
-Resumen: ${analysis.summary || 'Sin resumen'}
+NIVEL DE RIESGO: ${analysis.overallRiskLevel || 'medio'}
+
+RESUMEN:
+${analysis.summary || 'Sin resumen'}
 
 AMENAZAS:
 ${threatsDetail || 'No detectadas'}
 
-FUENTES:
-${rawDataSummary.substring(0, 2000)}
+INFORMACION DE FUENTES:
+${rawDataSummary.substring(0, 3000) || 'Limitada'}
 
 RECOMENDACIONES:
-${recommendations}
+${recommendations || 'Monitoreo continuo'}
 
-Menciona fuentes especificas. Extenso y profesional.`;
+FUENTES:
+${sourcesList || 'Fuentes clasificadas'}
+
+ESTRUCTURA: Resumen Ejecutivo, Amenazas Detalladas, Evidencia, Recomendaciones, Conclusiones, Referencias.
+Se extenso y profesional. Formato Markdown. Menciona fuentes.`;
   }
 
   const completion = await zai.chat.completions.create({
     messages: [
-      { role: 'system', content: 'Eres un redactor senior de informes de inteligencia ejecutiva y ciberseguridad. Generas informes detallados y profesionales basados en datos reales. NUNCA inventas informacion. Siempre mencionas la fuente de cada dato. Formato Markdown en espanol.' },
-      { role: 'user', content: prompt }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
     ],
-    temperature: 0.3,
-    max_tokens: 3000,
+    temperature: 0.25,
+    max_tokens: 6000,
   });
 
   const content = completion.choices?.[0]?.message?.content || 'Error al generar informe.';

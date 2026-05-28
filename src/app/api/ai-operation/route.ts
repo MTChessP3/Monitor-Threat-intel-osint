@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { writeFileSync, unlinkSync } from 'fs';
 import path from 'path';
+import os from 'os';
 
 const execFileAsync = promisify(execFile);
 
 export async function POST(request: Request) {
+  const tmpFiles: string[] = [];
+  
   try {
     const body = await request.json();
     const { operation, data } = body;
@@ -21,20 +25,29 @@ export async function POST(request: Request) {
 
     const scriptPath = path.join(process.cwd(), 'scripts', scriptName);
     
-    // For analyze, pass urls and queries as separate args
-    // For others, pass the whole data object
-    let args: string[];
+    // Write data to a temp file to avoid command line escaping issues
+    const tmpDir = os.tmpdir();
+    const tmpFile = path.join(tmpDir, `vip-ai-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+    tmpFiles.push(tmpFile);
+
+    let inputData: Record<string, unknown>;
     if (operation === 'analyze') {
-      args = [JSON.stringify(data.urls || []), JSON.stringify(data.searchQueries || [])];
+      inputData = {
+        urls: data.urls || [],
+        searchQueries: data.searchQueries || []
+      };
     } else {
-      args = [JSON.stringify(data)];
+      inputData = data;
     }
 
-    const { stdout, stderr } = await execFileAsync('node', [scriptPath, ...args], {
-      timeout: 180000, // 3 minutes timeout for AI operations
-      maxBuffer: 20 * 1024 * 1024, // 20MB buffer for large reports
+    writeFileSync(tmpFile, JSON.stringify(inputData), 'utf-8');
+
+    // Pass temp file path as argument - scripts read from it
+    const { stdout, stderr } = await execFileAsync('node', [scriptPath, tmpFile], {
+      timeout: 180000,
+      maxBuffer: 20 * 1024 * 1024,
       cwd: process.cwd(),
-      env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=256' },
+      env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=512' },
     });
 
     if (stderr && !stderr.includes('ExperimentalWarning') && !stderr.includes('DeprecationWarning')) {
@@ -47,5 +60,10 @@ export async function POST(request: Request) {
     console.error('AI operation error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Error en la operación de IA';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
+  } finally {
+    // Clean up temp files
+    for (const f of tmpFiles) {
+      try { unlinkSync(f); } catch {}
+    }
   }
 }

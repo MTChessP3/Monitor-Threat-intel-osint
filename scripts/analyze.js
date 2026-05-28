@@ -1,27 +1,33 @@
-// Analyze intelligence - runs as child process
-// This script searches EACH source individually and collects real information
+// Analyze intelligence - reads input from temp file (path passed as argv[2])
 const ZAI = require('z-ai-web-dev-sdk').default;
-
-const urls = JSON.parse(process.argv[2] || '[]');
-const searchQueries = JSON.parse(process.argv[3] || '[]');
+const fs = require('fs');
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 (async () => {
+  const inputFile = process.argv[2];
+  let input = {};
+  try {
+    const raw = fs.readFileSync(inputFile, 'utf-8');
+    input = JSON.parse(raw);
+  } catch (e) {
+    process.stderr.write('Error reading input: ' + e.message);
+    process.exit(1);
+  }
+
+  const urls = input.urls || [];
+  const searchQueries = input.searchQueries || [];
+
   const zai = await ZAI.create();
-  const allRawData = []; // Store ALL raw collected data
+  const allRawData = [];
 
   // === PHASE 1: Collect information from EACH source ===
-  
-  // Build queries - one per source URL plus user queries
   const searchTasks = [];
-  
-  // Add user-provided search queries
+
   for (const q of searchQueries) {
     searchTasks.push({ type: 'query', value: q });
   }
-  
-  // Add source-specific searches - search for content ON each source
+
   for (const url of urls) {
     try {
       const hostname = new URL(url).hostname;
@@ -30,47 +36,46 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
       searchTasks.push({ type: 'source', value: url, hostname: url });
     }
   }
-  
-  // Default if nothing provided
+
   if (searchTasks.length === 0) {
-    searchTasks.push({ type: 'query', value: 'proteccion digital ejecutivos amenazas ciberseguridad 2026' });
-    searchTasks.push({ type: 'query', value: 'seguridad VIP amenazas inteligencia OSINT' });
-    searchTasks.push({ type: 'query', value: 'phishing ejecutivos fraude digital Colombia 2026' });
+    searchTasks.push({ type: 'query', value: 'proteccion digital ejecutivos amenazas ciberseguridad Colombia 2026' });
+    searchTasks.push({ type: 'query', value: 'seguridad VIP Colombia amenazas secuestro extorsion 2026' });
+    searchTasks.push({ type: 'query', value: 'phishing ejecutivos fraude digital Colombia Bancolombia 2026' });
+    searchTasks.push({ type: 'query', value: 'inteligencia OSINT amenazas empresariales Colombia 2026' });
+    searchTasks.push({ type: 'query', value: 'ciberataques bancarios Colombia seguridad informatica 2026' });
   }
 
-  // Execute searches with delays to avoid rate limiting
   for (let i = 0; i < searchTasks.length; i++) {
     const task = searchTasks[i];
     let query;
-    
+
     if (task.type === 'source') {
-      // Search specifically for content from this source
-      query = `site:${task.hostname} seguridad amenazas proteccion digital ejecutivos`;
+      query = `site:${task.hostname} seguridad amenazas proteccion digital ejecutivos Colombia`;
     } else {
       query = task.value;
     }
-    
+
     try {
-      const result = await zai.functions.invoke('web_search', { query, num: 8 });
+      const result = await zai.functions.invoke('web_search', { query, num: 10 });
       if (result && Array.isArray(result) && result.length > 0) {
         for (const item of result) {
           allRawData.push({
-            sourceName: item.name || 'Unknown',
+            sourceName: item.name || 'Desconocido',
             sourceUrl: item.url || '',
             snippet: item.snippet || '',
             hostname: item.host_name || task.hostname || '',
             searchType: task.type,
-            searchQuery: query
+            searchQuery: query,
+            date: item.date || ''
           });
         }
       }
     } catch (e) {
-      // Continue with what we have
+      // Continue
     }
-    
-    // Rate limiting delay between searches
+
     if (i < searchTasks.length - 1) {
-      await sleep(2500);
+      await sleep(3000);
     }
   }
 
@@ -78,57 +83,58 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
     process.stdout.write(JSON.stringify({
       threats: [],
       overallRiskLevel: 'bajo',
-      summary: 'No se pudo recopilar informacion de las fuentes. Intente con diferentes terminos de busqueda o verifique que las fuentes esten accesibles.',
-      recommendations: ['Reintentar con terminos mas especificos', 'Verificar accesibilidad de las fuentes'],
+      summary: 'No se pudo recopilar informacion de las fuentes configuradas. Verifique accesibilidad y terminos de busqueda.',
+      recommendations: ['Reintentar con terminos mas especificos', 'Verificar fuentes', 'Anadir fuentes adicionales'],
       sources: [],
-      rawData: []
+      rawData: [],
+      rawDataText: ''
     }));
     return;
   }
 
-  // === PHASE 2: Deep AI analysis of ALL collected data ===
-  
-  // Build comprehensive text of all collected data
+  // === PHASE 2: Deep AI analysis ===
   const rawDataText = allRawData.map((item, idx) => {
-    return `[${idx + 1}] Fuente: ${item.sourceName}\n    URL: ${item.sourceUrl}\n    Contenido: ${item.snippet}\n    Busqueda: ${item.searchQuery}`;
+    return `[${idx + 1}] Fuente: ${item.sourceName}\n    URL: ${item.sourceUrl}\n    Fecha: ${item.date || 'N/A'}\n    Contenido: ${item.snippet}\n    Busqueda: ${item.searchQuery}`;
   }).join('\n\n');
 
-  const analysisPrompt = `Eres un analista SENIOR de inteligencia ejecutiva y ciberseguridad. Analiza DETALLADAMENTE la siguiente informacion recopilada de multiples fuentes de inteligencia.
+  const analysisPrompt = `Eres un ANALISTA SENIOR de inteligencia ejecutiva y ciberseguridad con experiencia en proteccion VIP y contrainteligencia.
 
-INFORMACION RECOPILADA DE FUENTES (OSINT):
+INFORMACION RECOPILADA DE FUENTES OSINT:
 ${rawDataText}
 
-INSTRUCCIONES CRITICAS:
-1. Analiza CADA fragmento de informacion individualmente
-2. Identifica amenazas ESPECIFICAS mencionadas en las fuentes (no genericas)
-3. Extrae datos concretos: nombres, fechas, cifras, ubicaciones, actores
-4. Clasifica por severidad real basada en la evidencia encontrada
-5. Proporciona un resumen ejecutivo DETALLADO con hallazgos especificos
-6. Genera recomendaciones ESPECIFICAS basadas en la informacion recopilada
-7. Lista TODAS las fuentes consultadas con su relevancia
+INSTRUCCIONES:
+1. Analiza CADA fragmento individualmente
+2. Identifica amenazas ESPECIFICAS con datos concretos: actores, fechas, ubicaciones, metodos, cifras
+3. Para cada amenaza: probabilidad, impacto, vector de ataque, medidas de mitigacion
+4. Clasifica severidad basada en EVIDENCIA REAL
+5. Resumen ejecutivo DETALLADO (minimo 200 palabras) con hallazgos y fuentes
+6. Recomendaciones ACCIONABLES y ESPECIFICAS
+7. Lista TODAS las fuentes con su aporte
+8. Identifica patrones y tendencias
 
-Responde SOLO con JSON valido:
+Responde SOLO con JSON:
 {
-  "threats": [
-    {"title": "titulo especifico de la amenaza detectada", "description": "descripcion detallada con datos especificos de las fuentes, menciona que fuente lo reporto", "severity": "bajo|medio|alto|critico", "category": "seguridad|politica|economia|social"}
-  ],
+  "threats": [{"title": "titulo especifico", "description": "descripcion detallada minimo 80 palabras con datos de fuentes", "severity": "bajo|medio|alto|critico", "category": "seguridad|politica|economia|social|ciberseguridad|fisica"}],
   "overallRiskLevel": "bajo|medio|alto|critico",
-  "summary": "Resumen ejecutivo DETALLADO con hallazgos especificos, mencionando fuentes concretas y datos reales",
-  "recommendations": ["recomendacion especifica 1 basada en hallazgos", "recomendacion especifica 2", "..."],
-  "sources": [{"title": "nombre de la fuente", "url": "url", "relevance": "que informacion relevante aporto"}]
+  "summary": "Resumen ejecutivo DETALLADO minimo 200 palabras con hallazgos especificos y fuentes concretas",
+  "recommendations": ["recomendacion accionable 1", "recomendacion 2"],
+  "sources": [{"title": "nombre fuente", "url": "url", "relevance": "que aporto"}]
 }`;
 
   const analysisCompletion = await zai.chat.completions.create({
     messages: [
-      { role: 'system', content: 'Eres un analista de inteligencia de alto nivel. Respondes SOLO con JSON valido. Tu analisis debe ser especifico, detallado y basado en los datos proporcionados. No inventes informacion.' },
+      {
+        role: 'system',
+        content: 'Eres un analista de inteligencia senior. Respondes SOLO con JSON valido. Tu analisis es especifico, detallado y basado en datos proporcionados. No inventas informacion.'
+      },
       { role: 'user', content: analysisPrompt }
     ],
-    temperature: 0.2,
-    max_tokens: 4000,
+    temperature: 0.15,
+    max_tokens: 6000,
   });
 
   const analysisText = analysisCompletion.choices?.[0]?.message?.content || '';
-  
+
   let analysisResult;
   try {
     const m = analysisText.match(/\{[\s\S]*\}/);
@@ -139,18 +145,21 @@ Responde SOLO con JSON valido:
 
   if (!analysisResult || !analysisResult.threats) {
     analysisResult = {
-      threats: [{ title: 'Analisis de seguridad', description: analysisText.substring(0, 1000), severity: 'medio', category: 'seguridad' }],
+      threats: allRawData.slice(0, 5).map(d => ({
+        title: `Hallazgo: ${d.sourceName}`,
+        description: d.snippet,
+        severity: 'medio',
+        category: 'seguridad'
+      })),
       overallRiskLevel: 'medio',
-      summary: analysisText.substring(0, 800),
-      recommendations: ['Monitoreo continuo de fuentes'],
-      sources: allRawData.map(d => ({ title: d.sourceName, url: d.sourceUrl, relevance: d.snippet.substring(0, 200) }))
+      summary: analysisText.substring(0, 1500) || 'Analisis completado con informacion limitada.',
+      recommendations: ['Monitoreo continuo', 'Implementar medidas proactivas', 'Actualizar evaluacion de riesgos'],
+      sources: allRawData.map(d => ({ title: d.sourceName, url: d.sourceUrl, relevance: d.snippet.substring(0, 300) }))
     };
   }
 
-  // Include raw data for report generation - but limit size to avoid command line overflow
-  // Keep only top 15 most relevant items
-  analysisResult.rawData = allRawData.slice(0, 15);
-  analysisResult.rawDataText = rawDataText.substring(0, 4000);
+  analysisResult.rawData = allRawData.slice(0, 20);
+  analysisResult.rawDataText = rawDataText.substring(0, 6000);
 
   process.stdout.write(JSON.stringify(analysisResult));
 })().catch(e => {
