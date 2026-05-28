@@ -394,11 +394,20 @@ export default function Home() {
     try {
       setGeneratingProgress(30);
 
+      // Get the actual template content from the selected template
+      let activeTemplateContent = '';
+      if (selectedTemplateId) {
+        const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+        if (selectedTemplate) {
+          activeTemplateContent = selectedTemplate.content;
+        }
+      }
+
       // Step 1: Generate report content with AI
       const aiRes = await fetch('/api/ai-operation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operation: 'generate-report', data: { templateContent: '', analysis: analysisResult } }),
+        body: JSON.stringify({ operation: 'generate-report', data: { templateContent: activeTemplateContent, analysis: analysisResult } }),
       });
 
       if (!aiRes.ok) {

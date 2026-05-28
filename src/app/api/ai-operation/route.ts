@@ -16,20 +16,30 @@ export async function POST(request: Request) {
       : null;
 
     if (!scriptName) {
-      return NextResponse.json({ error: 'Invalid operation' }, { status: 400 });
+      return NextResponse.json({ error: 'Operación inválida' }, { status: 400 });
     }
 
     const scriptPath = path.join(process.cwd(), 'scripts', scriptName);
-    const args = operation === 'analyze'
-      ? [JSON.stringify(data.urls || []), JSON.stringify(data.searchQueries || [])]
-      : [JSON.stringify(data)];
+    
+    // For analyze, pass urls and queries as separate args
+    // For others, pass the whole data object
+    let args: string[];
+    if (operation === 'analyze') {
+      args = [JSON.stringify(data.urls || []), JSON.stringify(data.searchQueries || [])];
+    } else {
+      args = [JSON.stringify(data)];
+    }
 
-    const { stdout } = await execFileAsync('node', [scriptPath, ...args], {
-      timeout: 120000,
-      maxBuffer: 10 * 1024 * 1024,
+    const { stdout, stderr } = await execFileAsync('node', [scriptPath, ...args], {
+      timeout: 180000, // 3 minutes timeout for AI operations
+      maxBuffer: 20 * 1024 * 1024, // 20MB buffer for large reports
       cwd: process.cwd(),
-      env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=128' },
+      env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=256' },
     });
+
+    if (stderr && !stderr.includes('ExperimentalWarning') && !stderr.includes('DeprecationWarning')) {
+      console.error('Script stderr:', stderr);
+    }
 
     const result = JSON.parse(stdout.trim());
     return NextResponse.json(result);
