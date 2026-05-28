@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, AlertTriangle, FileText, Globe, Brain, Download,
   Plus, Trash2, Search, BarChart3, Activity, Eye, ChevronRight,
   Loader2, CheckCircle, XCircle, Menu, X, Zap, Target, TrendingUp,
-  BookOpen, Newspaper, Play, RefreshCw, ExternalLink, Pencil, FileDown
+  BookOpen, Newspaper, Play, RefreshCw, ExternalLink, Pencil, FileDown,
+  Upload
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -147,6 +148,11 @@ export default function Home() {
   const [editAdditionalContext, setEditAdditionalContext] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // File upload state
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Fetch data functions
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
@@ -204,6 +210,51 @@ export default function Home() {
     fetchSources();
     fetchReports();
   }, [fetchTemplates, fetchSources, fetchReports]);
+
+  // File upload handler
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validExtensions = ['.pdf', '.docx', '.txt', '.md'];
+    const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!validExtensions.includes(ext)) {
+      toast.error('Formato no soportado. Use PDF, DOCX, TXT o MD.');
+      return;
+    }
+
+    setIsUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload-template', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setTemplateContent(data.text);
+        setUploadedFileName(data.fileName);
+        if (!templateName.trim()) {
+          setTemplateName(file.name.replace(/\.[^/.]+$/, ''));
+        }
+        toast.success(`Archivo "${data.fileName}" cargado exitosamente`);
+      } else {
+        const errorData = await res.json();
+        toast.error(errorData.error || 'Error al procesar el archivo');
+      }
+    } catch {
+      toast.error('Error al subir el archivo');
+    } finally {
+      setIsUploadingFile(false);
+      // Reset the file input so the same file can be re-uploaded
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   // Template CRUD
   const handleSaveTemplate = async () => {
@@ -864,6 +915,46 @@ export default function Home() {
                       <CardDescription>Entregue su documento o plantilla oficial y el sistema la llenará con información de inteligencia</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                      {/* File Upload Area */}
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Subir Documento Oficial</Label>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".pdf,.docx,.txt,.md"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploadingFile}
+                          className="w-full flex flex-col items-center justify-center gap-3 p-6 rounded-lg border-2 border-dashed border-border hover:border-amber-500/50 bg-muted/20 hover:bg-amber-500/5 transition-all duration-300 cursor-pointer group"
+                        >
+                          {isUploadingFile ? (
+                            <>
+                              <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                              <span className="text-sm text-muted-foreground">Procesando archivo...</span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+                                <Upload className="w-6 h-6 text-amber-500" />
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm font-medium text-foreground">Haga clic para subir su plantilla</p>
+                                <p className="text-xs text-muted-foreground mt-1">PDF, DOCX, TXT o MD</p>
+                              </div>
+                            </>
+                          )}
+                        </button>
+                        {uploadedFileName && (
+                          <div className="flex items-center gap-2 p-2 rounded-md bg-emerald-500/10 border border-emerald-500/20">
+                            <CheckCircle className="w-4 h-4 text-emerald-400" />
+                            <span className="text-xs text-emerald-400">{uploadedFileName} cargado</span>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="space-y-2">
                         <Label className="text-xs text-muted-foreground">Nombre de la Plantilla</Label>
                         <Input
@@ -878,7 +969,7 @@ export default function Home() {
                         <Textarea
                           value={templateContent}
                           onChange={(e) => setTemplateContent(e.target.value)}
-                          placeholder={`Pegue aquí su documento o plantilla oficial del informe. El sistema la llenará automáticamente con la información de inteligencia recopilada.\n\n# INFORME EJECUTIVO DE PROTECCIÓN VIP\n\n## Resumen Ejecutivo\n...\n\n## Amenazas Detectadas\n...`}
+                          placeholder={`Suba su archivo o pegue aquí su documento oficial. El sistema lo llenará automáticamente con la información de inteligencia recopilada.\n\n# INFORME EJECUTIVO DE PROTECCIÓN VIP\n\n## Resumen Ejecutivo\n...\n\n## Amenazas Detectadas\n...`}
                           className="min-h-48 bg-muted/30 border-border focus:border-amber-500/50 font-mono text-xs"
                         />
                       </div>
