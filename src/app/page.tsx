@@ -7,7 +7,8 @@ import {
   Plus, Trash2, Search, BarChart3, Activity, Eye, ChevronRight,
   Loader2, CheckCircle, XCircle, Menu, X, Zap, Target, TrendingUp,
   BookOpen, Newspaper, Play, RefreshCw, ExternalLink, Pencil, FileDown,
-  Upload, CheckSquare, Square, Filter, ListChecks, ToggleLeft, ToggleRight
+  Upload, CheckSquare, Square, Filter, ListChecks, ToggleLeft, ToggleRight,
+  LogOut, User as UserIcon, Lock, Smartphone
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -100,9 +101,137 @@ const categoryColors: Record<string, string> = {
   social: 'bg-sky-500/20 text-sky-400',
 };
 
+interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  mfaEnabled: boolean;
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('panel');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Auth state
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [mfaSetupModal, setMfaSetupModal] = useState(false);
+  const [mfaQrCode, setMfaQrCode] = useState('');
+  const [mfaSecret, setMfaSecret] = useState('');
+  const [mfaVerifyCode, setMfaVerifyCode] = useState('');
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [disableMfaPassword, setDisableMfaPassword] = useState('');
+  const [disableMfaLoading, setDisableMfaLoading] = useState(false);
+  const [showDisableMfaDialog, setShowDisableMfaDialog] = useState(false);
+
+  // Check auth session
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const res = await fetch('/api/auth/session');
+        if (res.ok) {
+          const data = await res.json();
+          setAuthUser(data.user);
+        } else {
+          window.location.href = '/auth/login';
+        }
+      } catch {
+        window.location.href = '/auth/login';
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    checkSession();
+  }, []);
+
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/auth/login';
+    } catch {
+      toast.error('Error al cerrar sesión');
+    }
+  };
+
+  // MFA Setup handler
+  const handleMfaSetup = async () => {
+    setMfaLoading(true);
+    try {
+      const res = await fetch('/api/auth/mfa/setup', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setMfaQrCode(data.qrCode);
+        setMfaSecret(data.secret);
+        setMfaSetupModal(true);
+      } else {
+        toast.error('Error al configurar MFA');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  // MFA Enable handler
+  const handleMfaEnable = async () => {
+    if (mfaVerifyCode.length !== 6) {
+      toast.error('El código debe tener 6 dígitos');
+      return;
+    }
+    setMfaLoading(true);
+    try {
+      const res = await fetch('/api/auth/mfa/enable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: mfaSecret, code: mfaVerifyCode }),
+      });
+      if (res.ok) {
+        toast.success('MFA activado exitosamente');
+        setMfaSetupModal(false);
+        setMfaVerifyCode('');
+        setAuthUser(prev => prev ? { ...prev, mfaEnabled: true } : null);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Código inválido');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  // MFA Disable handler
+  const handleMfaDisable = async () => {
+    if (!disableMfaPassword) {
+      toast.error('Ingrese su contraseña');
+      return;
+    }
+    setDisableMfaLoading(true);
+    try {
+      const res = await fetch('/api/auth/mfa/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: disableMfaPassword }),
+      });
+      if (res.ok) {
+        toast.success('MFA desactivado');
+        setShowDisableMfaDialog(false);
+        setDisableMfaPassword('');
+        setAuthUser(prev => prev ? { ...prev, mfaEnabled: false } : null);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Error al desactivar MFA');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    } finally {
+      setDisableMfaLoading(false);
+    }
+  };
 
   // Data states
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
@@ -765,12 +894,44 @@ export default function Home() {
               {activeTab === item.id && <ChevronRight className="w-3 h-3 ml-auto" />}
             </button>
           ))}
+          <Separator className="my-2" />
+          <a
+            href="/generar-informe"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15"
+          >
+            <Zap className="w-4 h-4" />
+            Generar Informe
+            <ChevronRight className="w-3 h-3 ml-auto" />
+          </a>
         </nav>
 
-        <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Activity className="w-3 h-3 text-amber-500" />
-            Sistema activo
+        <div className="p-4 border-t border-border space-y-3">
+          {authUser && (
+            <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
+              <div className="w-8 h-8 rounded-full gold-gradient flex items-center justify-center shrink-0">
+                <UserIcon className="w-4 h-4 text-background" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-foreground truncate">{authUser.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{authUser.email}</p>
+              </div>
+              {authUser.mfaEnabled && (
+                <Lock className="w-3 h-3 text-amber-500 shrink-0" />
+              )}
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Activity className="w-3 h-3 text-amber-500" />
+              Sistema activo
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-400 transition-colors"
+            >
+              <LogOut className="w-3 h-3" />
+              Salir
+            </button>
           </div>
         </div>
       </aside>
@@ -830,7 +991,37 @@ export default function Home() {
                     {item.label}
                   </button>
                 ))}
+                <Separator className="my-2" />
+                <a
+                  href="/generar-informe"
+                  onClick={() => setSidebarOpen(false)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15"
+                >
+                  <Zap className="w-4 h-4" />
+                  Generar Informe
+                </a>
               </nav>
+              {authUser && (
+                <div className="p-4 border-t border-border mt-auto space-y-3">
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
+                    <div className="w-8 h-8 rounded-full gold-gradient flex items-center justify-center shrink-0">
+                      <UserIcon className="w-4 h-4 text-background" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground truncate">{authUser.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{authUser.email}</p>
+                    </div>
+                    {authUser.mfaEnabled && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
+                  </div>
+                  <button
+                    onClick={() => { handleLogout(); setSidebarOpen(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <LogOut className="w-3 h-3" />
+                    Cerrar Sesión
+                  </button>
+                </div>
+              )}
             </motion.aside>
           </>
         )}
@@ -866,12 +1057,27 @@ export default function Home() {
                 <Shield className="w-3 h-3 text-amber-500" />
                 Clasificado
               </div>
+              {authUser && (
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  title="Cerrar sesión"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{authUser.name}</span>
+                </button>
+              )}
             </div>
           </div>
         </header>
 
         {/* Content area */}
         <div className="flex-1 p-4 lg:p-8 overflow-auto">
+          {authLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+            </div>
+          ) : (
           <AnimatePresence mode="wait">
             {/* ========== PANEL ========== */}
             {activeTab === 'panel' && (
@@ -1058,6 +1264,67 @@ export default function Home() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Security & Profile Settings */}
+                {authUser && (
+                  <Card className="border-border bg-card/80">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <Lock className="w-4 h-4 text-amber-500" />
+                        Seguridad de la Cuenta
+                      </CardTitle>
+                      <CardDescription>Configuración de seguridad y autenticación</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${authUser.mfaEnabled ? 'bg-emerald-500/20' : 'bg-muted'}`}>
+                            <Smartphone className={`w-5 h-5 ${authUser.mfaEnabled ? 'text-emerald-400' : 'text-muted-foreground'}`} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Autenticación de Doble Factor (MFA)</p>
+                            <p className="text-xs text-muted-foreground">
+                              {authUser.mfaEnabled ? 'Activada — Su cuenta está protegida' : 'Desactivada — Se recomienda activar MFA'}
+                            </p>
+                          </div>
+                        </div>
+                        {authUser.mfaEnabled ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowDisableMfaDialog(true)}
+                            className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                          >
+                            Desactivar
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={handleMfaSetup}
+                            disabled={mfaLoading}
+                            className="gold-gradient text-background font-semibold hover:opacity-90"
+                          >
+                            {mfaLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Activar MFA'}
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                            <Shield className="w-5 h-5 text-amber-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Rol de Usuario</p>
+                            <p className="text-xs text-muted-foreground capitalize">{authUser.role}</p>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20 capitalize">
+                          {authUser.role}
+                        </Badge>
                       </div>
                     </CardContent>
                   </Card>
@@ -1924,6 +2191,7 @@ export default function Home() {
               </motion.div>
             )}
           </AnimatePresence>
+          )}
         </div>
 
         {/* Footer */}
@@ -2053,6 +2321,101 @@ export default function Home() {
             <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="border-border">
               Cancelar
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MFA Setup Dialog */}
+      <Dialog open={mfaSetupModal} onOpenChange={setMfaSetupModal}>
+        <DialogContent className="max-w-md bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-amber-500" />
+              Configurar Autenticación de Doble Factor
+            </DialogTitle>
+            <DialogDescription>
+              Escanee el código QR con Google Authenticator y verifique
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {mfaQrCode && (
+              <div className="flex justify-center">
+                <div className="p-3 bg-white rounded-xl">
+                  <img src={mfaQrCode} alt="QR Code para MFA" width={180} height={180} />
+                </div>
+              </div>
+            )}
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Clave secreta (ingreso manual):</p>
+              <div className="p-2 bg-muted/30 rounded border border-border font-mono text-xs text-foreground break-all select-all">
+                {mfaSecret}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm text-muted-foreground">Código de verificación</Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                placeholder="000000"
+                value={mfaVerifyCode}
+                onChange={(e) => setMfaVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="text-center text-xl tracking-[0.5em] bg-muted/30 border-border focus:border-amber-500/50 h-12 font-mono"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleMfaEnable}
+                disabled={mfaLoading || mfaVerifyCode.length !== 6}
+                className="gold-gradient text-background font-semibold hover:opacity-90 flex-1"
+              >
+                {mfaLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+                {mfaLoading ? 'Verificando...' : 'Verificar y Activar'}
+              </Button>
+              <Button variant="outline" onClick={() => { setMfaSetupModal(false); setMfaVerifyCode(''); }} className="border-border">
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Disable MFA Dialog */}
+      <Dialog open={showDisableMfaDialog} onOpenChange={setShowDisableMfaDialog}>
+        <DialogContent className="max-w-sm bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-5 h-5 text-red-400" />
+              Desactivar MFA
+            </DialogTitle>
+            <DialogDescription>
+              Ingrese su contraseña para desactivar la autenticación de doble factor
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm text-muted-foreground">Contraseña</Label>
+              <Input
+                type="password"
+                placeholder="••••••••"
+                value={disableMfaPassword}
+                onChange={(e) => setDisableMfaPassword(e.target.value)}
+                className="bg-muted/30 border-border focus:border-amber-500/50"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleMfaDisable}
+                disabled={disableMfaLoading || !disableMfaPassword}
+                className="flex-1 bg-red-500/80 hover:bg-red-500 text-white font-semibold"
+              >
+                {disableMfaLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Desactivar MFA'}
+              </Button>
+              <Button variant="outline" onClick={() => { setShowDisableMfaDialog(false); setDisableMfaPassword(''); }} className="border-border">
+                Cancelar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

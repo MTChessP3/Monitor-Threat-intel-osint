@@ -22,6 +22,12 @@ export async function POST(request: Request) {
         content,
         templateId: templateId || null,
         sourcesUsed: JSON.stringify(analysis?.sources?.map((s: { url: string }) => s.url) || []),
+        generationMode: 'automatic',
+        abuseTypes: '[]',
+        severity: analysis?.overallRiskLevel || 'bajo',
+        tlpLevel: 'AMBER',
+        inputUrls: '[]',
+        inputText: '',
       },
     });
 

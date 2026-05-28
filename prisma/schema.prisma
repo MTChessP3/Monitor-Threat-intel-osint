@@ -30,15 +30,33 @@ model NewsSource {
 }
 
 model Report {
-  id          String          @id @default(cuid())
-  title       String
-  date        DateTime        @default(now())
-  summary     String
-  threatLevel String          @default("bajo")
-  content     String
-  templateId  String?
-  template    ReportTemplate? @relation(fields: [templateId], references: [id])
-  sourcesUsed String          @default("[]")
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id              String          @id @default(cuid())
+  title           String
+  date            DateTime        @default(now())
+  summary         String
+  threatLevel     String          @default("bajo")
+  content         String
+  templateId      String?
+  template        ReportTemplate? @relation(fields: [templateId], references: [id])
+  sourcesUsed     String          @default("[]")
+  generationMode  String          @default("automatic")
+  abuseTypes      String          @default("[]")
+  severity        String          @default("medio")
+  tlpLevel        String          @default("GREEN")
+  inputUrls       String          @default("[]")
+  inputText       String          @default("")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model User {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  password   String
+  role       String   @default("analyst")
+  mfaEnabled Boolean  @default(false)
+  mfaSecret  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
