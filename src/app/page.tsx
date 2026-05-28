@@ -1,0 +1,1420 @@
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Shield, AlertTriangle, FileText, Globe, Brain, Download,
+  Plus, Trash2, Search, BarChart3, Activity, Eye, ChevronRight,
+  Loader2, CheckCircle, XCircle, Menu, X, Zap, Target, TrendingUp,
+  BookOpen, Newspaper, Play, RefreshCw, ExternalLink
+} from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
+
+// Types
+interface ReportTemplate {
+  id: string;
+  name: string;
+  content: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface NewsSource {
+  id: string;
+  name: string;
+  url: string;
+  type: string;
+  category: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Threat {
+  title: string;
+  description: string;
+  severity: 'bajo' | 'medio' | 'alto' | 'critico';
+  category: string;
+}
+
+interface AnalysisResult {
+  threats: Threat[];
+  overallRiskLevel: 'bajo' | 'medio' | 'alto' | 'critico';
+  summary: string;
+  recommendations: string[];
+  sources: Array<{ title: string; url: string; relevance: string }>;
+}
+
+interface Report {
+  id: string;
+  title: string;
+  date: string;
+  summary: string;
+  threatLevel: string;
+  content: string;
+  templateId: string | null;
+  sourcesUsed: string;
+  createdAt: string;
+  updatedAt: string;
+  template?: { name: string };
+}
+
+type ActiveTab = 'panel' | 'plantillas' | 'fuentes' | 'analisis' | 'informes';
+
+const threatLevelColors: Record<string, string> = {
+  bajo: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  medio: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  alto: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  critico: 'bg-red-500/20 text-red-400 border-red-500/30',
+};
+
+const threatLevelDots: Record<string, string> = {
+  bajo: 'bg-emerald-500',
+  medio: 'bg-amber-500',
+  alto: 'bg-orange-500',
+  critico: 'bg-red-500',
+};
+
+const categoryColors: Record<string, string> = {
+  seguridad: 'bg-red-500/20 text-red-400',
+  politica: 'bg-purple-500/20 text-purple-400',
+  economia: 'bg-emerald-500/20 text-emerald-400',
+  social: 'bg-sky-500/20 text-sky-400',
+};
+
+export default function Home() {
+  const [activeTab, setActiveTab] = useState<ActiveTab>('panel');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Data states
+  const [templates, setTemplates] = useState<ReportTemplate[]>([]);
+  const [sources, setSources] = useState<NewsSource[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [totalReports, setTotalReports] = useState(0);
+
+  // Template form
+  const [templateName, setTemplateName] = useState('');
+  const [templateContent, setTemplateContent] = useState('');
+  const [templateIsDefault, setTemplateIsDefault] = useState(false);
+
+  // Source form
+  const [sourceName, setSourceName] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [sourceType, setSourceType] = useState('web');
+  const [sourceCategory, setSourceCategory] = useState('seguridad');
+
+  // Analysis states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [analysisStep, setAnalysisStep] = useState('');
+
+  // Report generation
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingProgress, setGeneratingProgress] = useState(0);
+
+  // Report preview
+  const [previewReport, setPreviewReport] = useState<Report | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Loading states
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [loadingSources, setLoadingSources] = useState(false);
+  const [loadingReports, setLoadingReports] = useState(false);
+
+  // Fetch data functions
+  const fetchTemplates = useCallback(async () => {
+    setLoadingTemplates(true);
+    try {
+      const res = await fetch('/api/templates');
+      if (res.ok) {
+        const data = await res.json();
+        setTemplates(data);
+        // Set default template as selected
+        const defaultTpl = data.find((t: ReportTemplate) => t.isDefault);
+        if (defaultTpl && !selectedTemplateId) {
+          setSelectedTemplateId(defaultTpl.id);
+        }
+      }
+    } catch {
+      toast.error('Error al cargar plantillas');
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }, [selectedTemplateId]);
+
+  const fetchSources = useCallback(async () => {
+    setLoadingSources(true);
+    try {
+      const res = await fetch('/api/sources');
+      if (res.ok) {
+        const data = await res.json();
+        setSources(data);
+      }
+    } catch {
+      toast.error('Error al cargar fuentes');
+    } finally {
+      setLoadingSources(false);
+    }
+  }, []);
+
+  const fetchReports = useCallback(async () => {
+    setLoadingReports(true);
+    try {
+      const res = await fetch('/api/reports?limit=20');
+      if (res.ok) {
+        const data = await res.json();
+        setReports(data.reports);
+        setTotalReports(data.total);
+      }
+    } catch {
+      toast.error('Error al cargar informes');
+    } finally {
+      setLoadingReports(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTemplates();
+    fetchSources();
+    fetchReports();
+  }, [fetchTemplates, fetchSources, fetchReports]);
+
+  // Template CRUD
+  const handleSaveTemplate = async () => {
+    if (!templateName.trim() || !templateContent.trim()) {
+      toast.error('Nombre y contenido son requeridos');
+      return;
+    }
+    try {
+      const res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: templateName, content: templateContent, isDefault: templateIsDefault }),
+      });
+      if (res.ok) {
+        toast.success('Plantilla guardada exitosamente');
+        setTemplateName('');
+        setTemplateContent('');
+        setTemplateIsDefault(false);
+        fetchTemplates();
+      } else {
+        toast.error('Error al guardar plantilla');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    }
+  };
+
+  // Source CRUD
+  const handleAddSource = async () => {
+    if (!sourceName.trim() || !sourceUrl.trim()) {
+      toast.error('Nombre y URL son requeridos');
+      return;
+    }
+    try {
+      const res = await fetch('/api/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: sourceName, url: sourceUrl, type: sourceType, category: sourceCategory }),
+      });
+      if (res.ok) {
+        toast.success('Fuente añadida exitosamente');
+        setSourceName('');
+        setSourceUrl('');
+        setSourceType('web');
+        setSourceCategory('seguridad');
+        fetchSources();
+      } else {
+        toast.error('Error al añadir fuente');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    }
+  };
+
+  const handleDeleteSource = async (id: string) => {
+    try {
+      const res = await fetch('/api/sources', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        toast.success('Fuente eliminada');
+        fetchSources();
+      } else {
+        toast.error('Error al eliminar fuente');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    }
+  };
+
+  // Analysis
+  const handleAnalyze = async () => {
+    if (!searchQuery.trim() && sources.length === 0) {
+      toast.error('Añada fuentes o consultas de búsqueda');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setAnalysisProgress(0);
+    setAnalysisResult(null);
+
+    try {
+      setAnalysisStep('Recopilando información de fuentes...');
+      setAnalysisProgress(15);
+      await new Promise(r => setTimeout(r, 500));
+
+      setAnalysisStep('Buscando información relevante...');
+      setAnalysisProgress(35);
+
+      const urls = sources.filter(s => s.active).map(s => s.url);
+      const queries = searchQuery.trim() ? searchQuery.split(',').map(q => q.trim()) : ['amenazas seguridad VIP protección'];
+
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls, searchQueries: queries }),
+      });
+
+      setAnalysisStep('Procesando datos con inteligencia artificial...');
+      setAnalysisProgress(70);
+
+      if (res.ok) {
+        const data = await res.json();
+        setAnalysisResult(data);
+        setAnalysisStep('Análisis completado');
+        setAnalysisProgress(100);
+        toast.success('Análisis completado exitosamente');
+      } else {
+        toast.error('Error en el análisis');
+      }
+    } catch {
+      toast.error('Error de conexión durante el análisis');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Generate Report
+  const handleGenerateReport = async () => {
+    if (!analysisResult) {
+      toast.error('Realice un análisis primero');
+      return;
+    }
+
+    setIsGenerating(true);
+    setGeneratingProgress(0);
+
+    try {
+      setGeneratingProgress(30);
+      const res = await fetch('/api/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateId: selectedTemplateId || null,
+          analysis: analysisResult,
+          title: `Informe de Inteligencia - ${new Date().toLocaleDateString('es-ES')}`,
+        }),
+      });
+
+      setGeneratingProgress(70);
+
+      if (res.ok) {
+        const data = await res.json();
+        setGeneratingProgress(100);
+        toast.success('Informe generado exitosamente');
+        fetchReports();
+        // Auto-show the generated report
+        setPreviewReport(data);
+        setPreviewOpen(true);
+      } else {
+        toast.error('Error al generar informe');
+      }
+    } catch {
+      toast.error('Error de conexión al generar informe');
+    } finally {
+      setIsGenerating(false);
+      setGeneratingProgress(0);
+    }
+  };
+
+  // Delete report
+  const handleDeleteReport = async (id: string) => {
+    try {
+      const res = await fetch('/api/reports', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        toast.success('Informe eliminado');
+        fetchReports();
+        if (previewReport?.id === id) {
+          setPreviewReport(null);
+          setPreviewOpen(false);
+        }
+      } else {
+        toast.error('Error al eliminar informe');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    }
+  };
+
+  // Download report as markdown
+  const handleDownloadReport = (report: Report) => {
+    const blob = new Blob([report.content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${report.title.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g, '')}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Informe descargado');
+  };
+
+  // Stats
+  const activeSourcesCount = sources.filter(s => s.active).length;
+  const detectedThreats = analysisResult?.threats?.length || 0;
+  const currentRiskLevel = analysisResult?.overallRiskLevel || 'bajo';
+
+  const navItems = [
+    { id: 'panel' as ActiveTab, label: 'Panel', icon: BarChart3 },
+    { id: 'plantillas' as ActiveTab, label: 'Plantillas', icon: BookOpen },
+    { id: 'fuentes' as ActiveTab, label: 'Fuentes', icon: Globe },
+    { id: 'analisis' as ActiveTab, label: 'Análisis', icon: Brain },
+    { id: 'informes' as ActiveTab, label: 'Informes', icon: FileText },
+  ];
+
+  return (
+    <div className="min-h-screen flex bg-background">
+      {/* Sidebar - Desktop */}
+      <aside className="hidden lg:flex flex-col w-64 border-r border-border bg-card/50 backdrop-blur-sm">
+        <div className="p-6 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg gold-gradient flex items-center justify-center">
+              <Shield className="w-6 h-6 text-background" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-foreground tracking-wide">VIP PROTECTION</h1>
+              <p className="text-xs text-amber-500 font-medium">Executive Intelligence</p>
+            </div>
+          </div>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-1">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                activeTab === item.id
+                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              }`}
+            >
+              <item.icon className="w-4 h-4" />
+              {item.label}
+              {activeTab === item.id && <ChevronRight className="w-3 h-3 ml-auto" />}
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-border">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Activity className="w-3 h-3 text-amber-500" />
+            Sistema activo
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile menu overlay */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+            <motion.aside
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed left-0 top-0 bottom-0 w-64 z-50 bg-card border-r border-border lg:hidden"
+            >
+              <div className="p-6 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg gold-gradient flex items-center justify-center">
+                    <Shield className="w-6 h-6 text-background" />
+                  </div>
+                  <div>
+                    <h1 className="text-sm font-bold text-foreground tracking-wide">VIP PROTECTION</h1>
+                    <p className="text-xs text-amber-500 font-medium">Executive</p>
+                  </div>
+                </div>
+                <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <nav className="p-4 space-y-1">
+                {navItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                      activeTab === item.id
+                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    }`}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Main content */}
+      <main className="flex-1 flex flex-col min-w-0">
+        {/* Top header */}
+        <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
+          <div className="flex items-center justify-between px-4 lg:px-8 py-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden text-muted-foreground hover:text-foreground"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <div>
+                <h2 className="text-lg font-bold text-foreground capitalize">
+                  {navItems.find(n => n.id === activeTab)?.label}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Sistema de Inteligencia Ejecutiva
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className={`${threatLevelColors[currentRiskLevel]} text-xs`}>
+                <span className={`w-2 h-2 rounded-full ${threatLevelDots[currentRiskLevel]} mr-1.5 ${currentRiskLevel === 'critico' ? 'threat-pulse' : ''}`} />
+                Riesgo: {currentRiskLevel.charAt(0).toUpperCase() + currentRiskLevel.slice(1)}
+              </Badge>
+              <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
+                <Shield className="w-3 h-3 text-amber-500" />
+                Clasificado
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Content area */}
+        <div className="flex-1 p-4 lg:p-8 overflow-auto">
+          <AnimatePresence mode="wait">
+            {/* ========== PANEL ========== */}
+            {activeTab === 'panel' && (
+              <motion.div
+                key="panel"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-6"
+              >
+                {/* Stats Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+                    <Card className="card-glow border-border bg-card/80 hover:border-amber-500/30 transition-all duration-300">
+                      <CardContent className="p-4 lg:p-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <FileText className="w-5 h-5 text-amber-500" />
+                          <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20">
+                            Total
+                          </Badge>
+                        </div>
+                        <div className="text-2xl lg:text-3xl font-bold text-foreground">{totalReports}</div>
+                        <p className="text-xs text-muted-foreground mt-1">Informes Generados</p>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                    <Card className="card-glow border-border bg-card/80 hover:border-emerald-500/30 transition-all duration-300">
+                      <CardContent className="p-4 lg:p-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <Globe className="w-5 h-5 text-emerald-500" />
+                          <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                            Activas
+                          </Badge>
+                        </div>
+                        <div className="text-2xl lg:text-3xl font-bold text-foreground">{activeSourcesCount}</div>
+                        <p className="text-xs text-muted-foreground mt-1">Fuentes Activas</p>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                    <Card className="card-glow border-border bg-card/80 hover:border-orange-500/30 transition-all duration-300">
+                      <CardContent className="p-4 lg:p-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <AlertTriangle className="w-5 h-5 text-orange-500" />
+                          <Badge variant="outline" className="text-xs bg-orange-500/10 text-orange-400 border-orange-500/20">
+                            Detectadas
+                          </Badge>
+                        </div>
+                        <div className="text-2xl lg:text-3xl font-bold text-foreground">{detectedThreats}</div>
+                        <p className="text-xs text-muted-foreground mt-1">Amenazas Detectadas</p>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                    <Card className="card-glow border-border bg-card/80 hover:border-red-500/30 transition-all duration-300">
+                      <CardContent className="p-4 lg:p-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <Target className="w-5 h-5 text-red-500" />
+                          <Badge className={`text-xs ${threatLevelColors[currentRiskLevel]}`}>
+                            Nivel
+                          </Badge>
+                        </div>
+                        <div className="text-2xl lg:text-3xl font-bold text-foreground capitalize">{currentRiskLevel}</div>
+                        <p className="text-xs text-muted-foreground mt-1">Nivel de Riesgo</p>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </div>
+
+                {/* Quick Actions & Recent Reports */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Quick Actions */}
+                  <Card className="border-border bg-card/80">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-amber-500" />
+                        Acciones Rápidas
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <Button
+                        onClick={() => setActiveTab('analisis')}
+                        className="w-full justify-start gap-2 gold-gradient text-background font-semibold hover:opacity-90"
+                      >
+                        <Brain className="w-4 h-4" />
+                        Nuevo Análisis
+                      </Button>
+                      <Button
+                        onClick={() => setActiveTab('fuentes')}
+                        variant="outline"
+                        className="w-full justify-start gap-2 border-border hover:border-amber-500/30"
+                      >
+                        <Globe className="w-4 h-4" />
+                        Añadir Fuente
+                      </Button>
+                      <Button
+                        onClick={() => setActiveTab('plantillas')}
+                        variant="outline"
+                        className="w-full justify-start gap-2 border-border hover:border-amber-500/30"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        Nueva Plantilla
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  {/* Recent Reports */}
+                  <Card className="lg:col-span-2 border-border bg-card/80">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-amber-500" />
+                          Informes Recientes
+                        </CardTitle>
+                        <Button variant="ghost" size="sm" className="text-xs text-amber-500 hover:text-amber-400" onClick={() => setActiveTab('informes')}>
+                          Ver todos <ChevronRight className="w-3 h-3 ml-1" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {loadingReports ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                        </div>
+                      ) : reports.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">No hay informes generados</p>
+                          <p className="text-xs mt-1">Realice un análisis para generar su primer informe</p>
+                        </div>
+                      ) : (
+                        <ScrollArea className="max-h-64">
+                          <div className="space-y-2">
+                            {reports.slice(0, 5).map((report) => (
+                              <div
+                                key={report.id}
+                                className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                                onClick={() => { setPreviewReport(report); setPreviewOpen(true); }}
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <span className={`w-2 h-2 rounded-full shrink-0 ${threatLevelDots[report.threatLevel] || 'bg-gray-500'}`} />
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium truncate">{report.title}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {new Date(report.createdAt).toLocaleDateString('es-ES')}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Badge className={`text-xs shrink-0 ${threatLevelColors[report.threatLevel] || ''}`}>
+                                  {report.threatLevel}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Threat Overview */}
+                {analysisResult && (
+                  <Card className="border-border bg-card/80">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-orange-500" />
+                        Último Análisis de Amenazas
+                      </CardTitle>
+                      <CardDescription>{analysisResult.summary}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {analysisResult.threats.slice(0, 4).map((threat, i) => (
+                          <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+                            <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${threatLevelDots[threat.severity]}`} />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">{threat.title}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-2">{threat.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </motion.div>
+            )}
+
+            {/* ========== PLANTILLAS ========== */}
+            {activeTab === 'plantillas' && (
+              <motion.div
+                key="plantillas"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-6"
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* New Template Form */}
+                  <Card className="border-border bg-card/80">
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Plus className="w-4 h-4 text-amber-500" />
+                        Nueva Plantilla
+                      </CardTitle>
+                      <CardDescription>Defina la estructura del informe ejecutivo</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Nombre de la Plantilla</Label>
+                        <Input
+                          value={templateName}
+                          onChange={(e) => setTemplateName(e.target.value)}
+                          placeholder="Ej: Informe Ejecutivo Semanal"
+                          className="bg-muted/30 border-border focus:border-amber-500/50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Estructura del Informe</Label>
+                        <Textarea
+                          value={templateContent}
+                          onChange={(e) => setTemplateContent(e.target.value)}
+                          placeholder={`# INFORME EJECUTIVO DE PROTECCIÓN VIP\n\n## Resumen Ejecutivo\n...\n\n## Amenazas Detectadas\n...\n\n## Nivel de Riesgo\n...\n\n## Recomendaciones\n...\n\n## Conclusiones\n...`}
+                          className="min-h-48 bg-muted/30 border-border focus:border-amber-500/50 font-mono text-xs"
+                        />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          checked={templateIsDefault}
+                          onCheckedChange={setTemplateIsDefault}
+                        />
+                        <Label className="text-sm">Plantilla predeterminada</Label>
+                      </div>
+                      <Button onClick={handleSaveTemplate} className="w-full gold-gradient text-background font-semibold hover:opacity-90">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Guardar Plantilla
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  {/* Existing Templates */}
+                  <Card className="border-border bg-card/80">
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-amber-500" />
+                        Plantillas Guardadas
+                      </CardTitle>
+                      <CardDescription>{templates.length} plantilla(s) disponible(s)</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {loadingTemplates ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                        </div>
+                      ) : templates.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">No hay plantillas</p>
+                        </div>
+                      ) : (
+                        <ScrollArea className="max-h-96">
+                          <div className="space-y-3">
+                            {templates.map((template) => (
+                              <div
+                                key={template.id}
+                                className={`p-4 rounded-lg border transition-all cursor-pointer ${
+                                  selectedTemplateId === template.id
+                                    ? 'border-amber-500/40 bg-amber-500/5'
+                                    : 'border-border bg-muted/20 hover:border-amber-500/20'
+                                }`}
+                                onClick={() => setSelectedTemplateId(template.id)}
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-amber-500" />
+                                    <span className="text-sm font-medium">{template.name}</span>
+                                  </div>
+                                  {template.isDefault && (
+                                    <Badge className="text-xs gold-gradient text-background border-0">Predeterminada</Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                  {template.content.substring(0, 120)}...
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  {new Date(template.createdAt).toLocaleDateString('es-ES')}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Template Preview */}
+                {selectedTemplateId && templates.find(t => t.id === selectedTemplateId) && (
+                  <Card className="border-border bg-card/80">
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Eye className="w-4 h-4 text-amber-500" />
+                        Vista Previa: {templates.find(t => t.id === selectedTemplateId)?.name}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="p-4 rounded-lg bg-muted/20 border border-border prose prose-invert prose-sm max-w-none">
+                        <ReactMarkdown>
+                          {templates.find(t => t.id === selectedTemplateId)?.content || ''}
+                        </ReactMarkdown>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </motion.div>
+            )}
+
+            {/* ========== FUENTES ========== */}
+            {activeTab === 'fuentes' && (
+              <motion.div
+                key="fuentes"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-6"
+              >
+                {/* Add Source Form */}
+                <Card className="border-border bg-card/80">
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-amber-500" />
+                      Añadir Fuente de Información
+                    </CardTitle>
+                    <CardDescription>Agregue URLs y feeds RSS como fuentes de inteligencia</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Nombre</Label>
+                        <Input
+                          value={sourceName}
+                          onChange={(e) => setSourceName(e.target.value)}
+                          placeholder="Ej: Reuters - Seguridad"
+                          className="bg-muted/30 border-border focus:border-amber-500/50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">URL</Label>
+                        <Input
+                          value={sourceUrl}
+                          onChange={(e) => setSourceUrl(e.target.value)}
+                          placeholder="https://ejemplo.com/noticias"
+                          className="bg-muted/30 border-border focus:border-amber-500/50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Tipo</Label>
+                        <Select value={sourceType} onValueChange={setSourceType}>
+                          <SelectTrigger className="bg-muted/30 border-border">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="web">Web</SelectItem>
+                            <SelectItem value="rss">RSS</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Categoría</Label>
+                        <Select value={sourceCategory} onValueChange={setSourceCategory}>
+                          <SelectTrigger className="bg-muted/30 border-border">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="seguridad">Seguridad</SelectItem>
+                            <SelectItem value="politica">Política</SelectItem>
+                            <SelectItem value="economia">Economía</SelectItem>
+                            <SelectItem value="social">Social</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Button onClick={handleAddSource} className="mt-4 gold-gradient text-background font-semibold hover:opacity-90">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Añadir Fuente
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Sources List */}
+                <Card className="border-border bg-card/80">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Newspaper className="w-4 h-4 text-amber-500" />
+                        Fuentes Registradas
+                      </CardTitle>
+                      <Badge variant="outline" className="text-xs">
+                        {sources.length} fuente(s)
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingSources ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                      </div>
+                    ) : sources.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Globe className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">No hay fuentes registradas</p>
+                        <p className="text-xs mt-1">Añada fuentes para comenzar el análisis</p>
+                      </div>
+                    ) : (
+                      <ScrollArea className="max-h-96">
+                        <div className="space-y-2">
+                          {sources.map((source) => (
+                            <div
+                              key={source.id}
+                              className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/20 hover:bg-muted/30 transition-colors"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${categoryColors[source.category] || 'bg-gray-500/20 text-gray-400'}`}>
+                                  {source.type === 'rss' ? <Activity className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-medium truncate">{source.name}</p>
+                                    <Badge variant="outline" className="text-xs shrink-0">{source.type.toUpperCase()}</Badge>
+                                    <Badge className={`text-xs shrink-0 ${categoryColors[source.category] || ''}`}>
+                                      {source.category}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground truncate max-w-xs lg:max-w-lg">
+                                    {source.url}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <a
+                                  href={source.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                                <button
+                                  onClick={() => handleDeleteSource(source.id)}
+                                  className="p-2 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* ========== ANÁLISIS ========== */}
+            {activeTab === 'analisis' && (
+              <motion.div
+                key="analisis"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-6"
+              >
+                {/* Analysis Configuration */}
+                <Card className="border-border bg-card/80">
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Brain className="w-4 h-4 text-amber-500" />
+                      Análisis de Inteligencia con IA
+                    </CardTitle>
+                    <CardDescription>
+                      Configure las fuentes y consultas para el análisis automatizado
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Consultas de Búsqueda (separadas por coma)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="amenazas seguridad VIP, conflictos políticos, riesgos protección ejecutiva"
+                          className="bg-muted/30 border-border focus:border-amber-500/50"
+                        />
+                        <Button
+                          onClick={handleAnalyze}
+                          disabled={isAnalyzing}
+                          className="gold-gradient text-background font-semibold hover:opacity-90 shrink-0"
+                        >
+                          {isAnalyzing ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Play className="w-4 h-4 mr-2" />
+                          )}
+                          Analizar
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Active Sources Summary */}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Globe className="w-3 h-3" />
+                      <span>{activeSourcesCount} fuentes activas serán analizadas</span>
+                      <Button variant="link" size="sm" className="text-amber-500 p-0 h-auto text-xs" onClick={() => setActiveTab('fuentes')}>
+                        Gestionar fuentes
+                      </Button>
+                    </div>
+
+                    {/* Template Selection */}
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Plantilla para Informe</Label>
+                      <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                        <SelectTrigger className="bg-muted/30 border-border">
+                          <SelectValue placeholder="Seleccionar plantilla" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name} {t.isDefault ? '(Predeterminada)' : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Progress */}
+                    {isAnalyzing && (
+                      <div className="space-y-3 p-4 rounded-lg bg-muted/20 border border-amber-500/20">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                          <span>{analysisStep}</span>
+                        </div>
+                        <Progress value={analysisProgress} className="h-2" />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Analysis Results */}
+                {analysisResult && !isAnalyzing && (
+                  <>
+                    {/* Summary & Risk Level */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                      <Card className="lg:col-span-2 border-border bg-card/80">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-amber-500" />
+                            Resumen del Análisis
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {analysisResult.summary}
+                          </p>
+                          <div className="mt-4 flex items-center gap-4">
+                            <Badge className={`text-sm px-3 py-1 ${threatLevelColors[analysisResult.overallRiskLevel]}`}>
+                              Riesgo: {analysisResult.overallRiskLevel.toUpperCase()}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {analysisResult.threats.length} amenazas identificadas
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="border-border bg-card/80">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Shield className="w-4 h-4 text-amber-500" />
+                            Generar Informe
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <p className="text-xs text-muted-foreground">
+                            Convierta este análisis en un informe ejecutivo profesional usando la plantilla seleccionada.
+                          </p>
+                          <Button
+                            onClick={handleGenerateReport}
+                            disabled={isGenerating}
+                            className="w-full gold-gradient text-background font-semibold hover:opacity-90"
+                          >
+                            {isGenerating ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <FileText className="w-4 h-4 mr-2" />
+                            )}
+                            {isGenerating ? 'Generando...' : 'Generar Informe'}
+                          </Button>
+                          {isGenerating && (
+                            <Progress value={generatingProgress} className="h-1.5" />
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Threats */}
+                    <Card className="border-border bg-card/80">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-orange-500" />
+                          Amenazas Detectadas
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {analysisResult.threats.map((threat, i) => (
+                            <motion.div
+                              key={i}
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: i * 0.1 }}
+                              className="flex items-start gap-3 p-4 rounded-lg border border-border bg-muted/20"
+                            >
+                              <span className={`w-3 h-3 rounded-full mt-1 shrink-0 ${threatLevelDots[threat.severity]} ${threat.severity === 'critico' ? 'threat-pulse' : ''}`} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <span className="text-sm font-semibold">{threat.title}</span>
+                                  <Badge className={`text-xs ${threatLevelColors[threat.severity]}`}>
+                                    {threat.severity.toUpperCase()}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    {threat.category}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground">{threat.description}</p>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Recommendations */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <Card className="border-border bg-card/80">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 text-amber-500" />
+                            Recomendaciones
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ScrollArea className="max-h-64">
+                            <div className="space-y-2">
+                              {analysisResult.recommendations.map((rec, i) => (
+                                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/20">
+                                  <CheckCircle className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                                  <p className="text-sm text-muted-foreground">{rec}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="border-border bg-card/80">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Search className="w-4 h-4 text-amber-500" />
+                            Fuentes Consultadas
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ScrollArea className="max-h-64">
+                            <div className="space-y-2">
+                              {analysisResult.sources.map((source, i) => (
+                                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/20">
+                                  <Globe className="w-4 h-4 text-sky-500 mt-0.5 shrink-0" />
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium truncate">{source.title}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{source.url}</p>
+                                    <p className="text-xs text-amber-500/70 mt-0.5">{source.relevance}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            )}
+
+            {/* ========== INFORMES ========== */}
+            {activeTab === 'informes' && (
+              <motion.div
+                key="informes"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-6"
+              >
+                <Card className="border-border bg-card/80">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-amber-500" />
+                          Informes Generados
+                        </CardTitle>
+                        <CardDescription>{totalReports} informe(s) en total</CardDescription>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={fetchReports} className="gap-1">
+                        <RefreshCw className="w-3 h-3" />
+                        Actualizar
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingReports ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                      </div>
+                    ) : reports.length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <FileText className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                        <p className="text-sm">No hay informes generados</p>
+                        <p className="text-xs mt-1">Vaya a Análisis para generar su primer informe</p>
+                        <Button
+                          variant="outline"
+                          className="mt-4 border-amber-500/30 text-amber-500 hover:text-amber-400"
+                          onClick={() => setActiveTab('analisis')}
+                        >
+                          Ir a Análisis
+                        </Button>
+                      </div>
+                    ) : (
+                      <ScrollArea className="max-h-[600px]">
+                        <div className="space-y-3">
+                          {reports.map((report, i) => (
+                            <motion.div
+                              key={report.id}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: i * 0.05 }}
+                              className="p-4 rounded-lg border border-border bg-muted/20 hover:bg-muted/30 transition-colors"
+                            >
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-start gap-3 min-w-0">
+                                  <span className={`w-3 h-3 rounded-full mt-1.5 shrink-0 ${threatLevelDots[report.threatLevel] || 'bg-gray-500'} ${report.threatLevel === 'critico' ? 'threat-pulse' : ''}`} />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h3 className="text-sm font-semibold">{report.title}</h3>
+                                      <Badge className={`text-xs ${threatLevelColors[report.threatLevel] || ''}`}>
+                                        {report.threatLevel.toUpperCase()}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                      {report.summary || 'Sin resumen disponible'}
+                                    </p>
+                                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                                      <span>{new Date(report.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                                      {report.template && (
+                                        <>
+                                          <Separator orientation="vertical" className="h-3" />
+                                          <span>Plantilla: {report.template.name}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => { setPreviewReport(report); setPreviewOpen(true); }}
+                                    className="text-amber-500 hover:text-amber-400"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDownloadReport(report)}
+                                    className="text-muted-foreground hover:text-foreground"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteReport(report.id)}
+                                    className="text-muted-foreground hover:text-red-400"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Footer */}
+        <footer className="border-t border-border px-4 lg:px-8 py-3 mt-auto">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Shield className="w-3 h-3 text-amber-500" />
+              <span>VIP Protection Executive Intelligence System</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span>Clasificado</span>
+              <span className="text-amber-500">•</span>
+              <span>{new Date().getFullYear()}</span>
+            </div>
+          </div>
+        </footer>
+      </main>
+
+      {/* Report Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-amber-500" />
+              {previewReport?.title || 'Vista Previa'}
+            </DialogTitle>
+            <DialogDescription className="flex items-center gap-3">
+              {previewReport && (
+                <>
+                  <Badge className={`${threatLevelColors[previewReport.threatLevel]}`}>
+                    {previewReport.threatLevel.toUpperCase()}
+                  </Badge>
+                  <span>{new Date(previewReport.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[65vh] pr-4">
+            <div className="prose prose-invert prose-sm max-w-none">
+              {previewReport && (
+                <ReactMarkdown>{previewReport.content}</ReactMarkdown>
+              )}
+            </div>
+          </ScrollArea>
+          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border">
+            {previewReport && (
+              <Button onClick={() => handleDownloadReport(previewReport)} className="gold-gradient text-background font-semibold hover:opacity-90">
+                <Download className="w-4 h-4 mr-2" />
+                Descargar Informe
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setPreviewOpen(false)} className="border-border">
+              Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
