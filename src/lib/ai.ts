@@ -16,27 +16,47 @@ export async function webSearch(query: string, num: number = 10) {
 }
 
 export async function webReader(url: string): Promise<string> {
-  const zai = await getAI();
+  // Strategy 1: Try fetching the URL directly
   try {
-    const result = await zai.functions.invoke("web_reader", { url });
-    if (typeof result === 'string') return result;
-    if (result && typeof result === 'object') {
-      // Try to extract content from the reader result
-      if (result.content) return typeof result.content === 'string' ? result.content : JSON.stringify(result.content);
-      if (result.html) return typeof result.html === 'string' ? result.html : JSON.stringify(result.html);
-      if (result.text) return typeof result.text === 'string' ? result.text : JSON.stringify(result.text);
-      return JSON.stringify(result);
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; VIPProtectionBot/1.0)',
+        'Accept': 'text/html,text/plain,application/json',
+      },
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    });
+    if (response.ok) {
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('text/html') || contentType.includes('text/plain')) {
+        const text = await response.text();
+        // Strip HTML tags for a cleaner result
+        const cleaned = text.replace(/<script[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[\s\S]*?<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (cleaned.length > 100) {
+          return cleaned.substring(0, 5000);
+        }
+      }
     }
-    return JSON.stringify(result);
-  } catch (error) {
-    console.error(`web_reader failed for ${url}:`, error);
-    // Fallback: try web search as alternative
-    try {
-      const searchResult = await zai.functions.invoke("web_search", { query: url, num: 3 });
-      return JSON.stringify(searchResult);
-    } catch {
-      throw new Error(`No se pudo leer la URL: ${url}`);
+  } catch (err) {
+    console.error(`Direct fetch failed for ${url}:`, err);
+  }
+
+  // Strategy 2: Fallback to web_search
+  try {
+    const zai = await getAI();
+    const searchResult = await zai.functions.invoke("web_search", { query: url, num: 3 });
+    if (searchResult && Array.isArray(searchResult) && searchResult.length > 0) {
+      return searchResult.map((r: { name?: string; snippet?: string; url?: string }) =>
+        `${r.name || ''}: ${r.snippet || ''} (${r.url || ''})`
+      ).join('\n');
     }
+    return JSON.stringify(searchResult);
+  } catch (searchErr) {
+    console.error(`Web search fallback failed for ${url}:`, searchErr);
+    throw new Error(`No se pudo leer la URL: ${url}`);
   }
 }
 
@@ -65,6 +85,11 @@ export interface AnalysisResult {
   }>;
 }
 
+// Helper to add delay between API calls to avoid rate limiting
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export async function analyzeIntelligence(
   urls: string[],
   searchQueries: string[]
@@ -72,42 +97,35 @@ export async function analyzeIntelligence(
   const collectedData: string[] = [];
   const errors: string[] = [];
 
-  // Fetch content from URLs (with parallel processing for speed)
-  const urlPromises = urls.map(async (url) => {
+  // Fetch content from URLs sequentially to avoid rate limiting
+  for (const url of urls) {
     try {
       const readerResult = await webReader(url);
-      return `Fuente URL: ${url}\n${readerResult.substring(0, 3000)}`;
+      collectedData.push(`Fuente URL: ${url}\n${readerResult.substring(0, 3000)}`);
     } catch (err) {
       errors.push(`URL no accesible: ${url}`);
-      return null;
     }
-  });
-
-  const urlResults = await Promise.allSettled(urlPromises);
-  for (const result of urlResults) {
-    if (result.status === 'fulfilled' && result.value) {
-      collectedData.push(result.value);
+    // Small delay between URL fetches
+    if (urls.indexOf(url) < urls.length - 1) {
+      await delay(500);
     }
   }
 
-  // Search for relevant news (with parallel processing)
-  const searchPromises = searchQueries.map(async (query) => {
+  // Search for relevant news sequentially to avoid 429 rate limiting
+  for (let i = 0; i < searchQueries.length; i++) {
+    const query = searchQueries[i];
     try {
       const searchResult = await webSearch(query, 5);
       const content = typeof searchResult === 'string'
         ? searchResult
         : JSON.stringify(searchResult);
-      return `Búsqueda: ${query}\n${content.substring(0, 3000)}`;
+      collectedData.push(`Búsqueda: ${query}\n${content.substring(0, 3000)}`);
     } catch (err) {
       errors.push(`Búsqueda fallida: ${query}`);
-      return null;
     }
-  });
-
-  const searchResults = await Promise.allSettled(searchPromises);
-  for (const result of searchResults) {
-    if (result.status === 'fulfilled' && result.value) {
-      collectedData.push(result.value);
+    // Delay between searches to avoid rate limiting
+    if (i < searchQueries.length - 1) {
+      await delay(1000);
     }
   }
 
@@ -244,17 +262,15 @@ export async function updateReport(
 ): Promise<string> {
   const collectedData: string[] = [];
 
-  // Fetch content from additional URLs
+  // Fetch content from additional URLs sequentially
   for (const url of additionalUrls) {
     try {
       const readerResult = await webReader(url);
-      const content = typeof readerResult === 'string'
-        ? readerResult
-        : JSON.stringify(readerResult);
-      collectedData.push(`Nueva fuente URL: ${url}\n${content.substring(0, 3000)}`);
+      collectedData.push(`Nueva fuente URL: ${url}\n${readerResult.substring(0, 3000)}`);
     } catch {
       collectedData.push(`Error al leer URL: ${url}`);
     }
+    await delay(500);
   }
 
   // Add additional news text
