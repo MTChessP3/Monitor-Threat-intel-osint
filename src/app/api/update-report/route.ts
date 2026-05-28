@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { updateReport } from '@/lib/ai';
 
 export async function POST(request: Request) {
   try {
@@ -18,7 +17,7 @@ export async function POST(request: Request) {
 
     let content = updatedContent || '';
 
-    // If no pre-generated content, use AI to update
+    // If no pre-generated content, check if additional info was provided
     if (!content) {
       const urls = additionalUrls
         ? additionalUrls.split(',').map((u: string) => u.trim()).filter((u: string) => u.length > 0)
@@ -30,7 +29,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Debe proporcionar información adicional' }, { status: 400 });
       }
 
-      content = await updateReport(report.content, report.title, urls, news, context);
+      // Content should be pre-generated via /api/ai-operation before saving
+      return NextResponse.json({ error: 'Contenido actualizado es requerido. Use /api/ai-operation primero.' }, { status: 400 });
     }
 
     const summaryMatch = content.match(/##?\s*(?:Resumen Ejecutivo|Resumen|Summary)\s*\n([\s\S]*?)(?=\n##?\s|\n*$)/i);

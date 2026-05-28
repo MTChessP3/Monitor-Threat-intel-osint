@@ -36,7 +36,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -50,5 +49,19 @@ test
 prompt
 
 server.log
+watchdog.log
+watchdog.js
+run-server.sh
+start-server.sh
+backend-server.js
+unified-server.js
+ai-backend.js
+ai-worker.js
+watchdog-server.js
+
+# Local SQLite database
+db/
+*.db
+
 # Skills directory
 /skills/

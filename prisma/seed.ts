@@ -3,16 +3,14 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Check if default template already exists
-  const existing = await prisma.reportTemplate.findFirst({
-    where: { isDefault: true },
-  });
-
-  if (!existing) {
-    await prisma.reportTemplate.create({
-      data: {
-        name: 'Plantilla Predeterminada - Informe VIP',
-        content: `# INFORME EJECUTIVO DE PROTECCIÓN VIP
+  // 1. Upsert default template
+  await prisma.reportTemplate.upsert({
+    where: { id: 'default-template-vip' },
+    update: {},
+    create: {
+      id: 'default-template-vip',
+      name: 'Plantilla Predeterminada - Informe VIP',
+      content: `# INFORME EJECUTIVO DE PROTECCIÓN VIP
 
 ## Resumen Ejecutivo
 Breve resumen de la situación actual de seguridad y las principales amenazas identificadas para la protección VIP.
@@ -47,46 +45,39 @@ Listado de fuentes consultadas para la elaboración de este informe.
 
 ## Conclusiones
 Conclusiones finales, evaluación general y próximos pasos recomendados.`,
-        isDefault: true,
-      },
-    });
-    console.log('Default template created');
-  } else {
-    console.log('Default template already exists');
-  }
+      isDefault: true,
+    },
+  });
+  console.log('Default template upserted');
 
-  // Add some default news sources
-  const sourceCount = await prisma.newsSource.count();
-  if (sourceCount === 0) {
-    await prisma.newsSource.createMany({
-      data: [
-        {
-          name: 'BBC Mundo - Seguridad',
-          url: 'https://www.bbc.com/mundo',
-          type: 'web',
-          category: 'seguridad',
-          active: true,
-        },
-        {
-          name: 'El País - Internacional',
-          url: 'https://elpais.com/internacional/',
-          type: 'web',
-          category: 'politica',
-          active: true,
-        },
-        {
-          name: 'Reuters - Security',
-          url: 'https://www.reuters.com/world/',
-          type: 'web',
-          category: 'seguridad',
-          active: true,
-        },
-      ],
+  // 2. Seed the 16 intelligence sources with upsert
+  const sources = [
+    { id: 'src-eltiempo', name: 'El Tiempo', url: 'https://www.eltiempo.com', type: 'web', category: 'seguridad', active: true },
+    { id: 'src-elespectador', name: 'El Espectador', url: 'https://www.elespectador.com', type: 'web', category: 'seguridad', active: true },
+    { id: 'src-semana', name: 'Semana', url: 'https://www.semana.com', type: 'web', category: 'politica', active: true },
+    { id: 'src-portafolio', name: 'Portafolio', url: 'https://www.portafolio.co', type: 'web', category: 'economia', active: true },
+    { id: 'src-bluradio', name: 'Blu Radio', url: 'https://www.bluradio.com', type: 'web', category: 'seguridad', active: true },
+    { id: 'src-caracol', name: 'Caracol Radio', url: 'https://caracol.com.co', type: 'web', category: 'seguridad', active: true },
+    { id: 'src-kaspersky', name: 'Kaspersky', url: 'https://www.kaspersky.com', type: 'web', category: 'ciberseguridad', active: true },
+    { id: 'src-thehackernews', name: 'The Hacker News', url: 'https://thehackernews.com', type: 'web', category: 'ciberseguridad', active: true },
+    { id: 'src-bleepingcomputer', name: 'BleepingComputer', url: 'https://www.bleepingcomputer.com', type: 'web', category: 'ciberseguridad', active: true },
+    { id: 'src-darkreading', name: 'Dark Reading', url: 'https://www.darkreading.com', type: 'web', category: 'ciberseguridad', active: true },
+    { id: 'src-cnnespanol', name: 'CNN Espanol', url: 'https://cnnespanol.cnn.com', type: 'web', category: 'politica', active: true },
+    { id: 'src-bbcmundo', name: 'BBC Mundo', url: 'https://www.bbc.com/mundo', type: 'web', category: 'politica', active: true },
+    { id: 'src-infosecurity', name: 'Infosecurity Magazine', url: 'https://www.infosecurity-magazine.com', type: 'web', category: 'ciberseguridad', active: true },
+    { id: 'src-insightcrime', name: 'InSight Crime', url: 'https://insightcrime.org', type: 'web', category: 'seguridad', active: true },
+    { id: 'src-bancolombia', name: 'Bancolombia', url: 'https://www.grupobancolombia.com', type: 'web', category: 'economia', active: true },
+    { id: 'src-redalert', name: 'Red Alert Colombia', url: 'https://redalert.col', type: 'web', category: 'seguridad', active: true },
+  ];
+
+  for (const source of sources) {
+    await prisma.newsSource.upsert({
+      where: { id: source.id },
+      update: {},
+      create: source,
     });
-    console.log('Default sources created');
-  } else {
-    console.log('Sources already exist');
   }
+  console.log(`${sources.length} intelligence sources upserted`);
 }
 
 main()

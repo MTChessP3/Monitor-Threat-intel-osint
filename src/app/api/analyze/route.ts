@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { analyzeIntelligence } from '@/lib/ai';
 
 export async function POST(request: Request) {
   try {
@@ -13,8 +12,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const analysis = await analyzeIntelligence(urls || [], searchQueries || []);
-    return NextResponse.json(analysis);
+    // This endpoint is deprecated - use /api/ai-operation with operation: 'analyze' instead
+    // Redirect to the inlined AI operation
+    return NextResponse.json({ 
+      error: 'Este endpoint ha sido reemplazado. Use /api/ai-operation con operation: "analyze".' 
+    }, { status: 410 });
   } catch (error: unknown) {
     console.error('Error in analysis:', error);
     const errorMessage = error instanceof Error ? error.message : 'Error al realizar el análisis';

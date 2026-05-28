@@ -3,41 +3,42 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
 model ReportTemplate {
-  id          String   @id @default(cuid())
-  name        String
-  content     String
-  isDefault   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  reports     Report[]
+  id        String   @id @default(cuid())
+  name      String
+  content   String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  reports   Report[]
 }
 
 model NewsSource {
-  id          String   @id @default(cuid())
-  name        String
-  url         String
-  type        String   @default("web")
-  category    String   @default("seguridad")
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  type      String   @default("web")
+  category  String   @default("seguridad")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Report {
-  id            String   @id @default(cuid())
-  title         String
-  date          DateTime @default(now())
-  summary       String
-  threatLevel   String   @default("bajo")
-  content       String
-  templateId    String?
-  template      ReportTemplate? @relation(fields: [templateId], references: [id])
-  sourcesUsed   String   @default("[]")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String          @id @default(cuid())
+  title       String
+  date        DateTime        @default(now())
+  summary     String
+  threatLevel String          @default("bajo")
+  content     String
+  templateId  String?
+  template    ReportTemplate? @relation(fields: [templateId], references: [id])
+  sourcesUsed String          @default("[]")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 }
