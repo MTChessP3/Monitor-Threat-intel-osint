@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VIP Protection Executive - Panel de Inteligencia",
+  title: "VIP_Protection Report - Panel de Inteligencia",
   description: "Sistema de inteligencia y protección ejecutiva VIP. Análisis de amenazas, informes ejecutivos y gestión de fuentes de inteligencia.",
   icons: {
     icon: "/logo.svg",

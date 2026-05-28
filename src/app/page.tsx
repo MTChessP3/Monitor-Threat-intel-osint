@@ -6,7 +6,7 @@ import {
   Shield, AlertTriangle, FileText, Globe, Brain, Download,
   Plus, Trash2, Search, BarChart3, Activity, Eye, ChevronRight,
   Loader2, CheckCircle, XCircle, Menu, X, Zap, Target, TrendingUp,
-  BookOpen, Newspaper, Play, RefreshCw, ExternalLink
+  BookOpen, Newspaper, Play, RefreshCw, ExternalLink, Pencil, FileDown
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -138,6 +138,14 @@ export default function Home() {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [loadingSources, setLoadingSources] = useState(false);
   const [loadingReports, setLoadingReports] = useState(false);
+
+  // Edit report states
+  const [editingReport, setEditingReport] = useState<Report | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editAdditionalUrls, setEditAdditionalUrls] = useState('');
+  const [editAdditionalNews, setEditAdditionalNews] = useState('');
+  const [editAdditionalContext, setEditAdditionalContext] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Fetch data functions
   const fetchTemplates = useCallback(async () => {
@@ -392,7 +400,110 @@ export default function Home() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success('Informe descargado');
+    toast.success('Informe MD descargado');
+  };
+
+  // Download report as PDF
+  const handleDownloadPDF = async (report: Report) => {
+    try {
+      const res = await fetch('/api/export-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId: report.id }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${report.title.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g, '')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success('PDF descargado exitosamente');
+      } else {
+        toast.error('Error al generar PDF');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    }
+  };
+
+  // Download report as DOCX
+  const handleDownloadDOCX = async (report: Report) => {
+    try {
+      const res = await fetch('/api/export-docx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId: report.id }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${report.title.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g, '')}.docx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success('DOCX descargado exitosamente');
+      } else {
+        toast.error('Error al generar DOCX');
+      }
+    } catch {
+      toast.error('Error de conexión');
+    }
+  };
+
+  // Open edit dialog
+  const handleOpenEdit = (report: Report) => {
+    setEditingReport(report);
+    setEditAdditionalUrls('');
+    setEditAdditionalNews('');
+    setEditAdditionalContext('');
+    setEditDialogOpen(true);
+  };
+
+  // Update report with new information
+  const handleUpdateReport = async () => {
+    if (!editingReport) return;
+    if (!editAdditionalUrls.trim() && !editAdditionalNews.trim() && !editAdditionalContext.trim()) {
+      toast.error('Debe proporcionar al menos una URL, noticias adicionales o contexto');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const res = await fetch('/api/update-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportId: editingReport.id,
+          additionalUrls: editAdditionalUrls,
+          additionalNews: editAdditionalNews,
+          additionalContext: editAdditionalContext,
+        }),
+      });
+      if (res.ok) {
+        const updatedReport = await res.json();
+        toast.success('Informe actualizado exitosamente');
+        setEditDialogOpen(false);
+        setEditingReport(null);
+        fetchReports();
+        // Update preview if currently viewing this report
+        if (previewReport?.id === editingReport.id) {
+          setPreviewReport(updatedReport);
+        }
+      } else {
+        toast.error('Error al actualizar informe');
+      }
+    } catch {
+      toast.error('Error de conexión al actualizar informe');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   // Stats
@@ -402,7 +513,7 @@ export default function Home() {
 
   const navItems = [
     { id: 'panel' as ActiveTab, label: 'Panel', icon: BarChart3 },
-    { id: 'plantillas' as ActiveTab, label: 'Plantillas', icon: BookOpen },
+    { id: 'plantillas' as ActiveTab, label: 'Documento Oficial', icon: BookOpen },
     { id: 'fuentes' as ActiveTab, label: 'Fuentes', icon: Globe },
     { id: 'analisis' as ActiveTab, label: 'Análisis', icon: Brain },
     { id: 'informes' as ActiveTab, label: 'Informes', icon: FileText },
@@ -418,7 +529,7 @@ export default function Home() {
               <Shield className="w-6 h-6 text-background" />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-foreground tracking-wide">VIP PROTECTION</h1>
+              <h1 className="text-sm font-bold text-foreground tracking-wide">VIP_Protection Report</h1>
               <p className="text-xs text-amber-500 font-medium">Executive Intelligence</p>
             </div>
           </div>
@@ -474,8 +585,8 @@ export default function Home() {
                     <Shield className="w-6 h-6 text-background" />
                   </div>
                   <div>
-                    <h1 className="text-sm font-bold text-foreground tracking-wide">VIP PROTECTION</h1>
-                    <p className="text-xs text-amber-500 font-medium">Executive</p>
+                    <h1 className="text-sm font-bold text-foreground tracking-wide">VIP_Protection Report</h1>
+                    <p className="text-xs text-amber-500 font-medium">Executive Intelligence</p>
                   </div>
                 </div>
                 <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground">
@@ -645,7 +756,7 @@ export default function Home() {
                         className="w-full justify-start gap-2 border-border hover:border-amber-500/30"
                       >
                         <BookOpen className="w-4 h-4" />
-                        Nueva Plantilla
+                        Documento Oficial
                       </Button>
                     </CardContent>
                   </Card>
@@ -748,9 +859,9 @@ export default function Home() {
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
                         <Plus className="w-4 h-4 text-amber-500" />
-                        Nueva Plantilla
+                        Documento Oficial del Informe
                       </CardTitle>
-                      <CardDescription>Defina la estructura del informe ejecutivo</CardDescription>
+                      <CardDescription>Entregue su documento o plantilla oficial y el sistema la llenará con información de inteligencia</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
@@ -763,11 +874,11 @@ export default function Home() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">Estructura del Informe</Label>
+                        <Label className="text-xs text-muted-foreground">Contenido del Documento Oficial</Label>
                         <Textarea
                           value={templateContent}
                           onChange={(e) => setTemplateContent(e.target.value)}
-                          placeholder={`# INFORME EJECUTIVO DE PROTECCIÓN VIP\n\n## Resumen Ejecutivo\n...\n\n## Amenazas Detectadas\n...\n\n## Nivel de Riesgo\n...\n\n## Recomendaciones\n...\n\n## Conclusiones\n...`}
+                          placeholder={`Pegue aquí su documento o plantilla oficial del informe. El sistema la llenará automáticamente con la información de inteligencia recopilada.\n\n# INFORME EJECUTIVO DE PROTECCIÓN VIP\n\n## Resumen Ejecutivo\n...\n\n## Amenazas Detectadas\n...`}
                           className="min-h-48 bg-muted/30 border-border focus:border-amber-500/50 font-mono text-xs"
                         />
                       </div>
@@ -790,9 +901,9 @@ export default function Home() {
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
                         <BookOpen className="w-4 h-4 text-amber-500" />
-                        Plantillas Guardadas
+                        Documentos Guardados
                       </CardTitle>
-                      <CardDescription>{templates.length} plantilla(s) disponible(s)</CardDescription>
+                      <CardDescription>{templates.length} documento(s) disponible(s)</CardDescription>
                     </CardHeader>
                     <CardContent>
                       {loadingTemplates ? (
@@ -1327,22 +1438,43 @@ export default function Home() {
                                     size="sm"
                                     onClick={() => { setPreviewReport(report); setPreviewOpen(true); }}
                                     className="text-amber-500 hover:text-amber-400"
+                                    title="Ver informe"
                                   >
                                     <Eye className="w-4 h-4" />
                                   </Button>
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleDownloadReport(report)}
+                                    onClick={() => handleDownloadPDF(report)}
                                     className="text-muted-foreground hover:text-foreground"
+                                    title="Descargar PDF"
                                   >
-                                    <Download className="w-4 h-4" />
+                                    <FileDown className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDownloadDOCX(report)}
+                                    className="text-muted-foreground hover:text-foreground"
+                                    title="Descargar DOCX"
+                                  >
+                                    <FileText className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleOpenEdit(report)}
+                                    className="text-amber-500 hover:text-amber-400"
+                                    title="Mejorar informe"
+                                  >
+                                    <Pencil className="w-4 h-4" />
                                   </Button>
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleDeleteReport(report.id)}
                                     className="text-muted-foreground hover:text-red-400"
+                                    title="Eliminar informe"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
@@ -1365,7 +1497,7 @@ export default function Home() {
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
               <Shield className="w-3 h-3 text-amber-500" />
-              <span>VIP Protection Executive Intelligence System</span>
+              <span>VIP_Protection Report - Executive Intelligence System</span>
             </div>
             <div className="flex items-center gap-1">
               <span>Clasificado</span>
@@ -1402,15 +1534,90 @@ export default function Home() {
               )}
             </div>
           </ScrollArea>
-          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border">
+          <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-border">
             {previewReport && (
-              <Button onClick={() => handleDownloadReport(previewReport)} className="gold-gradient text-background font-semibold hover:opacity-90">
-                <Download className="w-4 h-4 mr-2" />
-                Descargar Informe
-              </Button>
+              <>
+                <Button onClick={() => handleDownloadPDF(previewReport)} className="gold-gradient text-background font-semibold hover:opacity-90">
+                  <FileDown className="w-4 h-4 mr-2" />
+                  Descargar PDF
+                </Button>
+                <Button onClick={() => handleDownloadDOCX(previewReport)} variant="outline" className="border-amber-500/30 text-amber-500 hover:text-amber-400 hover:border-amber-500/50">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Descargar DOCX
+                </Button>
+                <Button onClick={() => handleDownloadReport(previewReport)} variant="outline" className="border-border hover:border-amber-500/30">
+                  <Download className="w-4 h-4 mr-2" />
+                  Descargar MD
+                </Button>
+                <Button onClick={() => { setPreviewOpen(false); handleOpenEdit(previewReport); }} variant="outline" className="border-border text-amber-500 hover:text-amber-400 hover:border-amber-500/30">
+                  <Pencil className="w-4 h-4 mr-2" />
+                  Mejorar
+                </Button>
+              </>
             )}
-            <Button variant="outline" onClick={() => setPreviewOpen(false)} className="border-border">
+            <Button variant="outline" onClick={() => setPreviewOpen(false)} className="border-border ml-auto">
               Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Report Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-amber-500" />
+              Mejorar Informe
+            </DialogTitle>
+            <DialogDescription>
+              {editingReport ? `Añada nueva información para mejorar: ${editingReport.title}` : 'Añada nueva información para mejorar el informe'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Nuevas URLs (separadas por coma)</Label>
+              <Textarea
+                value={editAdditionalUrls}
+                onChange={(e) => setEditAdditionalUrls(e.target.value)}
+                placeholder="https://ejemplo.com/noticia1, https://ejemplo.com/noticia2"
+                className="bg-muted/30 border-border focus:border-amber-500/50"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Nuevas Noticias</Label>
+              <Textarea
+                value={editAdditionalNews}
+                onChange={(e) => setEditAdditionalNews(e.target.value)}
+                placeholder="Pegue aquí texto adicional de noticias o información relevante..."
+                className="min-h-32 bg-muted/30 border-border focus:border-amber-500/50"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Contexto Adicional</Label>
+              <Textarea
+                value={editAdditionalContext}
+                onChange={(e) => setEditAdditionalContext(e.target.value)}
+                placeholder="Instrucciones o contexto adicional para el análisis..."
+                className="min-h-24 bg-muted/30 border-border focus:border-amber-500/50"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border">
+            <Button
+              onClick={handleUpdateReport}
+              disabled={isUpdating}
+              className="gold-gradient text-background font-semibold hover:opacity-90"
+            >
+              {isUpdating ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              {isUpdating ? 'Actualizando...' : 'Actualizar Informe'}
+            </Button>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="border-border">
+              Cancelar
             </Button>
           </div>
         </DialogContent>

@@ -192,3 +192,71 @@ Genera el informe completo en formato Markdown.`;
 
   return completion.choices?.[0]?.message?.content || 'Error al generar el informe';
 }
+
+export async function updateReport(
+  existingContent: string,
+  existingTitle: string,
+  additionalUrls: string[],
+  additionalNews: string,
+  additionalContext: string
+): Promise<string> {
+  const collectedData: string[] = [];
+
+  // Fetch content from additional URLs
+  for (const url of additionalUrls) {
+    try {
+      const readerResult = await webReader(url);
+      const content = typeof readerResult === 'string'
+        ? readerResult
+        : JSON.stringify(readerResult);
+      collectedData.push(`Nueva fuente URL: ${url}\n${content.substring(0, 3000)}`);
+    } catch {
+      collectedData.push(`Error al leer URL: ${url}`);
+    }
+  }
+
+  // Add additional news text
+  if (additionalNews.trim()) {
+    collectedData.push(`Noticias adicionales:\n${additionalNews}`);
+  }
+
+  // Add additional context
+  if (additionalContext.trim()) {
+    collectedData.push(`Contexto adicional del analista:\n${additionalContext}`);
+  }
+
+  const updatePrompt = `Eres un analista de inteligencia de protección VIP experto. Se te proporciona un informe existente y nueva información que debe ser incorporada para mejorarlo.
+
+INFORME EXISTENTE:
+${existingContent}
+
+NUEVA INFORMACIÓN RECOPILADA:
+${collectedData.join('\n\n---\n\n')}
+
+INSTRUCCIONES:
+1. Integra la nueva información en el informe existente
+2. Actualiza las secciones relevantes con los nuevos hallazgos
+3. Si la nueva información cambia el nivel de amenaza, actualízalo
+4. Añade nuevas amenazas si se identifican
+5. Actualiza las recomendaciones si es necesario
+6. Mantén la estructura y formato del informe original
+7. Usa un tono profesional y ejecutivo
+8. El informe debe estar en español
+9. Usa formato Markdown para estructurar el documento
+10. Marca las secciones actualizadas con [ACTUALIZADO] al inicio del título de la sección
+
+Genera el informe completo actualizado en formato Markdown.`;
+
+  const completion = await chatCompletion([
+    {
+      role: 'system',
+      content: 'Eres un analista profesional de inteligencia de protección VIP. Actualizas informes incorporando nueva información de manera coherente. Generas informes en español con formato Markdown.'
+    },
+    {
+      role: 'user',
+      content: updatePrompt
+    }
+  ]);
+
+  return completion.choices?.[0]?.message?.content || existingContent;
+}

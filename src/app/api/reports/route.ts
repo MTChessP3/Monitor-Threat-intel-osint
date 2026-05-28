@@ -47,3 +47,29 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Error al eliminar informe' }, { status: 500 });
   }
 }
+
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, content, title, summary, threatLevel } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID es requerido' }, { status: 400 });
+    }
+
+    const report = await db.report.update({
+      where: { id },
+      data: {
+        ...(content !== undefined && { content }),
+        ...(title !== undefined && { title }),
+        ...(summary !== undefined && { summary }),
+        ...(threatLevel !== undefined && { threatLevel }),
+      },
+    });
+
+    return NextResponse.json(report);
+  } catch (error) {
+    console.error('Error updating report:', error);
+    return NextResponse.json({ error: 'Error al actualizar informe' }, { status: 500 });
+  }
+}
