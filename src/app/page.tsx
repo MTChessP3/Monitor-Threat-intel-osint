@@ -349,10 +349,10 @@ export default function Home() {
       const urls = sources.filter(s => s.active).map(s => s.url);
       const queries = searchQuery.trim() ? searchQuery.split(',').map(q => q.trim()) : ['amenazas seguridad VIP protección'];
 
-      const res = await fetch('/api/analyze', {
+      const res = await fetch('/api/ai-operation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urls, searchQueries: queries }),
+        body: JSON.stringify({ operation: 'analyze', data: { urls, searchQueries: queries } }),
       });
 
       setAnalysisStep('Procesando datos con inteligencia artificial...');
@@ -393,28 +393,45 @@ export default function Home() {
 
     try {
       setGeneratingProgress(30);
-      const res = await fetch('/api/generate-report', {
+
+      // Step 1: Generate report content with AI
+      const aiRes = await fetch('/api/ai-operation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation: 'generate-report', data: { templateContent: '', analysis: analysisResult } }),
+      });
+
+      if (!aiRes.ok) {
+        toast.error('Error al generar informe con IA');
+        return;
+      }
+
+      const aiData = await aiRes.json();
+      const reportContent = aiData.content || '';
+
+      setGeneratingProgress(70);
+
+      // Step 2: Save to database
+      const saveRes = await fetch('/api/generate-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           templateId: selectedTemplateId || null,
           analysis: analysisResult,
           title: `Informe de Inteligencia - ${new Date().toLocaleDateString('es-ES')}`,
+          reportContent: reportContent,
         }),
       });
 
-      setGeneratingProgress(70);
-
-      if (res.ok) {
-        const data = await res.json();
+      if (saveRes.ok) {
+        const data = await saveRes.json();
         setGeneratingProgress(100);
         toast.success('Informe generado exitosamente');
         fetchReports();
-        // Auto-show the generated report
         setPreviewReport(data);
         setPreviewOpen(true);
       } else {
-        toast.error('Error al generar informe');
+        toast.error('Error al guardar informe');
       }
     } catch {
       toast.error('Error de conexión al generar informe');
@@ -534,28 +551,52 @@ export default function Home() {
 
     setIsUpdating(true);
     try {
-      const res = await fetch('/api/update-report', {
+      // Step 1: Update content with AI
+      const aiRes = await fetch('/api/ai-operation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operation: 'update-report',
+          data: {
+            existingContent: editingReport.content,
+            additionalUrls: editAdditionalUrls.split(',').map((u: string) => u.trim()).filter((u: string) => u.length > 0),
+            additionalNews: editAdditionalNews,
+            additionalContext: editAdditionalContext,
+          },
+        }),
+      });
+
+      if (!aiRes.ok) {
+        toast.error('Error al actualizar con IA');
+        return;
+      }
+
+      const aiData = await aiRes.json();
+      const updatedContent = aiData.content || editingReport.content;
+
+      // Step 2: Save to database
+      const saveRes = await fetch('/api/update-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reportId: editingReport.id,
+          updatedContent: updatedContent,
           additionalUrls: editAdditionalUrls,
           additionalNews: editAdditionalNews,
           additionalContext: editAdditionalContext,
         }),
       });
-      if (res.ok) {
-        const updatedReport = await res.json();
+      if (saveRes.ok) {
+        const updatedReport = await saveRes.json();
         toast.success('Informe actualizado exitosamente');
         setEditDialogOpen(false);
         setEditingReport(null);
         fetchReports();
-        // Update preview if currently viewing this report
         if (previewReport?.id === editingReport.id) {
           setPreviewReport(updatedReport);
         }
       } else {
-        toast.error('Error al actualizar informe');
+        toast.error('Error al guardar actualización');
       }
     } catch {
       toast.error('Error de conexión al actualizar informe');

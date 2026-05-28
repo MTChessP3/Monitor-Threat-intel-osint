@@ -13,18 +13,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const analysis = await analyzeIntelligence(
-      urls || [],
-      searchQueries || []
-    );
-
+    const analysis = await analyzeIntelligence(urls || [], searchQueries || []);
     return NextResponse.json(analysis);
   } catch (error: unknown) {
     console.error('Error in analysis:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Error al realizar el análisis de inteligencia';
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error ? error.message : 'Error al realizar el análisis';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

@@ -3,11 +3,22 @@
 		query XTransformPort=*
 	}
 
+	@ai_api path /api/ai/*
+
 	handle @transform_port_query {
 		reverse_proxy 127.0.0.1:{query.XTransformPort} {
 			header_up Host {host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle @ai_api {
+		reverse_proxy 127.0.0.1:3001 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded--Proto {scheme}
 			header_up X-Real-IP {remote_host}
 		}
 	}
