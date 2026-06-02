@@ -97,11 +97,11 @@ function MfaSetupContent() {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
-            className="w-16 h-16 rounded-xl gold-gradient flex items-center justify-center mx-auto mb-4"
+            className="w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center mx-auto mb-4"
           >
-            <Shield className="w-9 h-9 text-background" />
+            <img src="/favicon-128x128.png" alt="ActorTrace" className="w-16 h-16" />
           </motion.div>
-          <h1 className="text-2xl font-bold text-foreground tracking-wide">VIP_Protection Report</h1>
+          <h1 className="text-2xl font-bold text-foreground tracking-wide">ActorTrace</h1>
           <p className="text-sm text-muted-foreground mt-1">Configuración de Seguridad</p>
         </div>
 

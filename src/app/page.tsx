@@ -860,12 +860,12 @@ export default function Home() {
       <aside className="hidden lg:flex flex-col w-64 border-r border-border bg-card/50 backdrop-blur-sm">
         <div className="p-6 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg gold-gradient flex items-center justify-center">
-              <Shield className="w-6 h-6 text-background" />
+            <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center">
+              <img src="/favicon-64x64.png" alt="ActorTrace" className="w-10 h-10" />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-foreground tracking-wide">VIP_Protection Report</h1>
-              <p className="text-xs text-amber-500 font-medium">Executive Intelligence</p>
+              <h1 className="text-sm font-bold text-foreground tracking-wide">ActorTrace</h1>
+              <p className="text-xs text-amber-500 font-medium">Inteligencia VIP</p>
             </div>
           </div>
         </div>
@@ -956,12 +956,12 @@ export default function Home() {
             >
               <div className="p-6 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg gold-gradient flex items-center justify-center">
-                    <Shield className="w-6 h-6 text-background" />
+                  <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center">
+                    <img src="/favicon-64x64.png" alt="ActorTrace" className="w-10 h-10" />
                   </div>
                   <div>
-                    <h1 className="text-sm font-bold text-foreground tracking-wide">VIP_Protection Report</h1>
-                    <p className="text-xs text-amber-500 font-medium">Executive Intelligence</p>
+                    <h1 className="text-sm font-bold text-foreground tracking-wide">ActorTrace</h1>
+                    <p className="text-xs text-amber-500 font-medium">Inteligencia VIP</p>
                   </div>
                 </div>
                 <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground">

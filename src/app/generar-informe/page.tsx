@@ -487,12 +487,12 @@ export default function GenerarInformePage() {
         <div className="flex items-center justify-between px-4 lg:px-8 py-4">
           <div className="flex items-center gap-4">
             <NextLink href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-              <div className="w-10 h-10 rounded-lg gold-gradient flex items-center justify-center">
-                <Shield className="w-6 h-6 text-background" />
+              <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center">
+                <img src="/favicon-64x64.png" alt="ActorTrace" className="w-10 h-10" />
               </div>
               <div>
-                <h1 className="text-sm font-bold text-foreground tracking-wide">VIP_Protection Report</h1>
-                <p className="text-xs text-amber-500 font-medium">Executive Intelligence</p>
+                <h1 className="text-sm font-bold text-foreground tracking-wide">ActorTrace</h1>
+                <p className="text-xs text-amber-500 font-medium">Inteligencia VIP</p>
               </div>
             </NextLink>
             <Separator orientation="vertical" className="h-8 hidden sm:block" />
