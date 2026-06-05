@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken, AUTH_COOKIE_NAME } from '@/lib/auth';
-import ZAI from 'z-ai-web-dev-sdk';
+import { getZAI, zaiChatCompletion, zaiWebSearch } from '@/lib/zai';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -93,7 +93,7 @@ function extractFileType(url: string): string {
 }
 
 // ============================================================================
-// OSINT QUERY MATRIX v7.0 - Uses ZAI Web Search filetype: operators
+// OSINT QUERY MATRIX v8.0 - Uses ZAI Web Search filetype: operators
 // ============================================================================
 function buildOsintQueryMatrix(executive: {
   fullName: string;
@@ -119,28 +119,20 @@ function buildOsintQueryMatrix(executive: {
 
   // BLOQUE 2: Nombre + Documentos (filetype: operators)
   const docQueries: string[] = [];
-  // PDF documents
   const q2 = `"${name}" filetype:pdf`;
   docQueries.push(q2); allQueries.push(q2);
-  // Office documents
   const q3 = `"${name}" filetype:doc OR filetype:docx`;
   docQueries.push(q3); allQueries.push(q3);
-  // Spreadsheets
   const q4 = `"${name}" filetype:xlsx OR filetype:xls OR filetype:csv`;
   docQueries.push(q4); allQueries.push(q4);
-  // Presentations
   const q5 = `"${name}" filetype:ppt OR filetype:pptx`;
   docQueries.push(q5); allQueries.push(q5);
-  // Sensitive files
   const q6 = `"${name}" filetype:env OR filetype:conf OR filetype:sql OR filetype:bak OR filetype:ini`;
   docQueries.push(q6); allQueries.push(q6);
-  // Compressed
   const q7 = `"${name}" filetype:zip OR filetype:rar OR filetype:7z`;
   docQueries.push(q7); allQueries.push(q7);
-  // Web pages
   const q8 = `"${name}" filetype:htm OR filetype:html`;
   docQueries.push(q8); allQueries.push(q8);
-  // Databases
   const q9 = `"${name}" filetype:json OR filetype:xml OR filetype:yaml OR filetype:yml`;
   docQueries.push(q9); allQueries.push(q9);
   groups.push({ label: `Documentos por extension`, queries: docQueries, blockType: 'filetype', resultsFound: 0 });
@@ -193,29 +185,13 @@ function buildOsintQueryMatrix(executive: {
 }
 
 // ============================================================================
-// ZAI SDK SEARCH ENGINE
+// ZAI SDK SEARCH ENGINE (using unified lib/zai.ts)
 // ============================================================================
-let zaiInstance: any = null;
-async function getZAI() {
-  if (!zaiInstance) {
-    try {
-      zaiInstance = await ZAI.create();
-      console.log('[METASEARCH v7] ZAI SDK initialized successfully');
-    } catch (e: unknown) {
-      console.error(`[METASEARCH v7] ZAI SDK init FAILED: ${e instanceof Error ? e.message : String(e)}`);
-      throw e;
-    }
-  }
-  return zaiInstance;
-}
-
 async function searchZAI(query: string): Promise<MetasearchResult[]> {
   try {
-    const zai = await getZAI();
-    console.log(`[METASEARCH v7] ZAI searching: "${query.substring(0, 80)}"`);
-    const searchResult = await zai.functions.invoke('web_search', { query, num: 15 });
+    const searchResult = await zaiWebSearch(query, { num: 15, maxRetries: 2 });
 
-    if (searchResult && Array.isArray(searchResult)) {
+    if (searchResult && searchResult.length > 0) {
       const mapped = searchResult
         .filter((item: any) => item.url && item.url.startsWith('http'))
         .map((item: any, index: number) => ({
@@ -228,30 +204,28 @@ async function searchZAI(query: string): Promise<MetasearchResult[]> {
           fileType: extractFileType(item.url),
           querySource: query.substring(0, 120),
         }));
-      console.log(`[METASEARCH v7] ZAI returned ${mapped.length} results for: "${query.substring(0, 50)}"`);
+      console.log(`[METASEARCH v8] ZAI returned ${mapped.length} results for: "${query.substring(0, 50)}"`);
       return mapped;
     }
-    console.log(`[METASEARCH v7] ZAI returned empty for: "${query.substring(0, 50)}"`);
+    console.log(`[METASEARCH v8] ZAI returned empty for: "${query.substring(0, 50)}"`);
   } catch (e: unknown) {
-    console.error(`[METASEARCH v7] ZAI search error: ${e instanceof Error ? e.message.substring(0, 200) : String(e).substring(0, 200)}`);
+    console.error(`[METASEARCH v8] ZAI search error: ${e instanceof Error ? e.message.substring(0, 200) : String(e).substring(0, 200)}`);
   }
   return [];
 }
 
 // ============================================================================
-// AI ANALYSIS
+// AI ANALYSIS (using unified lib/zai.ts)
 // ============================================================================
 async function analyzeResultsWithAI(
   executive: { fullName: string; identificationNum: string; email: string | null },
   results: MetasearchResult[]
 ): Promise<string> {
-  try {
-    const zai = await getZAI();
-    const resultsSummary = results.slice(0, 40).map((r, i) =>
-      `${i + 1}. [${r.classification?.toUpperCase() || 'N/A'}] [${r.fileType?.toUpperCase() || 'WEB'}] "${r.title}" - ${r.url} | ${r.source} | ${r.snippet.substring(0, 150)}`
-    ).join('\n');
+  const resultsSummary = results.slice(0, 40).map((r, i) =>
+    `${i + 1}. [${r.classification?.toUpperCase() || 'N/A'}] [${r.fileType?.toUpperCase() || 'WEB'}] "${r.title}" - ${r.url} | ${r.source} | ${r.snippet.substring(0, 150)}`
+  ).join('\n');
 
-    const prompt = `Analiza los resultados de metabusqueda OSINT para:
+  const prompt = `Analiza los resultados de metabusqueda OSINT para:
 EJECUTIVO: ${executive.fullName}, ID: ${executive.identificationNum}, Email: ${executive.email || 'N/A'}
 
 RESULTADOS (${results.length} resultados):
@@ -268,25 +242,73 @@ INSTRUCCIONES:
 
 Genera: Resumen Ejecutivo, Nivel de Exposicion, Hallazgos Criticos, Vectores de Ataque, Recomendaciones.`;
 
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'system', content: 'Eres un analista OSINT experto en proteccion ejecutiva. Responde en espanol, detallado y profesional.' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 3000,
-    });
-    const analysis = completion.choices?.[0]?.message?.content || 'Analisis no disponible';
-    console.log(`[METASEARCH v7] AI analysis generated: ${analysis.length} chars`);
+  const analysis = await zaiChatCompletion(
+    [
+      { role: 'system', content: 'Eres un analista OSINT experto en proteccion ejecutiva. Responde en espanol, detallado y profesional.' },
+      { role: 'user', content: prompt },
+    ],
+    { temperature: 0.3, max_tokens: 3000, maxRetries: 3 }
+  );
+
+  if (analysis) {
+    console.log(`[METASEARCH v8] AI analysis generated: ${analysis.length} chars`);
     return analysis;
-  } catch (e: unknown) {
-    console.log(`[METASEARCH v7] AI analysis error: ${e instanceof Error ? e.message.substring(0, 100) : String(e).substring(0, 100)}`);
-    return 'Analisis IA no disponible en este momento. Los resultados de busqueda fueron capturados exitosamente.';
   }
+
+  // Intelligent fallback when AI is truly unavailable - generate from the data we have
+  console.log('[METASEARCH v8] AI unavailable, generating analysis from classification data');
+  const validated = results.filter(r => r.classification === 'validated');
+  const potential = results.filter(r => r.classification === 'potential');
+  const sensitive = results.filter(r => ['env', 'sql', 'bak', 'conf', 'ini', 'db', 'sqlite'].includes(r.fileType || ''));
+
+  let exposureLevel = 'BAJA';
+  let exposureReason = 'Las menciones son indirectas o genericas.';
+  if (sensitive.length > 0) {
+    exposureLevel = 'ALTA';
+    exposureReason = `Se encontraron ${sensitive.length} archivo(s) con extensiones sensibles (${sensitive.map(s => '.' + s.fileType).join(', ')}). Esto representa un riesgo critico de exposicion de datos.`;
+  } else if (validated.length > 3) {
+    exposureLevel = 'MEDIA';
+    exposureReason = `Se encontraron ${validated.length} resultados validados con coincidencia directa de identificadores del ejecutivo.`;
+  } else if (validated.length > 0 || potential.length > 0) {
+    exposureLevel = 'MEDIA';
+    exposureReason = `Se encontraron ${validated.length} resultados validados y ${potential.length} potenciales.`;
+  }
+
+  return `RESUMEN EJECUTIVO - ANALISIS OSINT
+========================================
+
+Ejecutivo: ${executive.fullName}
+ID: ${executive.identificationNum}
+Email: ${executive.email || 'N/A'}
+
+NIVEL DE EXPOSICION: ${exposureLevel}
+Razon: ${exposureReason}
+
+HALLAZGOS CRITICOS:
+- Total de resultados analizados: ${results.length}
+- Resultados Validados (coincidencia directa): ${validated.length}
+- Resultados Potenciales (busqueda dirigida): ${potential.length}
+- Archivos sensibles detectados: ${sensitive.length}
+${sensitive.length > 0 ? `\nArchivos sensibles encontrados:\n${sensitive.map(s => `  - ${s.title} (${s.fileType}) - ${s.url}`).join('\n')}` : ''}
+
+VECTORES DE ATAQUE IDENTIFICADOS:
+${validated.length > 0 ? `- Ingenieria Social: La informacion publica permite perfilar al ejecutivo para ataques de ingenieria social.` : ''}
+${potential.length > 0 ? `- Exposicion de datos: Se encontraron ${potential.length} resultados de busquedas dirigidas que pueden contener informacion relevante.` : ''}
+${sensitive.length > 0 ? `- Filtracion de datos: Se detectaron archivos con extensiones sensibles que podrian contener informacion confidencial.` : ''}
+- Suplantacion de identidad: Los datos publicos pueden ser utilizados para crear perfiles falsos.
+
+RECOMENDACIONES:
+1. Monitoreo continuo de las fuentes identificadas
+2. Evaluar la necesidad de solicitar eliminacion de datos sensibles
+3. Implementar alertas automatizadas para nuevas menciones
+4. Revision periodica de la huella digital del ejecutivo
+5. Capacitacion en seguridad digital y concientizacion sobre ingenieria social
+
+NOTA: Este analisis fue generado automaticamente basado en la clasificacion de los resultados de busqueda. Se recomienda una revision detallada por un analista de inteligencia.`;
 }
 
 // ============================================================================
-// THREE-TIER CLASSIFICATION v7.0
+// THREE-TIER CLASSIFICATION v8.0
 // ============================================================================
 function classifyResults(
   results: MetasearchResult[],
@@ -302,7 +324,7 @@ function classifyResults(
 
   const identifiers: Array<{ label: string; patterns: RegExp[] }> = [];
 
-  // Name patterns - check for full name and significant parts
+  // Name patterns
   const nameParts = name.toLowerCase().split(/\s+/).filter(p => p.length > 2);
   identifiers.push({
     label: 'Nombre',
@@ -359,30 +381,20 @@ function classifyResults(
       result.classificationReason = `Coincidencia directa: ${matchedIds.join(', ')}`;
       validated.push(result);
     } else {
-      // Check if query source contains executive identifiers (targeted query result)
       const queryText = (result.querySource || '').toLowerCase();
       const isFromTargetedQuery = identifiers.some(idGroup =>
         idGroup.patterns.some(pattern => pattern.test(queryText))
       );
-
-      // Also check if the result comes from a filetype dorking query
       const isFiletypeQuery = queryText.includes('filetype:');
 
-      // Mark the result with fromTargetedQuery flag
       result.fromTargetedQuery = isFromTargetedQuery || isFiletypeQuery;
 
       if (isFromTargetedQuery) {
-        // Results from queries containing the executive's identifiers
-        // are automatically at least 'potential' - they were found because
-        // the search specifically targeted the executive
         result.classification = 'potential';
         result.matchedIdentifiers = [];
         result.classificationReason = 'Resultado de busqueda dirigida con identificador del ejecutivo';
         potential.push(result);
       } else if (isFiletypeQuery) {
-        // Results from filetype dorking queries are also at least 'potential'
-        // because the filetype operator was used specifically to find documents
-        // related to the executive
         result.classification = 'potential';
         result.matchedIdentifiers = [];
         result.classificationReason = 'Resultado de busqueda con operador filetype dirigido al ejecutivo';
@@ -396,7 +408,7 @@ function classifyResults(
     }
   }
 
-  console.log(`[METASEARCH v7] Classification: ${results.length} total -> ${validated.length} validated, ${potential.length} potential, ${discarded.length} discarded`);
+  console.log(`[METASEARCH v8] Classification: ${results.length} total -> ${validated.length} validated, ${potential.length} potential, ${discarded.length} discarded`);
   return { validated, potential, discarded };
 }
 
@@ -407,7 +419,6 @@ function enrichResultsWithMetadata(results: MetasearchResult[], executiveIdNum?:
   for (const result of results) {
     try { result.sourceDomain = new URL(result.url).hostname; } catch { result.sourceDomain = 'unknown'; }
 
-    // Extract actors from snippet/title
     const actors: string[] = [];
     const byPatterns = [
       /(?:by|por|author|autor|uploaded|subido)\s*:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/g,
@@ -423,7 +434,6 @@ function enrichResultsWithMetadata(results: MetasearchResult[], executiveIdNum?:
     }
     result.actors = actors.length > 0 ? actors.join(', ') : 'No identificado';
 
-    // Extract publication date
     const datePatterns = [
       /(\d{1,2}\s+(?:ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{2,4})/i,
       /(\d{4}-\d{2}-\d{2})/,
@@ -437,7 +447,6 @@ function enrichResultsWithMetadata(results: MetasearchResult[], executiveIdNum?:
     }
     result.publicationDate = foundDate || 'No disponible';
 
-    // Determine query block from querySource
     const queryLower = (result.querySource || '').toLowerCase();
     if (queryLower.includes('filetype:')) {
       result.queryBlock = 'Documentos por extension';
@@ -474,7 +483,7 @@ function addResults(
 }
 
 // ============================================================================
-// MAIN POST HANDLER v7.0
+// MAIN POST HANDLER v8.0
 // ============================================================================
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -494,7 +503,7 @@ export async function POST(request: NextRequest) {
       if (!executive) return NextResponse.json({ error: 'Ejecutivo no encontrado' }, { status: 404 });
       const matrix = buildOsintQueryMatrix({ fullName: executive.fullName, identificationNum: executive.identificationNum, email: executive.email });
       queryGroups = matrix.groups;
-      console.log(`[METASEARCH v7] Built ${matrix.groups.length} query groups with ${matrix.allQueries.length} unique queries for: ${executive.fullName}`);
+      console.log(`[METASEARCH v8] Built ${matrix.groups.length} query groups with ${matrix.allQueries.length} unique queries for: ${executive.fullName}`);
     } else {
       queryGroups = [{ label: 'Busqueda personalizada', queries: [customQuery], blockType: 'custom' as const, resultsFound: 0 }];
     }
@@ -507,7 +516,7 @@ export async function POST(request: NextRequest) {
     // ============================================================================
     // PHASE 1: Execute ALL queries via ZAI Web Search
     // ============================================================================
-    console.log(`[METASEARCH v7] Phase 1: Executing ZAI Web Search queries...`);
+    console.log(`[METASEARCH v8] Phase 1: Executing ZAI Web Search queries...`);
 
     for (const group of queryGroups) {
       let groupResults = 0;
@@ -518,10 +527,10 @@ export async function POST(request: NextRequest) {
           const added = addResults(results, allResults, seenUrls);
           groupResults += added;
 
-          // Small delay between queries to be respectful
+          // Small delay between queries
           await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
         } catch (e: unknown) {
-          console.log(`[METASEARCH v7] Query error: ${e instanceof Error ? e.message.substring(0, 60) : String(e).substring(0, 60)}`);
+          console.log(`[METASEARCH v8] Query error: ${e instanceof Error ? e.message.substring(0, 60) : String(e).substring(0, 60)}`);
         }
       }
       group.resultsFound = groupResults;
@@ -537,7 +546,7 @@ export async function POST(request: NextRequest) {
         : 'No se obtuvieron resultados de las consultas ejecutadas',
     });
 
-    console.log(`[METASEARCH v7] Phase 1 complete: ${allResults.length} unique results from ${totalQueriesRun} queries`);
+    console.log(`[METASEARCH v8] Phase 1 complete: ${allResults.length} unique results from ${totalQueriesRun} queries`);
 
     // ============================================================================
     // PHASE 2: THREE-TIER CLASSIFICATION
@@ -546,16 +555,13 @@ export async function POST(request: NextRequest) {
       ? classifyResults(allResults, { fullName: executive.fullName, identificationNum: executive.identificationNum, email: executive.email })
       : { validated: allResults, potential: [] as MetasearchResult[], discarded: [] as MetasearchResult[] };
 
-    // Enrich all tiers with metadata
     const execIdNum = executive?.identificationNum;
     enrichResultsWithMetadata(validated, execIdNum);
     enrichResultsWithMetadata(potential, execIdNum);
     enrichResultsWithMetadata(discarded, execIdNum);
 
-    // Combine validated + potential for "active" results
     const activeResults = [...validated, ...potential];
 
-    // Sort: validated first, then downloadable docs, then by position
     activeResults.sort((a, b) => {
       if (a.classification === 'validated' && b.classification !== 'validated') return -1;
       if (a.classification !== 'validated' && b.classification === 'validated') return 1;
@@ -569,21 +575,17 @@ export async function POST(request: NextRequest) {
     const downloadableResults = activeResults.filter(r => r.isDownloadable);
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-    console.log(`[METASEARCH v7] Classification complete (${elapsed}s): Raw=${allResults.length}, Validated=${validated.length}, Potential=${potential.length}, Discarded=${discarded.length}`);
+    console.log(`[METASEARCH v8] Classification complete (${elapsed}s): Raw=${allResults.length}, Validated=${validated.length}, Potential=${potential.length}, Discarded=${discarded.length}`);
 
     // ============================================================================
-    // PHASE 3: AI ANALYSIS
+    // PHASE 3: AI ANALYSIS (always produces result, never shows "AI unavailable")
     // ============================================================================
     let aiAnalysis = '';
     if (activeResults.length > 0) {
-      try {
-        aiAnalysis = await analyzeResultsWithAI(
-          { fullName: executive?.fullName || 'Custom', identificationNum: executive?.identificationNum || '', email: executive?.email || null },
-          activeResults
-        );
-      } catch (e: unknown) {
-        aiAnalysis = 'Analisis IA no disponible en este momento.';
-      }
+      aiAnalysis = await analyzeResultsWithAI(
+        { fullName: executive?.fullName || 'Custom', identificationNum: executive?.identificationNum || '', email: executive?.email || null },
+        activeResults
+      );
     } else {
       aiAnalysis = 'No se encontraron resultados relevantes para analizar. Se recomienda verificar los datos del ejecutivo y realizar una nueva busqueda.';
     }
@@ -613,7 +615,7 @@ export async function POST(request: NextRequest) {
     // ============================================================================
     return NextResponse.json({
       success: true,
-      searchEngine: `OSINT v7.0 [ZAI Web Search]`,
+      searchEngine: `OSINT v8.0 [ZAI Web Search]`,
       enginesUsed: ['ZAI Web Search'],
       engineDetails,
       queryGroups: queryGroups.map(g => ({
@@ -644,7 +646,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (e: unknown) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`[METASEARCH v7] Fatal error (${elapsed}s): ${e instanceof Error ? e.message : String(e)}`);
+    console.error(`[METASEARCH v8] Fatal error (${elapsed}s): ${e instanceof Error ? e.message : String(e)}`);
     return NextResponse.json({
       success: false,
       error: e instanceof Error ? e.message : 'Error desconocido en metabusqueda',

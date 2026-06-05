@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import * as cheerio from 'cheerio';
+import { getZAI, zaiChatCompletion, zaiWebSearch } from '@/lib/zai';
 
 export const maxDuration = 180; // 3 minutes
-
-// ============================================================================
-// ZAI INITIALIZATION - Use the reliable ZAI.create() method
-// ============================================================================
-async function getZAI() {
-  const ZAI = (await import('z-ai-web-dev-sdk')).default;
-  return ZAI.create();
-}
 
 // Helper: strip HTML to plain text
 function htmlToPlainText(html: string): string {
@@ -169,12 +162,9 @@ async function fetchUrlContent(url: string, zai: any): Promise<UrlIntelligence> 
   if (!success) {
     try {
       console.log(`[INTEL-REPORT] web_search fallback for: ${url.substring(0, 60)}`);
-      const searchResult = await zai.functions.invoke('web_search', {
-        query: url.substring(0, 200),
-        num: 5,
-      });
+      const searchResult = await zaiWebSearch(url.substring(0, 200), { num: 5 });
 
-      if (searchResult && Array.isArray(searchResult) && searchResult.length > 0) {
+      if (searchResult && searchResult.length > 0) {
         searchSnippets = searchResult.map((item: any) =>
           `[${item.name || 'Fuente'}] ${item.snippet || ''}`
         ).filter((s: string) => s.length > 20);
@@ -194,12 +184,9 @@ async function fetchUrlContent(url: string, zai: any): Promise<UrlIntelligence> 
   if (!success) {
     try {
       const domainQuery = `${metadata.domain} filing executive information`;
-      const broadResult = await zai.functions.invoke('web_search', {
-        query: domainQuery,
-        num: 5,
-      });
+      const broadResult = await zaiWebSearch(domainQuery, { num: 5 });
 
-      if (broadResult && Array.isArray(broadResult) && broadResult.length > 0) {
+      if (broadResult && broadResult.length > 0) {
         searchSnippets = broadResult.map((item: any) =>
           `[${item.name || 'Fuente'}] ${item.snippet || ''}`
         ).filter((s: string) => s.length > 20);
@@ -288,19 +275,13 @@ async function handleAutomaticGeneration(data: {
   // Extract search queries from written data
   if (writtenData.trim()) {
     try {
-      const extractCompletion = await zai.chat.completions.create({
-        messages: [
+      const extractText = await zaiChatCompletion([
           {
             role: 'system',
-            content: `Eres un analista OSINT. Extrae las 3 búsquedas web más efectivas para investigar la amenaza descrita. Responde SOLO con JSON array de strings: ["búsqueda 1", "búsqueda 2", "búsqueda 3"]`,
+            content: `Eres un analista OSINT. Extrae las 3 busquedas web mas efectivas para investigar la amenaza descrita. Responde SOLO con JSON array de strings: ["busqueda 1", "busqueda 2", "busqueda 3"]`,
           },
           { role: 'user', content: writtenData.substring(0, 3000) },
-        ],
-        temperature: 0.1,
-        max_tokens: 300,
-      });
-
-      const extractText = extractCompletion.choices?.[0]?.message?.content || '';
+        ], { temperature: 0.1, max_tokens: 300, maxRetries: 2 }) || '';
       const extractMatch = extractText.match(/\[[\s\S]*\]/);
       if (extractMatch) {
         const extracted = JSON.parse(extractMatch[0]);
@@ -325,9 +306,9 @@ async function handleAutomaticGeneration(data: {
   // Execute OSINT searches in parallel (max 4)
   console.log(`[INTEL-REPORT] Phase 2: ${searchQueries.slice(0, 4).length} OSINT searches in parallel...`);
   const osintSearchPromises = searchQueries.slice(0, 4).map(query =>
-    zai.functions.invoke('web_search', { query, num: 5 })
-      .then((result: any) => {
-        if (result && Array.isArray(result)) {
+    zaiWebSearch(query, { num: 5 })
+      .then((result: any[]) => {
+        if (result && result.length > 0) {
           return result.map((item: any) => ({
             sourceName: item.name || 'Desconocido',
             sourceUrl: item.url || '',
@@ -523,16 +504,10 @@ Analiza EN PROFUNDIDAD toda la información proporcionada arriba. Produce un inf
 
   try {
     console.log('[INTEL-REPORT] Phase 4: Deep AI analysis...');
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.08,
-      max_tokens: 16000,
-    });
-
-    const responseText = completion.choices?.[0]?.message?.content || '';
+    const responseText = await zaiChatCompletion([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ], { temperature: 0.08, max_tokens: 16000, maxRetries: 3 }) || '';
     console.log(`[INTEL-REPORT] AI response: ${responseText.length} chars`);
 
     if (responseText) {
