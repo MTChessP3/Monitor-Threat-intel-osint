@@ -40,6 +40,11 @@ interface MetasearchResult {
   localPath?: string;
   querySource?: string;
   exposureLevel?: string;
+  // V5.0 - Analytical metadata
+  sourceDomain?: string;
+  actors?: string;
+  publicationDate?: string;
+  matchedIdentifiers?: string[];
 }
 
 interface EvidenceDetail {
@@ -639,17 +644,24 @@ async function analyzeResultsWithAI(
       `${i + 1}. [${r.fileType?.toUpperCase() || 'WEB'}] "${r.title}" - ${r.url} | ${r.source} | ${r.snippet.substring(0, 150)}`
     ).join('\n');
 
-    const prompt = `Analiza los resultados de metabusqueda OSINT para:
+    const prompt = `Analiza ESTRICTAMENTE los resultados de metabusqueda OSINT para:
 EJECUTIVO: ${executive.fullName}, ID: ${executive.identificationNum}, Email: ${executive.email || 'N/A'}
 
-RESULTADOS (${results.length} resultados):
+RESULTADOS FILTRADOS (${results.length} resultados validados - ya filtrados por coincidencia de identificadores):
 ${resultsSummary}
 
-Genera: Resumen Ejecutivo, Hallazgos Criticos, Hallazgos de Seguridad, Vectores de Ataque, Recomendaciones.`;
+INSTRUCCIONES DE CALIDAD:
+- Solo analiza resultados que contengan EXPLICITAMENTE el nombre, ID o correo del ejecutivo.
+- Descarta mentalmente cualquier resultado que sea demasiado generico o no directamente relevante.
+- Clasifica la exposicion como ALTA si aparecen documentos sensibles (PDFs, hojas de calculo, credenciales).
+- Clasifica como MEDIA si solo aparecen menciones en sitios web publicos genericos.
+- Clasifica como BAJA si las menciones son indirectas o contextuales.
+
+Genera: Resumen Ejecutivo, Hallazgos Criticos (solo coincidencias directas), Hallazgos de Seguridad, Vectores de Ataque, Recomendaciones.`;
 
     const completion = await zai.chat.completions.create({
       messages: [
-        { role: 'system', content: 'Eres un analista OSINT experto en proteccion ejecutiva. Responde en espanol, detallado y profesional.' },
+        { role: 'system', content: 'Eres un analista OSINT experto en proteccion ejecutiva. Filtra resultados con criterio estricto: solo reporta hallazgos con coincidencia directa y verificable. Responde en espanol, detallado y profesional.' },
         { role: 'user', content: prompt },
       ],
       temperature: 0.3,
@@ -738,7 +750,136 @@ function addResults(
 }
 
 // ============================================================================
-// MAIN POST HANDLER v4.1 - Bulletproof for Vercel serverless
+// FALSE POSITIVE FILTER v5.0 - Strict identifier matching
+// ============================================================================
+function filterFalsePositives(
+  results: MetasearchResult[],
+  executive: { fullName: string; identificationNum: string; email: string | null },
+): MetasearchResult[] {
+  const name = executive.fullName;
+  const id = executive.identificationNum;
+  const email = executive.email;
+
+  // Build identifier patterns for matching
+  const identifiers: Array<{ label: string; patterns: RegExp[] }> = [];
+
+  // Name patterns - match full name, and also each individual name part
+  const nameParts = name.toLowerCase().split(/\s+/).filter(p => p.length > 2);
+  identifiers.push({
+    label: 'Nombre',
+    patterns: [
+      new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), // Full name exact
+      ...nameParts.map(part => new RegExp(`\\b${part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')), // Each significant name part
+    ],
+  });
+
+  // ID patterns - match the ID number
+  const idClean = id.replace(/[^a-zA-Z0-9]/g, '');
+  const idNum = id.replace(/\D/g, ''); // Just digits
+  identifiers.push({
+    label: 'ID',
+    patterns: [
+      new RegExp(id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+      ...(idNum.length > 4 ? [new RegExp(idNum, 'i')] : []), // Pure number if >4 digits
+      ...(idClean.length > 4 ? [new RegExp(idClean, 'i')] : []), // Alphanumeric cleaned
+    ],
+  });
+
+  // Email patterns
+  if (email) {
+    const emailUser = email.split('@')[0];
+    identifiers.push({
+      label: 'Email',
+      patterns: [
+        new RegExp(email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), // Full email
+        ...(emailUser.length > 3 ? [new RegExp(emailUser.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')] : []), // Email username
+      ],
+    });
+  }
+
+  const filtered: MetasearchResult[] = [];
+
+  for (const result of results) {
+    const searchableText = `${result.title} ${result.snippet} ${result.url}`.toLowerCase();
+    const matchedIds: string[] = [];
+    let hasMatch = false;
+
+    for (const identifier of identifiers) {
+      for (const pattern of identifier.patterns) {
+        if (pattern.test(searchableText)) {
+          hasMatch = true;
+          if (!matchedIds.includes(identifier.label)) {
+            matchedIds.push(identifier.label);
+          }
+          break; // One match per identifier group is enough
+        }
+      }
+    }
+
+    // STRICT RULE: At least one identifier must match
+    if (hasMatch) {
+      result.matchedIdentifiers = matchedIds;
+      filtered.push(result);
+    }
+  }
+
+  console.log(`[METASEARCH] False-positive filter: ${results.length} → ${filtered.length} results (discarded ${results.length - filtered.length})`);
+  return filtered;
+}
+
+// ============================================================================
+// METADATA ENRICHMENT v5.0 - Extract source, actors, publication date
+// ============================================================================
+function enrichResultsWithMetadata(results: MetasearchResult[]): MetasearchResult[] {
+  for (const result of results) {
+    // Source domain
+    try {
+      result.sourceDomain = new URL(result.url).hostname;
+    } catch {
+      result.sourceDomain = 'unknown';
+    }
+
+    // Extract actors from snippet/title patterns
+    const actors: string[] = [];
+    const byPatterns = [
+      /(?:by|por|author|autor|uploaded|subido)\s*:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/g,
+      /@([\w.-]+)/g,
+      /(?:user|usuario)\s*:?\s*([\w.-]+)/gi,
+    ];
+    const textToSearch = `${result.title} ${result.snippet}`;
+    for (const pattern of byPatterns) {
+      let match;
+      while ((match = pattern.exec(textToSearch)) !== null) {
+        const actor = match[1].trim();
+        if (actor.length > 1 && actor.length < 60 && !actors.includes(actor)) {
+          actors.push(actor);
+        }
+      }
+    }
+    result.actors = actors.length > 0 ? actors.join(', ') : 'No identificado';
+
+    // Extract publication date from snippet
+    const datePatterns = [
+      /(\d{1,2}\s+(?:ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{2,4})/i,
+      /(\d{4}-\d{2}-\d{2})/,
+      /((?:ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2},?\s+\d{4})/i,
+      /(\d{1,2}\/\d{1,2}\/\d{2,4})/,
+    ];
+    let foundDate = '';
+    for (const pattern of datePatterns) {
+      const match = textToSearch.match(pattern);
+      if (match) {
+        foundDate = match[1];
+        break;
+      }
+    }
+    result.publicationDate = foundDate || 'No disponible';
+  }
+  return results;
+}
+
+// ============================================================================
+// MAIN POST HANDLER v5.0 - Bulletproof for Vercel serverless
 // ============================================================================
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -886,30 +1027,48 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // =========================================================================
+    // PHASE 4: FALSE POSITIVE FILTER (Strict identifier validation)
+    // =========================================================================
+    let filteredResults = allResults;
+    if (executive) {
+      console.log(`[METASEARCH] Phase 4: False-positive filtering (${allResults.length} results)...`);
+      filteredResults = filterFalsePositives(allResults, {
+        fullName: executive.fullName,
+        identificationNum: executive.identificationNum,
+        email: executive.email,
+      });
+      // Enrich surviving results with metadata
+      enrichResultsWithMetadata(filteredResults);
+    } else {
+      // For custom queries without executive, just enrich metadata
+      enrichResultsWithMetadata(filteredResults);
+    }
+
     // Sort and re-number
-    allResults.sort((a, b) => {
+    filteredResults.sort((a, b) => {
       if (a.isDownloadable && !b.isDownloadable) return -1;
       if (!a.isDownloadable && b.isDownloadable) return 1;
       return a.position - b.position;
     });
-    allResults.forEach((r, i) => { r.position = i + 1; });
+    filteredResults.forEach((r, i) => { r.position = i + 1; });
 
     const searchEngine = enginesUsed.length > 0
-      ? `OSINT v4.1 [${enginesUsed.join(' + ')}]`
+      ? `OSINT v5.0 [${enginesUsed.join(' + ')}]`
       : 'Sin resultados';
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[METASEARCH] Final (${elapsed}s): ZAI=${engineStats.webSearch}, G=${engineStats.google}, B=${engineStats.bing}, DDG=${engineStats.duckduckgo}, Total=${allResults.length}`);
+    console.log(`[METASEARCH] Final (${elapsed}s): ZAI=${engineStats.webSearch}, G=${engineStats.google}, B=${engineStats.bing}, DDG=${engineStats.duckduckgo}, Raw=${allResults.length}, Filtered=${filteredResults.length}`);
 
     // =========================================================================
     // AI ANALYSIS
     // =========================================================================
     let aiAnalysis = '';
-    if (executive && allResults.length > 0) {
+    if (executive && filteredResults.length > 0) {
       try {
         aiAnalysis = await analyzeResultsWithAI(
           { fullName: executive.fullName, identificationNum: executive.identificationNum, email: executive.email },
-          allResults
+          filteredResults
         );
       } catch (e: unknown) {
         console.log(`[METASEARCH] AI analysis error: ${e instanceof Error ? e.message.substring(0, 80) : String(e).substring(0, 80)}`);
@@ -921,16 +1080,16 @@ export async function POST(request: NextRequest) {
     // EVIDENCE FILES (Safe - won't crash on Vercel)
     // =========================================================================
     const evidenceDetails: EvidenceDetail[] = [];
-    const downloadableResults = allResults.filter(r => r.isDownloadable);
+    const downloadableResults = filteredResults.filter(r => r.isDownloadable);
     let evidenceDetailPath = '';
 
     // Only attempt file operations if we have results and an executive
-    if (executive && allResults.length > 0) {
+    if (executive && filteredResults.length > 0) {
       try {
         const baseDir = '/tmp/Evidencias_Ejecutivos';
 
         // Build evidence details for ALL results
-        const allEvidence: EvidenceDetail[] = allResults.map(r => ({
+        const allEvidence: EvidenceDetail[] = filteredResults.map(r => ({
           url: r.url,
           sourceDomain: extractDomain(r.url),
           discoveredAt: new Date().toISOString(),
@@ -952,11 +1111,13 @@ export async function POST(request: NextRequest) {
             executiveName: executive.fullName,
             generatedAt: new Date().toISOString(),
             captureTimestamp: new Date().toISOString(),
-            generatorAgent: 'ActorTrace OSINT v4.1',
+            generatorAgent: 'ActorTrace OSINT v5.0',
             queryMatrixUsed: queryGroups.map(g => ({ block: g.blockType, label: g.label, queriesExecuted: g.queries.length })),
           },
           statistics: {
-            totalFindings: allResults.length,
+            totalFindings: filteredResults.length,
+            rawFindings: allResults.length,
+            filteredOut: allResults.length - filteredResults.length,
             engineStats,
           },
           aiAnalysis,
@@ -977,13 +1138,17 @@ export async function POST(request: NextRequest) {
     // =========================================================================
     if (executive) {
       try {
-        const resultsSummary = allResults.slice(0, 50).map(r => ({
+        const resultsSummary = filteredResults.slice(0, 50).map(r => ({
           title: r.title,
           url: r.url,
           snippet: r.snippet.substring(0, 200),
           source: r.source,
           fileType: r.fileType,
           isDownloadable: r.isDownloadable,
+          sourceDomain: r.sourceDomain,
+          actors: r.actors,
+          publicationDate: r.publicationDate,
+          matchedIdentifiers: r.matchedIdentifiers,
         }));
 
         await db.executive.update({
@@ -1007,10 +1172,12 @@ export async function POST(request: NextRequest) {
       enginesUsed,
       engineStats,
       queryGroups: queryGroups.map(g => ({ label: g.label, queryCount: g.queries.length, blockType: g.blockType })),
-      resultCount: allResults.length,
+      resultCount: filteredResults.length,
+      rawResultCount: allResults.length,
+      filteredOutCount: allResults.length - filteredResults.length,
       downloadableCount: downloadableResults.length,
       downloadedCount: evidenceDetails.filter(e => e.downloadStatus === 'success').length,
-      results: allResults.slice(0, 150),
+      results: filteredResults.slice(0, 150),
       aiAnalysis,
       evidence: evidenceDetails,
       evidenceDetailPath,

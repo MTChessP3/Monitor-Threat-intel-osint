@@ -5,8 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Search, Plus, Trash2, Edit3, UserCheck, AlertTriangle,
   Loader2, ExternalLink, X, Save, Eye,
-  Building2, Mail, Phone, FileText, Globe, ChevronUp,
-  Download, FileCheck, FileX, HardDrive, FolderOpen,
+  Building2, Mail, Phone, FileText, Globe, ChevronUp, ChevronDown,
+  Download, FileCheck, FileX, HardDrive, FolderOpen, FileJson,
+  FileCode, Calendar, Users, Globe2, CheckCircle2, Filter,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,12 @@ interface MetasearchResult {
   isDownloadable?: boolean;
   downloaded?: boolean;
   localPath?: string;
+  querySource?: string;
+  // V5.0 - Analytical metadata
+  sourceDomain?: string;
+  actors?: string;
+  publicationDate?: string;
+  matchedIdentifiers?: string[];
 }
 
 interface EvidenceDetail {
@@ -74,6 +81,8 @@ interface MetasearchResponse {
   engineStats: { google: number; bing: number; yandex: number; duckduckgo: number; brave: number; webSearch: number };
   queryGroups: Array<{ label: string; queryCount: number; blockType: string }>;
   resultCount: number;
+  rawResultCount?: number;
+  filteredOutCount?: number;
   downloadableCount: number;
   downloadedCount: number;
   results: MetasearchResult[];
@@ -82,6 +91,7 @@ interface MetasearchResponse {
   evidenceDetailPath: string;
   executive: { id: string; fullName: string; identificationNum: string; email: string | null } | null;
   timestamp: string;
+  extensionsMonitored?: string[];
 }
 
 // ============================================================================
@@ -92,7 +102,7 @@ function RiskBadge({ level }: { level: string }) {
     bajo: { color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', label: 'BAJO' },
     medio: { color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20', label: 'MEDIO' },
     alto: { color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20', label: 'ALTO' },
-    critico: { color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20', label: 'CRÍTICO' },
+    critico: { color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20', label: 'CRITICO' },
   };
   const c = config[level] || config.bajo;
   return (
@@ -102,26 +112,178 @@ function RiskBadge({ level }: { level: string }) {
   );
 }
 
-// File type icon
-function FileTypeIcon({ fileType, downloaded }: { fileType: string; downloaded?: boolean }) {
-  const colors: Record<string, string> = {
-    pdf: 'text-red-400', xlsx: 'text-green-400', xls: 'text-green-400',
-    doc: 'text-blue-400', docx: 'text-blue-400', ppt: 'text-orange-400',
-    txt: 'text-gray-400', rar: 'text-purple-400', zip: 'text-purple-400',
-    '7z': 'text-purple-400', csv: 'text-emerald-400', rtf: 'text-cyan-400',
-    htm: 'text-teal-400', html: 'text-teal-400', json: 'text-yellow-400',
-    xml: 'text-yellow-300', yaml: 'text-yellow-300', yml: 'text-yellow-300',
-    env: 'text-red-500', conf: 'text-red-500', config: 'text-red-500', ini: 'text-red-500',
-    bak: 'text-pink-400', old: 'text-pink-400', sql: 'text-indigo-400', db: 'text-indigo-400',
-    sqlite: 'text-indigo-400', odt: 'text-blue-300', ods: 'text-green-300', odp: 'text-orange-300',
-    png: 'text-sky-400', jpg: 'text-sky-400', jpeg: 'text-sky-400', svg: 'text-sky-400',
+// ============================================================================
+// Export helpers
+// ============================================================================
+function downloadAsFile(data: string, filename: string, mimeType: string) {
+  const blob = new Blob([data], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportResultAsJson(result: MetasearchResult, execName: string) {
+  const payload = {
+    metadata: {
+      exportedAt: new Date().toISOString(),
+      executiveName: execName,
+      agent: 'ActorTrace OSINT v5.0',
+    },
+    result: {
+      title: result.title,
+      url: result.url,
+      snippet: result.snippet,
+      source: result.source,
+      position: result.position,
+      fileType: result.fileType || 'html',
+      isDownloadable: result.isDownloadable || false,
+      querySource: result.querySource || '',
+      sourceDomain: result.sourceDomain || '',
+      actors: result.actors || '',
+      publicationDate: result.publicationDate || '',
+      matchedIdentifiers: result.matchedIdentifiers || [],
+    },
+    rawPayload: {
+      originalResponse: { ...result },
+      captureTimestamp: new Date().toISOString(),
+    },
   };
-  const color = colors[fileType] || 'text-muted-foreground';
-  return (
-    <span className={`text-[10px] font-mono font-bold ${color} uppercase`}>
-      {downloaded ? '✓' : ''}{fileType}
-    </span>
-  );
+  const safeName = execName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
+  downloadAsFile(JSON.stringify(payload, null, 2), `OSINT_${safeName}_result_${result.position}.json`, 'application/json');
+  toast.success('Resultado exportado como JSON');
+}
+
+function exportResultAsTxt(result: MetasearchResult, execName: string) {
+  const lines = [
+    `================================================================================`,
+    `  ACTORTRACE OSINT v5.0 - REPORTE DE RESULTADO INDIVIDUAL`,
+    `================================================================================`,
+    ``,
+    `EJECUTIVO: ${execName}`,
+    `EXPORTADO: ${new Date().toISOString()}`,
+    ``,
+    `--- DATOS DEL RESULTADO ---`,
+    ``,
+    `Posicion:      ${result.position}`,
+    `Titulo:        ${result.title}`,
+    `URL:           ${result.url}`,
+    `Fuente:        ${result.source}`,
+    `Tipo Archivo:  ${result.fileType || 'html'}`,
+    `Descargable:   ${result.isDownloadable ? 'Si' : 'No'}`,
+    ``,
+    `--- METADATOS ANALITICOS ---`,
+    ``,
+    `Fuente (Dom):  ${result.sourceDomain || 'No disponible'}`,
+    `Actores:       ${result.actors || 'No identificado'}`,
+    `F. Publicacion:${result.publicationDate || 'No disponible'}`,
+    `IDs Coincidentes: ${result.matchedIdentifiers?.join(', ') || 'Ninguno'}`,
+    ``,
+    `--- SNIPPET ---`,
+    ``,
+    `${result.snippet || 'Sin snippet'}`,
+    ``,
+    `--- QUERY ORIGEN ---`,
+    ``,
+    `${result.querySource || 'No disponible'}`,
+    ``,
+    `================================================================================`,
+  ];
+  const safeName = execName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
+  downloadAsFile(lines.join('\n'), `OSINT_${safeName}_result_${result.position}.txt`, 'text/plain');
+  toast.success('Resultado exportado como TXT');
+}
+
+function exportAllAsJson(response: MetasearchResponse) {
+  const payload = {
+    metadata: {
+      exportedAt: new Date().toISOString(),
+      agent: 'ActorTrace OSINT v5.0',
+      searchEngine: response.searchEngine,
+      enginesUsed: response.enginesUsed,
+      elapsedSeconds: response.elapsedSeconds,
+    },
+    executive: response.executive,
+    statistics: {
+      totalResults: response.resultCount,
+      rawResults: response.rawResultCount || response.resultCount,
+      filteredOut: response.filteredOutCount || 0,
+      downloadable: response.downloadableCount,
+      engineStats: response.engineStats,
+    },
+    queryGroups: response.queryGroups,
+    aiAnalysis: response.aiAnalysis,
+    results: response.results.map(r => ({
+      ...r,
+      rawPayload: { ...r },
+      captureTimestamp: new Date().toISOString(),
+    })),
+    evidence: response.evidence,
+  };
+  const safeName = (response.executive?.fullName || 'custom').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
+  downloadAsFile(JSON.stringify(payload, null, 2), `OSINT_${safeName}_complete_${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+  toast.success(`Exportados ${response.resultCount} resultados como JSON`);
+}
+
+function exportAllAsTxt(response: MetasearchResponse) {
+  const lines = [
+    `================================================================================`,
+    `  ACTORTRACE OSINT v5.0 - REPORTE COMPLETO DE METABUSQUEDA`,
+    `================================================================================`,
+    ``,
+    `Fecha:           ${new Date().toISOString()}`,
+    `Motor:           ${response.searchEngine}`,
+    `Motores Usados:  ${response.enginesUsed.join(', ')}`,
+    `Tiempo:          ${response.elapsedSeconds}s`,
+    ``,
+    `--- EJECUTIVO ---`,
+    `Nombre:          ${response.executive?.fullName || 'N/A'}`,
+    `ID:              ${response.executive?.identificationNum || 'N/A'}`,
+    `Email:           ${response.executive?.email || 'N/A'}`,
+    ``,
+    `--- ESTADISTICAS ---`,
+    `Resultados Totales:   ${response.resultCount}`,
+    `Resultados Crudos:    ${response.rawResultCount || response.resultCount}`,
+    `Filtrados (FP):       ${response.filteredOutCount || 0}`,
+    `Descargables:         ${response.downloadableCount}`,
+    `Google:               ${response.engineStats.google}`,
+    `Bing:                 ${response.engineStats.bing}`,
+    `DuckDuckGo:           ${response.engineStats.duckduckgo}`,
+    `Web Search:           ${response.engineStats.webSearch}`,
+    ``,
+    `--- ANALISIS IA ---`,
+    ``,
+    `${response.aiAnalysis || 'No disponible'}`,
+    ``,
+    `================================================================================`,
+    `  RESULTADOS DETALLADOS (${response.resultCount})`,
+    `================================================================================`,
+    ``,
+  ];
+
+  for (const r of response.results) {
+    lines.push(`--- Resultado #${r.position} ---`);
+    lines.push(`Titulo:        ${r.title}`);
+    lines.push(`URL:           ${r.url}`);
+    lines.push(`Fuente:        ${r.source}`);
+    lines.push(`Dominio:       ${r.sourceDomain || 'N/A'}`);
+    lines.push(`Actores:       ${r.actors || 'No identificado'}`);
+    lines.push(`F. Publicacion:${r.publicationDate || 'No disponible'}`);
+    lines.push(`IDs Match:     ${r.matchedIdentifiers?.join(', ') || 'Ninguno'}`);
+    lines.push(`Tipo Archivo:  ${r.fileType || 'html'}`);
+    lines.push(`Descargable:   ${r.isDownloadable ? 'Si' : 'No'}`);
+    lines.push(`Snippet:       ${r.snippet || 'Sin snippet'}`);
+    lines.push(`Query:         ${r.querySource || 'N/A'}`);
+    lines.push(``);
+  }
+
+  const safeName = (response.executive?.fullName || 'custom').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
+  downloadAsFile(lines.join('\n'), `OSINT_${safeName}_complete_${new Date().toISOString().slice(0, 10)}.txt`, 'text/plain');
+  toast.success(`Exportados ${response.resultCount} resultados como TXT`);
 }
 
 // ============================================================================
@@ -136,6 +298,8 @@ export default function ProteccionEjecutivosPage() {
   const [metasearchResults, setMetasearchResults] = useState<MetasearchResponse | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [searchProgress, setSearchProgress] = useState('');
+  const [expandedResult, setExpandedResult] = useState<number | null>(null);
+  const [resultFilter, setResultFilter] = useState<'all' | 'documents' | 'web'>('all');
 
   // Dialog states
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -185,7 +349,7 @@ export default function ProteccionEjecutivosPage() {
       if (!res.ok) { toast.error(data.error || 'Error al crear ejecutivo'); return; }
       toast.success(`Ejecutivo ${formData.fullName} creado exitosamente`);
       setShowCreateDialog(false); resetForm(); fetchExecutives();
-    } catch { toast.error('Error de conexión al crear ejecutivo'); }
+    } catch { toast.error('Error de conexion al crear ejecutivo'); }
   };
 
   const handleUpdate = async () => {
@@ -199,7 +363,7 @@ export default function ProteccionEjecutivosPage() {
       if (!res.ok) { toast.error(data.error || 'Error al actualizar ejecutivo'); return; }
       toast.success(`Ejecutivo ${formData.fullName} actualizado exitosamente`);
       setShowEditDialog(false); setSelectedExecutive(null); resetForm(); fetchExecutives();
-    } catch { toast.error('Error de conexión al actualizar ejecutivo'); }
+    } catch { toast.error('Error de conexion al actualizar ejecutivo'); }
   };
 
   const handleDelete = async () => {
@@ -209,7 +373,7 @@ export default function ProteccionEjecutivosPage() {
       if (!res.ok) { toast.error('Error al eliminar ejecutivo'); return; }
       toast.success('Ejecutivo eliminado exitosamente');
       setShowDeleteDialog(false); setSelectedExecutive(null); fetchExecutives();
-    } catch { toast.error('Error de conexión al eliminar ejecutivo'); }
+    } catch { toast.error('Error de conexion al eliminar ejecutivo'); }
   };
 
   const openEditDialog = (exec: Executive) => {
@@ -222,13 +386,14 @@ export default function ProteccionEjecutivosPage() {
     setShowEditDialog(true);
   };
 
-  // Execute metabúsqueda with OSINT query matrix
+  // Execute metabusqueda with OSINT query matrix
   const handleMetasearch = async () => {
     if (!selectedExecutive) return;
     setMetasearchLoading(true);
     setShowResults(true);
     setMetasearchResults(null);
-    setSearchProgress('Iniciando Meta-Búsqueda OSINT v3.0 (6 motores + Dorking expandido)...');
+    setExpandedResult(null);
+    setSearchProgress('Iniciando Meta-Busqueda OSINT v5.0 (Filtro Anti-Falsos Positivos + Dorking)...');
 
     try {
       const res = await fetch('/api/metasearch', {
@@ -239,7 +404,7 @@ export default function ProteccionEjecutivosPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || 'Error en metabúsqueda');
+        toast.error(data.error || 'Error en metabusqueda');
         setMetasearchLoading(false);
         return;
       }
@@ -247,12 +412,10 @@ export default function ProteccionEjecutivosPage() {
       setMetasearchResults(data);
       setSearchProgress('');
 
-      // Summary toast
-      const dlCount = data.downloadedCount || 0;
-      const totalCount = data.resultCount || 0;
-      toast.success(`Búsqueda completada: ${totalCount} resultados, ${dlCount} archivos descargados`);
+      const filtered = data.filteredOutCount || 0;
+      toast.success(`Busqueda completada: ${data.resultCount} resultados validados (${filtered} falsos positivos filtrados)`);
     } catch {
-      toast.error('Error de conexión en metabúsqueda');
+      toast.error('Error de conexion en metabusqueda');
       setSearchProgress('');
     } finally {
       setMetasearchLoading(false);
@@ -271,8 +434,12 @@ export default function ProteccionEjecutivosPage() {
     acc[e.riskLevel] = (acc[e.riskLevel] || 0) + 1; return acc;
   }, {} as Record<string, number>);
 
-  // Compute evidence count from results
-  const evidenceCount = metasearchResults?.evidence?.filter(e => e.downloadStatus === 'success').length || 0;
+  // Filter results for display
+  const filteredDisplayResults = metasearchResults?.results.filter(r => {
+    if (resultFilter === 'documents') return r.isDownloadable;
+    if (resultFilter === 'web') return !r.isDownloadable;
+    return true;
+  }) || [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -285,12 +452,12 @@ export default function ProteccionEjecutivosPage() {
                 <Shield className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground tracking-tight">Protección de Ejecutivos</h1>
-                <p className="text-xs text-muted-foreground">Módulo de gestión y metabúsqueda OSINT</p>
+                <h1 className="text-xl font-bold text-foreground tracking-tight">Proteccion de Ejecutivos</h1>
+                <p className="text-xs text-muted-foreground">Modulo OSINT v5.0 - Filtro Anti-Falsos Positivos</p>
               </div>
             </div>
             <a href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              ← Dashboard
+              &larr; Dashboard
             </a>
           </div>
         </div>
@@ -333,10 +500,10 @@ export default function ProteccionEjecutivosPage() {
               onClick={handleMetasearch}
               disabled={!selectedExecutive || metasearchLoading}
               className="bg-[#1a1a5e] hover:bg-[#252580] text-white font-medium gap-2 disabled:opacity-40"
-              title={selectedExecutive ? `Meta-Búsqueda OSINT v3.0: ${selectedExecutive.fullName}` : 'Seleccione un ejecutivo primero'}
+              title={selectedExecutive ? `Meta-Busqueda OSINT v5.0: ${selectedExecutive.fullName}` : 'Seleccione un ejecutivo primero'}
             >
               {metasearchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              Meta-Búsqueda OSINT
+              Meta-Busqueda OSINT
             </Button>
             <Button
               onClick={() => { resetForm(); setShowCreateDialog(true); }}
@@ -356,8 +523,8 @@ export default function ProteccionEjecutivosPage() {
             <UserCheck className="w-4 h-4 text-amber-500" />
             <span className="text-sm text-amber-400">
               Seleccionado: <strong>{selectedExecutive.fullName}</strong>
-              {selectedExecutive.position && ` — ${selectedExecutive.position}`}
-              {selectedExecutive.organization && ` — ${selectedExecutive.organization}`}
+              {selectedExecutive.position && ` - ${selectedExecutive.position}`}
+              {selectedExecutive.organization && ` - ${selectedExecutive.organization}`}
             </span>
             <button onClick={() => { setSelectedExecutive(null); setShowResults(false); }} className="ml-auto text-amber-400 hover:text-amber-300">
               <X className="w-4 h-4" />
@@ -370,7 +537,7 @@ export default function ProteccionEjecutivosPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base text-foreground">Directorio de Ejecutivos</CardTitle>
             <CardDescription className="text-muted-foreground text-xs">
-              Seleccione un ejecutivo para habilitar la Meta-Búsqueda OSINT v3.0 (Google + Bing + Yandex + DuckDuckGo + Brave + Web Search + Dorking 30+ extensiones)
+              Seleccione un ejecutivo para habilitar la Meta-Busqueda OSINT v5.0 (Filtro Anti-FP + Dorking 40+ extensiones)
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -390,12 +557,12 @@ export default function ProteccionEjecutivosPage() {
                   <TableHeader>
                     <TableRow className="border-border hover:bg-transparent">
                       <TableHead className="w-10"></TableHead>
-                      <TableHead className="text-xs text-muted-foreground">Identificación</TableHead>
+                      <TableHead className="text-xs text-muted-foreground">Identificacion</TableHead>
                       <TableHead className="text-xs text-muted-foreground">Nombre Completo</TableHead>
-                      <TableHead className="text-xs text-muted-foreground">Correo Electrónico</TableHead>
-                      <TableHead className="text-xs text-muted-foreground">Cargo / Organización</TableHead>
+                      <TableHead className="text-xs text-muted-foreground">Correo Electronico</TableHead>
+                      <TableHead className="text-xs text-muted-foreground">Cargo / Organizacion</TableHead>
                       <TableHead className="text-xs text-muted-foreground">Riesgo</TableHead>
-                      <TableHead className="text-xs text-muted-foreground">Última Búsqueda</TableHead>
+                      <TableHead className="text-xs text-muted-foreground">Ultima Busqueda</TableHead>
                       <TableHead className="w-24 text-xs text-muted-foreground">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -415,10 +582,10 @@ export default function ProteccionEjecutivosPage() {
                         </TableCell>
                         <TableCell className="py-3"><span className="text-xs font-mono text-muted-foreground">{exec.identificationNum}</span></TableCell>
                         <TableCell className="py-3"><span className="text-sm font-medium text-foreground">{exec.fullName}</span></TableCell>
-                        <TableCell className="py-3"><span className="text-xs text-muted-foreground">{exec.email || '—'}</span></TableCell>
+                        <TableCell className="py-3"><span className="text-xs text-muted-foreground">{exec.email || '-'}</span></TableCell>
                         <TableCell className="py-3">
                           <div className="flex flex-col">
-                            <span className="text-xs text-foreground">{exec.position || '—'}</span>
+                            <span className="text-xs text-foreground">{exec.position || '-'}</span>
                             <span className="text-xs text-muted-foreground">{exec.organization || ''}</span>
                           </div>
                         </TableCell>
@@ -444,7 +611,7 @@ export default function ProteccionEjecutivosPage() {
           </CardContent>
         </Card>
 
-        {/* Metasearch Results */}
+        {/* Metasearch Results - Enterprise Dashboard */}
         <AnimatePresence>
           {showResults && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
@@ -454,74 +621,115 @@ export default function ProteccionEjecutivosPage() {
                     <div>
                       <CardTitle className="text-base text-foreground flex items-center gap-2">
                         <Globe className="w-4 h-4 text-amber-500" />
-                        Resultados de Meta-Búsqueda OSINT
+                        Resultados de Meta-Busqueda OSINT v5.0
                       </CardTitle>
                       {metasearchResults && (
                         <CardDescription className="text-xs text-muted-foreground mt-1">
-                          {metasearchResults.searchEngine} — {metasearchResults.resultCount} resultados — {metasearchResults.downloadedCount} archivos descargados
+                          {metasearchResults.searchEngine} - {metasearchResults.resultCount} resultados validados
+                          {metasearchResults.filteredOutCount ? ` (${metasearchResults.filteredOutCount} falsos positivos filtrados)` : ''}
                         </CardDescription>
                       )}
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => setShowResults(false)} className="text-muted-foreground hover:text-foreground">
-                      <ChevronUp className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {metasearchResults && !metasearchLoading && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => exportAllAsJson(metasearchResults)}
+                            className="text-[10px] h-7 gap-1 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                          >
+                            <FileJson className="w-3 h-3" /> Exportar JSON
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => exportAllAsTxt(metasearchResults)}
+                            className="text-[10px] h-7 gap-1 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                          >
+                            <FileCode className="w-3 h-3" /> Exportar TXT
+                          </Button>
+                        </>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => setShowResults(false)} className="text-muted-foreground hover:text-foreground">
+                        <ChevronUp className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
                   {metasearchLoading ? (
                     <div className="flex flex-col items-center justify-center py-12">
                       <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-3" />
-                      <p className="text-sm text-muted-foreground">Ejecutando Meta-Búsqueda OSINT Multi-Engine...</p>
+                      <p className="text-sm text-muted-foreground">Ejecutando Meta-Busqueda OSINT v5.0...</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Consultando: &quot;{selectedExecutive?.fullName}&quot; × 30+ extensiones en Google + Bing + Yandex + DuckDuckGo + Brave + Web Search
+                        Consultando: &quot;{selectedExecutive?.fullName}&quot; en Google + Bing + DuckDuckGo + Web Search
                       </p>
+                      <p className="text-xs text-amber-400 mt-2">Filtro Anti-Falsos Positivos activado</p>
                       {searchProgress && (
-                        <p className="text-xs text-amber-400 mt-2">{searchProgress}</p>
+                        <p className="text-xs text-amber-400 mt-1">{searchProgress}</p>
                       )}
                     </div>
                   ) : metasearchResults ? (
                     <>
-                      {/* Engine Stats */}
-                      {metasearchResults.engineStats && (
-                        <div className="mb-4 p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Globe className="w-4 h-4 text-purple-400" />
-                            <p className="text-xs font-medium text-purple-400">Motores de Búsqueda Consultados</p>
+                      {/* Engine Stats + Filter Stats Row */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                        {/* Engine Stats */}
+                        {metasearchResults.engineStats && (
+                          <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Globe className="w-3.5 h-3.5 text-purple-400" />
+                              <p className="text-[10px] font-medium text-purple-400">Motores de Busqueda</p>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2 text-center">
+                              <div>
+                                <p className="text-sm font-bold text-blue-400">{metasearchResults.engineStats.google}</p>
+                                <p className="text-[9px] text-muted-foreground">Google</p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-cyan-400">{metasearchResults.engineStats.bing}</p>
+                                <p className="text-[9px] text-muted-foreground">Bing</p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-orange-400">{metasearchResults.engineStats.duckduckgo}</p>
+                                <p className="text-[9px] text-muted-foreground">DDG</p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-foreground">{metasearchResults.engineStats.webSearch}</p>
+                                <p className="text-[9px] text-muted-foreground">Web S.</p>
+                              </div>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-6 gap-2 text-center">
+                        )}
+
+                        {/* Filter Stats */}
+                        <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Filter className="w-3.5 h-3.5 text-emerald-400" />
+                            <p className="text-[10px] font-medium text-emerald-400">Filtro Anti-Falsos Positivos</p>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-center">
                             <div>
-                              <p className="text-lg font-bold text-blue-400">{metasearchResults.engineStats.google}</p>
-                              <p className="text-[10px] text-muted-foreground">Google</p>
+                              <p className="text-sm font-bold text-muted-foreground">{metasearchResults.rawResultCount || metasearchResults.resultCount}</p>
+                              <p className="text-[9px] text-muted-foreground">Crudos</p>
                             </div>
                             <div>
-                              <p className="text-lg font-bold text-cyan-400">{metasearchResults.engineStats.bing}</p>
-                              <p className="text-[10px] text-muted-foreground">Bing</p>
+                              <p className="text-sm font-bold text-emerald-400">{metasearchResults.resultCount}</p>
+                              <p className="text-[9px] text-muted-foreground">Validados</p>
                             </div>
                             <div>
-                              <p className="text-lg font-bold text-red-400">{metasearchResults.engineStats.yandex}</p>
-                              <p className="text-[10px] text-muted-foreground">Yandex</p>
-                            </div>
-                            <div>
-                              <p className="text-lg font-bold text-orange-400">{metasearchResults.engineStats.duckduckgo}</p>
-                              <p className="text-[10px] text-muted-foreground">DuckDuckGo</p>
-                            </div>
-                            <div>
-                              <p className="text-lg font-bold text-amber-300">{metasearchResults.engineStats.brave}</p>
-                              <p className="text-[10px] text-muted-foreground">Brave</p>
-                            </div>
-                            <div>
-                              <p className="text-lg font-bold text-foreground">{metasearchResults.engineStats.webSearch}</p>
-                              <p className="text-[10px] text-muted-foreground">Web Search</p>
+                              <p className="text-sm font-bold text-red-400">{metasearchResults.filteredOutCount || 0}</p>
+                              <p className="text-[9px] text-muted-foreground">Descartados</p>
                             </div>
                           </div>
                         </div>
-                      )}
+                      </div>
 
                       {/* Query Groups Summary */}
                       {metasearchResults.queryGroups && metasearchResults.queryGroups.length > 0 && (
                         <div className="mb-4 p-3 rounded-lg bg-muted/20 border border-border">
-                          <p className="text-xs font-medium text-foreground mb-2">Matriz de Dorking OSINT Ejecutada:</p>
-                          <div className="flex flex-wrap gap-2">
+                          <p className="text-[10px] font-medium text-foreground mb-2">Matriz de Dorking OSINT Ejecutada:</p>
+                          <div className="flex flex-wrap gap-1.5">
                             {metasearchResults.queryGroups.map((group, idx) => {
                               const blockColors: Record<string, string> = {
                                 name: 'border-blue-500/30 text-blue-400',
@@ -532,7 +740,7 @@ export default function ProteccionEjecutivosPage() {
                               };
                               const color = blockColors[group.blockType] || 'border-border';
                               return (
-                                <Badge key={idx} variant="outline" className={`text-[10px] ${color}`}>
+                                <Badge key={idx} variant="outline" className={`text-[9px] ${color}`}>
                                   [{group.blockType?.toUpperCase()}] {group.label} ({group.queryCount})
                                 </Badge>
                               );
@@ -546,7 +754,7 @@ export default function ProteccionEjecutivosPage() {
                         <div className="mb-4 p-4 rounded-lg bg-amber-500/5 border border-amber-500/20">
                           <div className="flex items-center gap-2 mb-3">
                             <Shield className="w-4 h-4 text-amber-400" />
-                            <p className="text-xs font-semibold text-amber-400">Análisis de Inteligencia OSINT - IA</p>
+                            <p className="text-xs font-semibold text-amber-400">Analisis de Inteligencia OSINT - IA</p>
                           </div>
                           <div className="text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed">
                             {metasearchResults.aiAnalysis}
@@ -558,95 +766,261 @@ export default function ProteccionEjecutivosPage() {
                       {(metasearchResults.downloadedCount > 0 || metasearchResults.downloadableCount > 0) && (
                         <div className="mb-4 p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
                           <div className="flex items-center gap-2 mb-2">
-                            <HardDrive className="w-4 h-4 text-blue-400" />
-                            <p className="text-xs font-medium text-blue-400">Evidencia Digital Preservada</p>
+                            <HardDrive className="w-3.5 h-3.5 text-blue-400" />
+                            <p className="text-[10px] font-medium text-blue-400">Evidencia Digital</p>
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-center">
                             <div>
-                              <p className="text-lg font-bold text-foreground">{metasearchResults.downloadableCount}</p>
-                              <p className="text-[10px] text-muted-foreground">Documentos Encontrados</p>
+                              <p className="text-sm font-bold text-foreground">{metasearchResults.downloadableCount}</p>
+                              <p className="text-[9px] text-muted-foreground">Documentos</p>
                             </div>
                             <div>
-                              <p className="text-lg font-bold text-emerald-400">{metasearchResults.downloadedCount}</p>
-                              <p className="text-[10px] text-muted-foreground">Descargados</p>
+                              <p className="text-sm font-bold text-emerald-400">{metasearchResults.downloadedCount}</p>
+                              <p className="text-[9px] text-muted-foreground">Descargados</p>
                             </div>
                             <div>
-                              <p className="text-lg font-bold text-red-400">{metasearchResults.downloadableCount - metasearchResults.downloadedCount}</p>
-                              <p className="text-[10px] text-muted-foreground">Fallidos</p>
+                              <p className="text-sm font-bold text-red-400">{metasearchResults.downloadableCount - metasearchResults.downloadedCount}</p>
+                              <p className="text-[9px] text-muted-foreground">Fallidos</p>
                             </div>
                           </div>
-                          {metasearchResults.evidenceDetailPath && (
-                            <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-                              <FolderOpen className="w-3 h-3" />
-                              <span className="font-mono text-[10px]">{metasearchResults.evidenceDetailPath}</span>
-                            </div>
-                          )}
                         </div>
                       )}
 
-                      {metasearchResults.results.length === 0 ? (
+                      {/* Results Filter Tabs */}
+                      {metasearchResults.results.length > 0 && (
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-[10px] text-muted-foreground">Filtrar:</span>
+                          {[
+                            { key: 'all' as const, label: 'Todos', count: metasearchResults.results.length },
+                            { key: 'documents' as const, label: 'Documentos', count: metasearchResults.results.filter(r => r.isDownloadable).length },
+                            { key: 'web' as const, label: 'Web', count: metasearchResults.results.filter(r => !r.isDownloadable).length },
+                          ].map(tab => (
+                            <button
+                              key={tab.key}
+                              onClick={() => setResultFilter(tab.key)}
+                              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                                resultFilter === tab.key
+                                  ? 'border-amber-500/40 text-amber-400 bg-amber-500/10'
+                                  : 'border-border text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              {tab.label} ({tab.count})
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Results List - Enterprise Style */}
+                      {filteredDisplayResults.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                           <Search className="w-10 h-10 mb-3 opacity-30" />
-                          <p className="text-sm">No se encontraron resultados</p>
+                          <p className="text-sm">No se encontraron resultados validados</p>
+                          {metasearchResults.filteredOutCount ? (
+                            <p className="text-xs text-red-400 mt-1">{metasearchResults.filteredOutCount} resultados fueron filtrados como falsos positivos</p>
+                          ) : null}
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          {metasearchResults.results.map((result, index) => (
-                            <motion.div
-                              key={index}
-                              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.03 }}
-                              className={`p-3 rounded-lg border transition-colors ${
-                                result.downloaded
-                                  ? 'border-emerald-500/20 bg-emerald-500/5'
-                                  : result.isDownloadable
+                          {filteredDisplayResults.map((result, index) => {
+                            const isExpanded = expandedResult === result.position;
+                            return (
+                              <motion.div
+                                key={index}
+                                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: index * 0.02 }}
+                                className={`rounded-lg border transition-colors overflow-hidden ${
+                                  result.isDownloadable
                                     ? 'border-amber-500/20 bg-amber-500/5'
                                     : 'border-border bg-muted/20'
-                              }`}
-                            >
-                              <div className="flex items-start gap-3">
-                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-mono">
-                                  {result.position}
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <a
-                                      href={result.url} target="_blank" rel="noopener noreferrer"
-                                      className="text-sm font-medium text-amber-500 hover:text-amber-400 hover:underline truncate"
-                                    >
-                                      {result.title}
-                                    </a>
-                                    <ExternalLink className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                                  </div>
-                                  <p className="text-xs text-muted-foreground mb-1 break-all">{result.url}</p>
-                                  {result.snippet && (
-                                    <p className="text-xs text-muted-foreground/80 line-clamp-2">{result.snippet}</p>
-                                  )}
-                                  <div className="flex items-center gap-2 mt-1.5">
-                                    <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-border">
-                                      {result.source}
-                                    </Badge>
-                                    {result.fileType && result.fileType !== 'html' && (
-                                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-500/30 text-amber-400">
-                                        .{result.fileType}
-                                      </Badge>
-                                    )}
-                                    {result.isDownloadable && (
-                                      result.downloaded ? (
-                                        <Badge className="text-[10px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border">
-                                          <FileCheck className="w-3 h-3 mr-1" /> Descargado
+                                }`}
+                              >
+                                {/* Main Row - Always Visible */}
+                                <div
+                                  className="p-3 cursor-pointer"
+                                  onClick={() => setExpandedResult(isExpanded ? null : result.position)}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-mono">
+                                      {result.position}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      {/* Title + External Link */}
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <a
+                                          href={result.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-sm font-medium text-amber-500 hover:text-amber-400 hover:underline truncate max-w-[80%]"
+                                        >
+                                          {result.title}
+                                        </a>
+                                        <a
+                                          href={result.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20"
+                                          title="Navegar al sitio original"
+                                        >
+                                          <ExternalLink className="w-3 h-3" /> Abrir Fuente
+                                        </a>
+                                      </div>
+
+                                      {/* Snippet */}
+                                      {result.snippet && (
+                                        <p className="text-xs text-muted-foreground/80 line-clamp-2 mb-1.5">{result.snippet}</p>
+                                      )}
+
+                                      {/* Metadata Row */}
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        {/* Source Badge */}
+                                        <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-border">
+                                          {result.source}
                                         </Badge>
-                                      ) : (
-                                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-500/30 text-amber-400">
-                                          <Download className="w-3 h-3 mr-1" /> Descargable
-                                        </Badge>
-                                      )
-                                    )}
+
+                                        {/* File Type */}
+                                        {result.fileType && result.fileType !== 'html' && (
+                                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-amber-500/30 text-amber-400">
+                                            .{result.fileType}
+                                          </Badge>
+                                        )}
+
+                                        {/* Matched Identifiers */}
+                                        {result.matchedIdentifiers && result.matchedIdentifiers.length > 0 && (
+                                          <Badge className="text-[9px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border">
+                                            <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" /> {result.matchedIdentifiers.join(' + ')}
+                                          </Badge>
+                                        )}
+
+                                        {/* Source Domain */}
+                                        {result.sourceDomain && (
+                                          <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
+                                            <Globe2 className="w-2.5 h-2.5" /> {result.sourceDomain}
+                                          </span>
+                                        )}
+
+                                        {/* Expand toggle */}
+                                        <span className="ml-auto text-[9px] text-muted-foreground flex items-center gap-0.5">
+                                          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                          {isExpanded ? 'Cerrar' : 'Detalle'}
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </motion.div>
-                          ))}
+
+                                {/* Expanded Detail Panel */}
+                                <AnimatePresence>
+                                  {isExpanded && (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: 'auto', opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="border-t border-border overflow-hidden"
+                                    >
+                                      <div className="p-4 bg-muted/10 space-y-3">
+                                        {/* Analytical Metadata Grid */}
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                          {/* Source */}
+                                          <div className="p-2 rounded bg-card/50 border border-border">
+                                            <div className="flex items-center gap-1.5 mb-1">
+                                              <Globe2 className="w-3 h-3 text-purple-400" />
+                                              <p className="text-[10px] font-medium text-purple-400">Fuente</p>
+                                            </div>
+                                            <p className="text-xs text-foreground font-mono break-all">{result.sourceDomain || 'No disponible'}</p>
+                                          </div>
+
+                                          {/* Actors */}
+                                          <div className="p-2 rounded bg-card/50 border border-border">
+                                            <div className="flex items-center gap-1.5 mb-1">
+                                              <Users className="w-3 h-3 text-cyan-400" />
+                                              <p className="text-[10px] font-medium text-cyan-400">Actores</p>
+                                            </div>
+                                            <p className="text-xs text-foreground">{result.actors || 'No identificado'}</p>
+                                          </div>
+
+                                          {/* Publication Date */}
+                                          <div className="p-2 rounded bg-card/50 border border-border">
+                                            <div className="flex items-center gap-1.5 mb-1">
+                                              <Calendar className="w-3 h-3 text-amber-400" />
+                                              <p className="text-[10px] font-medium text-amber-400">Fecha Publicacion</p>
+                                            </div>
+                                            <p className="text-xs text-foreground">{result.publicationDate || 'No disponible'}</p>
+                                          </div>
+                                        </div>
+
+                                        {/* Full URL */}
+                                        <div className="p-2 rounded bg-card/50 border border-border">
+                                          <p className="text-[10px] text-muted-foreground mb-0.5">URL Completa:</p>
+                                          <a
+                                            href={result.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-blue-400 hover:text-blue-300 break-all font-mono"
+                                          >
+                                            {result.url}
+                                          </a>
+                                        </div>
+
+                                        {/* Full Snippet */}
+                                        {result.snippet && (
+                                          <div className="p-2 rounded bg-card/50 border border-border">
+                                            <p className="text-[10px] text-muted-foreground mb-0.5">Snippet Completo:</p>
+                                            <p className="text-xs text-foreground/90">{result.snippet}</p>
+                                          </div>
+                                        )}
+
+                                        {/* Query Source + Matched Identifiers */}
+                                        <div className="flex flex-wrap gap-3">
+                                          {result.querySource && (
+                                            <div>
+                                              <p className="text-[10px] text-muted-foreground">Query Origen:</p>
+                                              <p className="text-[10px] text-foreground font-mono">{result.querySource}</p>
+                                            </div>
+                                          )}
+                                          {result.matchedIdentifiers && result.matchedIdentifiers.length > 0 && (
+                                            <div>
+                                              <p className="text-[10px] text-muted-foreground">Identificadores Coincidentes:</p>
+                                              <div className="flex gap-1 mt-0.5">
+                                                {result.matchedIdentifiers.map((id, i) => (
+                                                  <Badge key={i} className="text-[9px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border">
+                                                    {id}
+                                                  </Badge>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {/* Export Buttons per Result */}
+                                        <div className="flex items-center gap-2 pt-2 border-t border-border">
+                                          <span className="text-[10px] text-muted-foreground">Exportar resultado:</span>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-[10px] h-6 gap-1 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                                            onClick={() => exportResultAsJson(result, metasearchResults.executive?.fullName || 'unknown')}
+                                          >
+                                            <FileJson className="w-3 h-3" /> .JSON
+                                          </Button>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-[10px] h-6 gap-1 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                                            onClick={() => exportResultAsTxt(result, metasearchResults.executive?.fullName || 'unknown')}
+                                          >
+                                            <FileCode className="w-3 h-3" /> .TXT
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </motion.div>
+                            );
+                          })}
                         </div>
                       )}
                     </>
@@ -663,7 +1037,7 @@ export default function ProteccionEjecutivosPage() {
           <DialogContent className="max-w-lg bg-card border-border">
             <DialogHeader>
               <DialogTitle className="text-foreground">Detalle del Ejecutivo</DialogTitle>
-              <DialogDescription className="text-muted-foreground">Información completa del ejecutivo</DialogDescription>
+              <DialogDescription className="text-muted-foreground">Informacion completa del ejecutivo</DialogDescription>
             </DialogHeader>
             {selectedExecutive && (
               <div className="space-y-4">
@@ -675,18 +1049,18 @@ export default function ProteccionEjecutivosPage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1"><p className="text-xs text-muted-foreground">Identificación</p><p className="text-sm text-foreground font-mono">{selectedExecutive.identificationNum}</p></div>
-                  <div className="space-y-1"><p className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="w-3 h-3" /> Correo</p><p className="text-sm text-foreground">{selectedExecutive.email || '—'}</p></div>
-                  <div className="space-y-1"><p className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3" /> Teléfono</p><p className="text-sm text-foreground">{selectedExecutive.phone || '—'}</p></div>
-                  <div className="space-y-1"><p className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="w-3 h-3" /> Organización</p><p className="text-sm text-foreground">{selectedExecutive.organization || '—'}</p></div>
-                  <div className="space-y-1 col-span-2"><p className="text-xs text-muted-foreground">Cargo</p><p className="text-sm text-foreground">{selectedExecutive.position || '—'}</p></div>
+                  <div className="space-y-1"><p className="text-xs text-muted-foreground">Identificacion</p><p className="text-sm text-foreground font-mono">{selectedExecutive.identificationNum}</p></div>
+                  <div className="space-y-1"><p className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="w-3 h-3" /> Correo</p><p className="text-sm text-foreground">{selectedExecutive.email || '-'}</p></div>
+                  <div className="space-y-1"><p className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3" /> Telefono</p><p className="text-sm text-foreground">{selectedExecutive.phone || '-'}</p></div>
+                  <div className="space-y-1"><p className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="w-3 h-3" /> Organizacion</p><p className="text-sm text-foreground">{selectedExecutive.organization || '-'}</p></div>
+                  <div className="space-y-1 col-span-2"><p className="text-xs text-muted-foreground">Cargo</p><p className="text-sm text-foreground">{selectedExecutive.position || '-'}</p></div>
                   {selectedExecutive.notes && (
                     <div className="space-y-1 col-span-2"><p className="text-xs text-muted-foreground flex items-center gap-1"><FileText className="w-3 h-3" /> Notas</p><p className="text-sm text-foreground whitespace-pre-wrap">{selectedExecutive.notes}</p></div>
                   )}
                 </div>
                 {selectedExecutive.lastMetasearch && (
                   <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                    <p className="text-xs text-muted-foreground">Última Meta-Búsqueda</p>
+                    <p className="text-xs text-muted-foreground">Ultima Meta-Busqueda</p>
                     <p className="text-sm text-foreground">{new Date(selectedExecutive.lastMetasearch).toLocaleString('es-CO')}</p>
                   </div>
                 )}
@@ -701,27 +1075,29 @@ export default function ProteccionEjecutivosPage() {
             <DialogHeader><DialogTitle className="text-foreground">Nuevo Ejecutivo</DialogTitle><DialogDescription className="text-muted-foreground">Registrar un nuevo ejecutivo</DialogDescription></DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground">Número de Identificación *</Label><Input placeholder="CC-12345678" value={formData.identificationNum} onChange={(e) => setFormData(prev => ({ ...prev, identificationNum: e.target.value }))} className="bg-muted/30 border-border" /></div>
+                <div className="space-y-2"><Label className="text-xs text-muted-foreground">Numero de Identificacion *</Label><Input placeholder="CC-12345678" value={formData.identificationNum} onChange={(e) => setFormData(prev => ({ ...prev, identificationNum: e.target.value }))} className="bg-muted/30 border-border" /></div>
                 <div className="space-y-2"><Label className="text-xs text-muted-foreground">Nivel de Riesgo</Label>
                   <select value={formData.riskLevel} onChange={(e) => setFormData(prev => ({ ...prev, riskLevel: e.target.value }))} className="w-full h-9 rounded-md bg-muted/30 border border-border text-sm text-foreground px-3">
-                    <option value="bajo">Bajo</option><option value="medio">Medio</option><option value="alto">Alto</option><option value="critico">Crítico</option>
+                    <option value="bajo">Bajo</option><option value="medio">Medio</option><option value="alto">Alto</option><option value="critico">Critico</option>
                   </select>
                 </div>
               </div>
-              <div className="space-y-2"><Label className="text-xs text-muted-foreground">Nombre Completo *</Label><Input placeholder="Juan Carlos Pérez Gómez" value={formData.fullName} onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))} className="bg-muted/30 border-border" /></div>
+              <div className="space-y-2"><Label className="text-xs text-muted-foreground">Nombre Completo *</Label><Input placeholder="Juan Carlos Perez Gomez" value={formData.fullName} onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))} className="bg-muted/30 border-border" /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="w-3 h-3" /> Correo Electrónico</Label><Input placeholder="correo@ejemplo.com" type="email" value={formData.email} onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))} className="bg-muted/30 border-border" /></div>
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3" /> Teléfono</Label><Input placeholder="+57 300 1234567" value={formData.phone} onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))} className="bg-muted/30 border-border" /></div>
+                <div className="space-y-2"><Label className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="w-3 h-3" /> Correo Electronico</Label><Input placeholder="correo@ejemplo.com" type="email" value={formData.email} onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))} className="bg-muted/30 border-border" /></div>
+                <div className="space-y-2"><Label className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3" /> Telefono</Label><Input placeholder="+57 300 1234567" value={formData.phone} onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))} className="bg-muted/30 border-border" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2"><Label className="text-xs text-muted-foreground">Cargo</Label><Input placeholder="CEO, CFO, Director..." value={formData.position} onChange={(e) => setFormData(prev => ({ ...prev, position: e.target.value }))} className="bg-muted/30 border-border" /></div>
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="w-3 h-3" /> Organización</Label><Input placeholder="Empresa S.A." value={formData.organization} onChange={(e) => setFormData(prev => ({ ...prev, organization: e.target.value }))} className="bg-muted/30 border-border" /></div>
+                <div className="space-y-2"><Label className="text-xs text-muted-foreground">Organizacion</Label><Input placeholder="Empresa S.A.S" value={formData.organization} onChange={(e) => setFormData(prev => ({ ...prev, organization: e.target.value }))} className="bg-muted/30 border-border" /></div>
               </div>
-              <div className="space-y-2"><Label className="text-xs text-muted-foreground flex items-center gap-1"><FileText className="w-3 h-3" /> Notas</Label><Textarea placeholder="Observaciones adicionales..." value={formData.notes} onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))} className="bg-muted/30 border-border min-h-[80px]" /></div>
+              <div className="space-y-2"><Label className="text-xs text-muted-foreground">Notas</Label><Textarea placeholder="Observaciones adicionales..." value={formData.notes} onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))} className="bg-muted/30 border-border min-h-[60px]" /></div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="border-border">Cancelar</Button>
-              <Button onClick={handleCreate} disabled={!formData.identificationNum || !formData.fullName} className="bg-amber-600 hover:bg-amber-700 text-white"><Save className="w-4 h-4 mr-2" />Crear Ejecutivo</Button>
+              <Button variant="ghost" onClick={() => setShowCreateDialog(false)} className="text-muted-foreground">Cancelar</Button>
+              <Button onClick={handleCreate} disabled={!formData.fullName || !formData.identificationNum} className="bg-amber-600 hover:bg-amber-700 text-white gap-2">
+                <Save className="w-4 h-4" /> Crear Ejecutivo
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -729,30 +1105,32 @@ export default function ProteccionEjecutivosPage() {
         {/* Edit Dialog */}
         <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
           <DialogContent className="max-w-lg bg-card border-border">
-            <DialogHeader><DialogTitle className="text-foreground">Editar Ejecutivo</DialogTitle><DialogDescription className="text-muted-foreground">Modificar datos del ejecutivo</DialogDescription></DialogHeader>
+            <DialogHeader><DialogTitle className="text-foreground">Editar Ejecutivo</DialogTitle><DialogDescription className="text-muted-foreground">Modificar informacion del ejecutivo</DialogDescription></DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground">Número de Identificación</Label><Input value={formData.identificationNum} onChange={(e) => setFormData(prev => ({ ...prev, identificationNum: e.target.value }))} className="bg-muted/30 border-border" /></div>
+                <div className="space-y-2"><Label className="text-xs text-muted-foreground">Numero de Identificacion *</Label><Input value={formData.identificationNum} onChange={(e) => setFormData(prev => ({ ...prev, identificationNum: e.target.value }))} className="bg-muted/30 border-border" /></div>
                 <div className="space-y-2"><Label className="text-xs text-muted-foreground">Nivel de Riesgo</Label>
                   <select value={formData.riskLevel} onChange={(e) => setFormData(prev => ({ ...prev, riskLevel: e.target.value }))} className="w-full h-9 rounded-md bg-muted/30 border border-border text-sm text-foreground px-3">
-                    <option value="bajo">Bajo</option><option value="medio">Medio</option><option value="alto">Alto</option><option value="critico">Crítico</option>
+                    <option value="bajo">Bajo</option><option value="medio">Medio</option><option value="alto">Alto</option><option value="critico">Critico</option>
                   </select>
                 </div>
               </div>
-              <div className="space-y-2"><Label className="text-xs text-muted-foreground">Nombre Completo</Label><Input value={formData.fullName} onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))} className="bg-muted/30 border-border" /></div>
+              <div className="space-y-2"><Label className="text-xs text-muted-foreground">Nombre Completo *</Label><Input value={formData.fullName} onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))} className="bg-muted/30 border-border" /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground">Correo Electrónico</Label><Input type="email" value={formData.email} onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))} className="bg-muted/30 border-border" /></div>
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground">Teléfono</Label><Input value={formData.phone} onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))} className="bg-muted/30 border-border" /></div>
+                <div className="space-y-2"><Label className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="w-3 h-3" /> Correo Electronico</Label><Input type="email" value={formData.email} onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))} className="bg-muted/30 border-border" /></div>
+                <div className="space-y-2"><Label className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3" /> Telefono</Label><Input value={formData.phone} onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))} className="bg-muted/30 border-border" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2"><Label className="text-xs text-muted-foreground">Cargo</Label><Input value={formData.position} onChange={(e) => setFormData(prev => ({ ...prev, position: e.target.value }))} className="bg-muted/30 border-border" /></div>
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground">Organización</Label><Input value={formData.organization} onChange={(e) => setFormData(prev => ({ ...prev, organization: e.target.value }))} className="bg-muted/30 border-border" /></div>
+                <div className="space-y-2"><Label className="text-xs text-muted-foreground">Organizacion</Label><Input value={formData.organization} onChange={(e) => setFormData(prev => ({ ...prev, organization: e.target.value }))} className="bg-muted/30 border-border" /></div>
               </div>
-              <div className="space-y-2"><Label className="text-xs text-muted-foreground">Notas</Label><Textarea value={formData.notes} onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))} className="bg-muted/30 border-border min-h-[80px]" /></div>
+              <div className="space-y-2"><Label className="text-xs text-muted-foreground">Notas</Label><Textarea value={formData.notes} onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))} className="bg-muted/30 border-border min-h-[60px]" /></div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowEditDialog(false)} className="border-border">Cancelar</Button>
-              <Button onClick={handleUpdate} className="bg-amber-600 hover:bg-amber-700 text-white"><Save className="w-4 h-4 mr-2" />Guardar Cambios</Button>
+              <Button variant="ghost" onClick={() => setShowEditDialog(false)} className="text-muted-foreground">Cancelar</Button>
+              <Button onClick={handleUpdate} disabled={!formData.fullName || !formData.identificationNum} className="bg-amber-600 hover:bg-amber-700 text-white gap-2">
+                <Save className="w-4 h-4" /> Guardar Cambios
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -761,12 +1139,18 @@ export default function ProteccionEjecutivosPage() {
         <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <DialogContent className="max-w-md bg-card border-border">
             <DialogHeader>
-              <DialogTitle className="text-foreground flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-red-500" /> Confirmar Eliminación</DialogTitle>
-              <DialogDescription className="text-muted-foreground">¿Está seguro de eliminar al ejecutivo <strong>{selectedExecutive?.fullName}</strong>?</DialogDescription>
+              <DialogTitle className="text-foreground flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-500" /> Confirmar Eliminacion
+              </DialogTitle>
+              <DialogDescription className="text-muted-foreground">
+                Esta accion no se puede deshacer. Se eliminara el ejecutivo <strong>{selectedExecutive?.fullName}</strong> y todos sus registros asociados.
+              </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowDeleteDialog(false)} className="border-border">Cancelar</Button>
-              <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white"><Trash2 className="w-4 h-4 mr-2" />Eliminar</Button>
+              <Button variant="ghost" onClick={() => setShowDeleteDialog(false)} className="text-muted-foreground">Cancelar</Button>
+              <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white gap-2">
+                <Trash2 className="w-4 h-4" /> Eliminar
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
