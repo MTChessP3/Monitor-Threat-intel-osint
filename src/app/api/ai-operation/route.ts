@@ -307,9 +307,18 @@ function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 // ============================================================================
 // ANALYZ OPERATION - Dynamic, source-aware analysis
 // ============================================================================
-async function handleAnalyze(data: { urls?: string[]; searchQueries?: string[] }) {
+async function handleAnalyze(data: {
+    urls?: string[];
+    searchQueries?: string[];
+    selectedCategories?: string[];
+    selectedSourceNames?: string[];
+    sourceInfo?: Array<{ id: string; name: string; url: string; domain: string; type: string; category: string }>;
+  }) {
   const urls = data.urls || [];
   const searchQueries = data.searchQueries || [];
+  const selectedCategories = data.selectedCategories || [];
+  const selectedSourceNames = data.selectedSourceNames || [];
+  const sourceInfo = data.sourceInfo || [];
 
   const zai = await createZAI();
   const allRawData: Array<{
@@ -317,19 +326,51 @@ async function handleAnalyze(data: { urls?: string[]; searchQueries?: string[] }
     hostname: string; searchQuery: string; category: string; date: string;
   }> = [];
 
-  // Build structured source info
-  const sourceInfoList = urls.map(url => {
-    let hostname: string;
-    try { hostname = new URL(url).hostname; } catch { hostname = url; }
-    const name = hostnameNameMap[hostname] || hostname;
-    const category = hostnameCategoryMap[hostname] || 'seguridad';
-    return { url, hostname, name, category };
-  });
+  // Build structured source info - use sourceInfo from frontend if available
+  const sourceInfoList = sourceInfo.length > 0
+    ? sourceInfo.map(si => ({
+        url: si.url,
+        hostname: si.domain || si.url,
+        name: si.name,
+        category: si.category || 'seguridad',
+      }))
+    : urls.map(url => {
+      let hostname: string;
+      try { hostname = new URL(url).hostname; } catch { hostname = url; }
+      const name = hostnameNameMap[hostname] || hostname;
+      const category = hostnameCategoryMap[hostname] || 'seguridad';
+      return { url, hostname, name, category };
+    });
 
   const sourceList = sourceInfoList.map(s => `- ${s.name} (${s.category}): ${s.url}`).join('\n');
 
-  // Determine active categories ONLY from configured sources
+  // Determine active categories - prioritize USER SELECTED categories over hostname-derived
   const activeCategories = new Set<string>();
+  if (selectedCategories.length > 0) {
+    // User selected specific categories - use those
+    for (const cat of selectedCategories) {
+      const catLower = cat.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      // Map user-friendly category labels to internal keys
+      if (catLower.includes('seguridad digital') || catLower.includes('ciberseguridad') || catLower.includes('digital')) {
+        activeCategories.add('ciberseguridad');
+      } else if (catLower.includes('proteccion de datos') || catLower.includes('datos') || catLower.includes('privacidad')) {
+        activeCategories.add('ciberseguridad');
+        activeCategories.add('economia');
+      } else if (catLower.includes('viajes') || catLower.includes('viaje') || catLower.includes('movilidad') || catLower.includes('fisica')) {
+        activeCategories.add('fisica');
+        activeCategories.add('seguridad');
+      } else if (catLower.includes('economia') || catLower.includes('financiero') || catLower.includes('fraude')) {
+        activeCategories.add('economia');
+      } else if (catLower.includes('politica') || catLower.includes('conflicto')) {
+        activeCategories.add('politica');
+      } else if (catLower.includes('seguridad') && !catLower.includes('digital')) {
+        activeCategories.add('seguridad');
+      } else {
+        activeCategories.add(cat.toLowerCase());
+      }
+    }
+  }
+  // Also add categories from source URLs
   for (const s of sourceInfoList) {
     activeCategories.add(s.category);
   }
@@ -360,7 +401,7 @@ async function handleAnalyze(data: { urls?: string[]; searchQueries?: string[] }
   }
 
   // Add broader queries that combine ALL active categories with source names
-  const sourceNames = sourceInfoList.map(s => s.name).filter(n => n !== s.hostname);
+  const sourceNames = sourceInfoList.filter(src => src.name !== src.hostname).map(src => src.name);
   if (sourceNames.length > 0) {
     for (const cat of activeCategories) {
       const topicKeywords = categoryTopicMap[cat] || 'seguridad amenazas';
@@ -581,8 +622,11 @@ Responde SOLO con JSON valido:
 // ============================================================================
 // GENERATE-REPORT OPERATION (from scripts/generate-report.js)
 // ============================================================================
-async function handleGenerateReport(data: { templateContent?: string; analysis: Record<string, unknown> }) {
+async function handleGenerateReport(data: { templateContent?: string; analysis: Record<string, unknown>; reportContext?: { selectedCategories?: string[]; selectedSources?: string[]; threatCount?: number; riskLevel?: string; summary?: string; topThreats?: Array<{ title: string; severity: string; category: string }>; sourcesUsed?: string[] } }) {
   const { templateContent = '', analysis } = data;
+  const reportContext = data.reportContext || {};
+  const selectedCategories = reportContext.selectedCategories || [];
+  const selectedSources = reportContext.selectedSources || [];
 
   const zai = await createZAI();
 
@@ -642,12 +686,21 @@ CARACTERISTICAS:
 - Minimo 3000 palabras de contenido sustancial
 - COMPOSICION DE DATOS DISPONIBLES: ${dataComposition}
 
+CONTEXTO DEL INFORME (CRITICO - LA ESTRUCTURA DEBE ADAPTARSE):
+${selectedCategories.length > 0 ? `- Clasificaciones de industria seleccionadas: ${selectedCategories.join(', ')}` : '- No se seleccionaron clasificaciones especificas'}
+${selectedSources.length > 0 ? `- Fuentes seleccionadas: ${selectedSources.join(', ')}` : '- No se seleccionaron fuentes especificas'}
+${selectedCategories.includes('Seguridad Digital') || selectedCategories.includes('Ciberseguridad') ? '- INCLUYE seccion detallada de "Seguridad Digital y Ciberamenazas" con analisis de phishing, malware, ransomware, filtracion de datos, ingenieria social' : ''}
+${selectedCategories.includes('Proteccion de Datos') ? '- INCLUYE seccion detallada de "Proteccion de Datos y Privacidad" con analisis de exposicion de datos personales, brechas, compliance, derechos ARCO' : ''}
+${selectedCategories.includes('Seguridad en Viajes') ? '- INCLUYE seccion detallada de "Seguridad en Viajes y Movilidad" con analisis de riesgos de desplazamiento, rutas criticas, protocolos de viaje seguro' : ''}
+${selectedCategories.includes('Economia') || selectedCategories.includes('Fraude Financiero') ? '- INCLUYE seccion detallada de "Riesgo Financiero y Fraude" con analisis de fraude BEC, lavado de activos, estafa corporativa' : ''}
+
 REGLAS DE ESTRUCTURA ADAPTATIVA:
 ${hasUrlContent ? '- Se encontraron resultados OSINT: INCLUYE una seccion detallada de "Evidencia de Fuentes OSINT" con cada fuente citada' : '- No hay resultados OSINT: NO incluyas seccion de evidencia OSINT'}
 ${hasThreats ? '- Se identificaron amenazas: INCLUYE seccion de "Amenazas Identificadas" con analisis detallado de cada una' : '- No se identificaron amenazas: NO incluyas seccion de amenazas, en su lugar enfatiza el bajo riesgo detectado'}
 ${hasRecommendations ? '- Hay recomendaciones del analisis: INCLUYE seccion "Recomendaciones" con cada una detallada' : '- No hay recomendaciones especificas: ofrece recomendaciones generales basadas en las fuentes configuradas'}
 - NO incluyas secciones vacias o con placeholder - solo secciones con datos reales
-- El nivel de riesgo debe basarse en los HALLAZGOS REALES, no en un valor por defecto`;
+- El nivel de riesgo debe basarse en los HALLAZGOS REALES, no en un valor por defecto
+- LA ESTRUCTURA DEL INFORME DEBE SER DIFERENTE segun las clasificaciones y fuentes seleccionadas. No siempre la misma plantilla.`;
 
   let userPrompt: string;
 
@@ -895,10 +948,10 @@ export async function POST(request: Request) {
     const { operation, data } = body as { operation: string; data: Record<string, unknown> };
 
     if (operation === 'analyze') {
-      const result = await handleAnalyze(data as { urls?: string[]; searchQueries?: string[] });
+      const result = await handleAnalyze(data as Parameters<typeof handleAnalyze>[0]);
       return NextResponse.json(result);
     } else if (operation === 'generate-report') {
-      const result = await handleGenerateReport(data as { templateContent?: string; analysis: Record<string, unknown> });
+      const result = await handleGenerateReport(data as Parameters<typeof handleGenerateReport>[0]);
       return NextResponse.json(result);
     } else if (operation === 'update-report') {
       const result = await handleUpdateReport(data as {
