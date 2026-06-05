@@ -71,8 +71,8 @@ interface MetasearchResponse {
   success: boolean;
   searchEngine: string;
   enginesUsed: string[];
-  engineStats: { google: number; bing: number; yandex: number; duckduckgo: number; webSearch: number };
-  queryGroups: Array<{ label: string; queryCount: number }>;
+  engineStats: { google: number; bing: number; yandex: number; duckduckgo: number; brave: number; webSearch: number };
+  queryGroups: Array<{ label: string; queryCount: number; blockType: string }>;
   resultCount: number;
   downloadableCount: number;
   downloadedCount: number;
@@ -108,6 +108,13 @@ function FileTypeIcon({ fileType, downloaded }: { fileType: string; downloaded?:
     pdf: 'text-red-400', xlsx: 'text-green-400', xls: 'text-green-400',
     doc: 'text-blue-400', docx: 'text-blue-400', ppt: 'text-orange-400',
     txt: 'text-gray-400', rar: 'text-purple-400', zip: 'text-purple-400',
+    '7z': 'text-purple-400', csv: 'text-emerald-400', rtf: 'text-cyan-400',
+    htm: 'text-teal-400', html: 'text-teal-400', json: 'text-yellow-400',
+    xml: 'text-yellow-300', yaml: 'text-yellow-300', yml: 'text-yellow-300',
+    env: 'text-red-500', conf: 'text-red-500', config: 'text-red-500', ini: 'text-red-500',
+    bak: 'text-pink-400', old: 'text-pink-400', sql: 'text-indigo-400', db: 'text-indigo-400',
+    sqlite: 'text-indigo-400', odt: 'text-blue-300', ods: 'text-green-300', odp: 'text-orange-300',
+    png: 'text-sky-400', jpg: 'text-sky-400', jpeg: 'text-sky-400', svg: 'text-sky-400',
   };
   const color = colors[fileType] || 'text-muted-foreground';
   return (
@@ -221,7 +228,7 @@ export default function ProteccionEjecutivosPage() {
     setMetasearchLoading(true);
     setShowResults(true);
     setMetasearchResults(null);
-    setSearchProgress('Iniciando consulta Multi-Engine (Google + Bing + Yandex + DuckDuckGo)...');
+    setSearchProgress('Iniciando Meta-Búsqueda OSINT v3.0 (6 motores + Dorking expandido)...');
 
     try {
       const res = await fetch('/api/metasearch', {
@@ -326,7 +333,7 @@ export default function ProteccionEjecutivosPage() {
               onClick={handleMetasearch}
               disabled={!selectedExecutive || metasearchLoading}
               className="bg-[#1a1a5e] hover:bg-[#252580] text-white font-medium gap-2 disabled:opacity-40"
-              title={selectedExecutive ? `Meta-Búsqueda OSINT: ${selectedExecutive.fullName}` : 'Seleccione un ejecutivo primero'}
+              title={selectedExecutive ? `Meta-Búsqueda OSINT v3.0: ${selectedExecutive.fullName}` : 'Seleccione un ejecutivo primero'}
             >
               {metasearchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               Meta-Búsqueda OSINT
@@ -363,7 +370,7 @@ export default function ProteccionEjecutivosPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base text-foreground">Directorio de Ejecutivos</CardTitle>
             <CardDescription className="text-muted-foreground text-xs">
-              Seleccione un ejecutivo para habilitar la Meta-Búsqueda OSINT (Google + Bing + Yandex + DuckDuckGo + Web Search)
+              Seleccione un ejecutivo para habilitar la Meta-Búsqueda OSINT v3.0 (Google + Bing + Yandex + DuckDuckGo + Brave + Web Search + Dorking 30+ extensiones)
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -466,7 +473,7 @@ export default function ProteccionEjecutivosPage() {
                       <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-3" />
                       <p className="text-sm text-muted-foreground">Ejecutando Meta-Búsqueda OSINT Multi-Engine...</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Consultando: &quot;{selectedExecutive?.fullName}&quot; × filetype en Google + Bing + Yandex + DuckDuckGo
+                        Consultando: &quot;{selectedExecutive?.fullName}&quot; × 30+ extensiones en Google + Bing + Yandex + DuckDuckGo + Brave + Web Search
                       </p>
                       {searchProgress && (
                         <p className="text-xs text-amber-400 mt-2">{searchProgress}</p>
@@ -481,7 +488,7 @@ export default function ProteccionEjecutivosPage() {
                             <Globe className="w-4 h-4 text-purple-400" />
                             <p className="text-xs font-medium text-purple-400">Motores de Búsqueda Consultados</p>
                           </div>
-                          <div className="grid grid-cols-5 gap-2 text-center">
+                          <div className="grid grid-cols-6 gap-2 text-center">
                             <div>
                               <p className="text-lg font-bold text-blue-400">{metasearchResults.engineStats.google}</p>
                               <p className="text-[10px] text-muted-foreground">Google</p>
@@ -499,6 +506,10 @@ export default function ProteccionEjecutivosPage() {
                               <p className="text-[10px] text-muted-foreground">DuckDuckGo</p>
                             </div>
                             <div>
+                              <p className="text-lg font-bold text-amber-300">{metasearchResults.engineStats.brave}</p>
+                              <p className="text-[10px] text-muted-foreground">Brave</p>
+                            </div>
+                            <div>
                               <p className="text-lg font-bold text-foreground">{metasearchResults.engineStats.webSearch}</p>
                               <p className="text-[10px] text-muted-foreground">Web Search</p>
                             </div>
@@ -509,13 +520,23 @@ export default function ProteccionEjecutivosPage() {
                       {/* Query Groups Summary */}
                       {metasearchResults.queryGroups && metasearchResults.queryGroups.length > 0 && (
                         <div className="mb-4 p-3 rounded-lg bg-muted/20 border border-border">
-                          <p className="text-xs font-medium text-foreground mb-2">Matriz de Consultas OSINT Ejecutadas:</p>
+                          <p className="text-xs font-medium text-foreground mb-2">Matriz de Dorking OSINT Ejecutada:</p>
                           <div className="flex flex-wrap gap-2">
-                            {metasearchResults.queryGroups.map((group, idx) => (
-                              <Badge key={idx} variant="outline" className="text-[10px] border-border">
-                                {group.label} ({group.queryCount} consultas)
-                              </Badge>
-                            ))}
+                            {metasearchResults.queryGroups.map((group, idx) => {
+                              const blockColors: Record<string, string> = {
+                                name: 'border-blue-500/30 text-blue-400',
+                                email: 'border-purple-500/30 text-purple-400',
+                                id: 'border-amber-500/30 text-amber-400',
+                                combined: 'border-red-500/30 text-red-400',
+                                custom: 'border-green-500/30 text-green-400',
+                              };
+                              const color = blockColors[group.blockType] || 'border-border';
+                              return (
+                                <Badge key={idx} variant="outline" className={`text-[10px] ${color}`}>
+                                  [{group.blockType?.toUpperCase()}] {group.label} ({group.queryCount})
+                                </Badge>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
