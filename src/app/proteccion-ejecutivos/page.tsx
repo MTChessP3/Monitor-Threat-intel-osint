@@ -8,6 +8,7 @@ import {
   Building2, Mail, Phone, FileText, Globe, ChevronUp, ChevronDown,
   Download, FileCheck, FileX, HardDrive, FolderOpen, FileJson,
   FileCode, Calendar, Users, Globe2, CheckCircle2, Filter,
+  XCircle, ArrowUpCircle, ArrowDownCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -54,11 +55,14 @@ interface MetasearchResult {
   downloaded?: boolean;
   localPath?: string;
   querySource?: string;
-  // V5.0 - Analytical metadata
+  // V6.0 - Analytical metadata
   sourceDomain?: string;
   actors?: string;
   publicationDate?: string;
   matchedIdentifiers?: string[];
+  // V6.0 - Classification
+  classification?: 'validated' | 'potential' | 'discarded';
+  classificationReason?: string;
 }
 
 interface EvidenceDetail {
@@ -86,12 +90,17 @@ interface MetasearchResponse {
   downloadableCount: number;
   downloadedCount: number;
   results: MetasearchResult[];
+  classificationStats: { validated: number; potential: number; discarded: number };
+  validatedResults: MetasearchResult[];
+  potentialResults: MetasearchResult[];
+  discardedResults: MetasearchResult[];
   aiAnalysis: string;
   evidence: EvidenceDetail[];
   evidenceDetailPath: string;
   executive: { id: string; fullName: string; identificationNum: string; email: string | null } | null;
   timestamp: string;
   extensionsMonitored?: string[];
+  elapsedSeconds: number;
 }
 
 // ============================================================================
@@ -110,6 +119,23 @@ function RiskBadge({ level }: { level: string }) {
       {c.label}
     </span>
   );
+}
+
+// ============================================================================
+// Classification Icon
+// ============================================================================
+function ClassificationIcon({ classification, size = 4 }: { classification: string; size?: number }) {
+  const sizeClass = `w-${size} h-${size}`;
+  switch (classification) {
+    case 'validated':
+      return <CheckCircle2 className={`${sizeClass} text-emerald-400`} />;
+    case 'potential':
+      return <AlertTriangle className={`${sizeClass} text-amber-400`} />;
+    case 'discarded':
+      return <XCircle className={`${sizeClass} text-red-400`} />;
+    default:
+      return <CheckCircle2 className={`${sizeClass} text-emerald-400`} />;
+  }
 }
 
 // ============================================================================
@@ -132,7 +158,7 @@ function exportResultAsJson(result: MetasearchResult, execName: string) {
     metadata: {
       exportedAt: new Date().toISOString(),
       executiveName: execName,
-      agent: 'ActorTrace OSINT v5.0',
+      agent: 'ActorTrace OSINT v6.0',
     },
     result: {
       title: result.title,
@@ -147,6 +173,8 @@ function exportResultAsJson(result: MetasearchResult, execName: string) {
       actors: result.actors || '',
       publicationDate: result.publicationDate || '',
       matchedIdentifiers: result.matchedIdentifiers || [],
+      classification: result.classification || 'validated',
+      classificationReason: result.classificationReason || '',
     },
     rawPayload: {
       originalResponse: { ...result },
@@ -154,14 +182,15 @@ function exportResultAsJson(result: MetasearchResult, execName: string) {
     },
   };
   const safeName = execName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
-  downloadAsFile(JSON.stringify(payload, null, 2), `OSINT_${safeName}_result_${result.position}.json`, 'application/json');
+  const classSuffix = result.classification || 'validated';
+  downloadAsFile(JSON.stringify(payload, null, 2), `OSINT_${safeName}_${classSuffix}_result_${result.position}.json`, 'application/json');
   toast.success('Resultado exportado como JSON');
 }
 
 function exportResultAsTxt(result: MetasearchResult, execName: string) {
   const lines = [
     `================================================================================`,
-    `  ACTORTRACE OSINT v5.0 - REPORTE DE RESULTADO INDIVIDUAL`,
+    `  ACTORTRACE OSINT v6.0 - REPORTE DE RESULTADO INDIVIDUAL`,
     `================================================================================`,
     ``,
     `EJECUTIVO: ${execName}`,
@@ -175,6 +204,8 @@ function exportResultAsTxt(result: MetasearchResult, execName: string) {
     `Fuente:        ${result.source}`,
     `Tipo Archivo:  ${result.fileType || 'html'}`,
     `Descargable:   ${result.isDownloadable ? 'Si' : 'No'}`,
+    `Clasificacion: ${result.classification?.toUpperCase() || 'VALIDATED'}`,
+    `Razon:         ${result.classificationReason || 'N/A'}`,
     ``,
     `--- METADATOS ANALITICOS ---`,
     ``,
@@ -194,15 +225,95 @@ function exportResultAsTxt(result: MetasearchResult, execName: string) {
     `================================================================================`,
   ];
   const safeName = execName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
-  downloadAsFile(lines.join('\n'), `OSINT_${safeName}_result_${result.position}.txt`, 'text/plain');
+  const classSuffix = result.classification || 'validated';
+  downloadAsFile(lines.join('\n'), `OSINT_${safeName}_${classSuffix}_result_${result.position}.txt`, 'text/plain');
   toast.success('Resultado exportado como TXT');
 }
 
-function exportAllAsJson(response: MetasearchResponse) {
+function exportTabAsJson(results: MetasearchResult[], tabName: string, response: MetasearchResponse) {
   const payload = {
     metadata: {
       exportedAt: new Date().toISOString(),
-      agent: 'ActorTrace OSINT v5.0',
+      agent: 'ActorTrace OSINT v6.0',
+      tab: tabName,
+      searchEngine: response.searchEngine,
+      enginesUsed: response.enginesUsed,
+      elapsedSeconds: response.elapsedSeconds,
+    },
+    executive: response.executive,
+    classificationStats: response.classificationStats,
+    results: results.map(r => ({
+      ...r,
+      rawPayload: { ...r },
+      captureTimestamp: new Date().toISOString(),
+    })),
+  };
+  const safeName = (response.executive?.fullName || 'custom').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
+  downloadAsFile(JSON.stringify(payload, null, 2), `OSINT_${safeName}_${tabName}_${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+  toast.success(`Exportados ${results.length} resultados ${tabName} como JSON`);
+}
+
+function exportTabAsTxt(results: MetasearchResult[], tabName: string, response: MetasearchResponse) {
+  const lines = [
+    `================================================================================`,
+    `  ACTORTRACE OSINT v6.0 - REPORTE DE RESULTADOS ${tabName.toUpperCase()}`,
+    `================================================================================`,
+    ``,
+    `Fecha:           ${new Date().toISOString()}`,
+    `Motor:           ${response.searchEngine}`,
+    `Tiempo:          ${response.elapsedSeconds}s`,
+    `Clasificacion:   ${tabName}`,
+    ``,
+    `--- EJECUTIVO ---`,
+    `Nombre:          ${response.executive?.fullName || 'N/A'}`,
+    `ID:              ${response.executive?.identificationNum || 'N/A'}`,
+    `Email:           ${response.executive?.email || 'N/A'}`,
+    ``,
+    `--- ESTADISTICAS DE CLASIFICACION ---`,
+    `Validados:       ${response.classificationStats.validated}`,
+    `Potenciales:     ${response.classificationStats.potential}`,
+    `Descartados:     ${response.classificationStats.discarded}`,
+    ``,
+    `================================================================================`,
+    `  RESULTADOS ${tabName.toUpperCase()} (${results.length})`,
+    `================================================================================`,
+    ``,
+  ];
+
+  for (const r of results) {
+    lines.push(`--- Resultado #${r.position} ---`);
+    lines.push(`Titulo:        ${r.title}`);
+    lines.push(`URL:           ${r.url}`);
+    lines.push(`Fuente:        ${r.source}`);
+    lines.push(`Clasificacion: ${r.classification?.toUpperCase() || 'N/A'}`);
+    lines.push(`Razon:         ${r.classificationReason || 'N/A'}`);
+    lines.push(`Dominio:       ${r.sourceDomain || 'N/A'}`);
+    lines.push(`Actores:       ${r.actors || 'No identificado'}`);
+    lines.push(`F. Publicacion:${r.publicationDate || 'No disponible'}`);
+    lines.push(`IDs Match:     ${r.matchedIdentifiers?.join(', ') || 'Ninguno'}`);
+    lines.push(`Tipo Archivo:  ${r.fileType || 'html'}`);
+    lines.push(`Descargable:   ${r.isDownloadable ? 'Si' : 'No'}`);
+    lines.push(`Snippet:       ${r.snippet || 'Sin snippet'}`);
+    lines.push(`Query:         ${r.querySource || 'N/A'}`);
+    lines.push(``);
+  }
+
+  const safeName = (response.executive?.fullName || 'custom').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
+  downloadAsFile(lines.join('\n'), `OSINT_${safeName}_${tabName}_${new Date().toISOString().slice(0, 10)}.txt`, 'text/plain');
+  toast.success(`Exportados ${results.length} resultados ${tabName} como TXT`);
+}
+
+function exportAllAsJson(
+  response: MetasearchResponse,
+  localValidated: MetasearchResult[],
+  localPotential: MetasearchResult[],
+  localDiscarded: MetasearchResult[],
+) {
+  const allResults = [...localValidated, ...localPotential, ...localDiscarded];
+  const payload = {
+    metadata: {
+      exportedAt: new Date().toISOString(),
+      agent: 'ActorTrace OSINT v6.0',
       searchEngine: response.searchEngine,
       enginesUsed: response.enginesUsed,
       elapsedSeconds: response.elapsedSeconds,
@@ -214,25 +325,35 @@ function exportAllAsJson(response: MetasearchResponse) {
       filteredOut: response.filteredOutCount || 0,
       downloadable: response.downloadableCount,
       engineStats: response.engineStats,
+      classificationStats: {
+        validated: localValidated.length,
+        potential: localPotential.length,
+        discarded: localDiscarded.length,
+      },
     },
     queryGroups: response.queryGroups,
     aiAnalysis: response.aiAnalysis,
-    results: response.results.map(r => ({
-      ...r,
-      rawPayload: { ...r },
-      captureTimestamp: new Date().toISOString(),
-    })),
+    validatedResults: localValidated.map(r => ({ ...r, rawPayload: { ...r }, captureTimestamp: new Date().toISOString() })),
+    potentialResults: localPotential.map(r => ({ ...r, rawPayload: { ...r }, captureTimestamp: new Date().toISOString() })),
+    discardedResults: localDiscarded.map(r => ({ ...r, rawPayload: { ...r }, captureTimestamp: new Date().toISOString() })),
+    results: allResults.map(r => ({ ...r, rawPayload: { ...r }, captureTimestamp: new Date().toISOString() })),
     evidence: response.evidence,
   };
   const safeName = (response.executive?.fullName || 'custom').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
   downloadAsFile(JSON.stringify(payload, null, 2), `OSINT_${safeName}_complete_${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
-  toast.success(`Exportados ${response.resultCount} resultados como JSON`);
+  toast.success(`Exportados ${allResults.length} resultados (todas las clasificaciones) como JSON`);
 }
 
-function exportAllAsTxt(response: MetasearchResponse) {
+function exportAllAsTxt(
+  response: MetasearchResponse,
+  localValidated: MetasearchResult[],
+  localPotential: MetasearchResult[],
+  localDiscarded: MetasearchResult[],
+) {
+  const allResults = [...localValidated, ...localPotential, ...localDiscarded];
   const lines = [
     `================================================================================`,
-    `  ACTORTRACE OSINT v5.0 - REPORTE COMPLETO DE METABUSQUEDA`,
+    `  ACTORTRACE OSINT v6.0 - REPORTE COMPLETO DE METABUSQUEDA`,
     `================================================================================`,
     ``,
     `Fecha:           ${new Date().toISOString()}`,
@@ -248,8 +369,10 @@ function exportAllAsTxt(response: MetasearchResponse) {
     `--- ESTADISTICAS ---`,
     `Resultados Totales:   ${response.resultCount}`,
     `Resultados Crudos:    ${response.rawResultCount || response.resultCount}`,
-    `Filtrados (FP):       ${response.filteredOutCount || 0}`,
     `Descargables:         ${response.downloadableCount}`,
+    `Validados:            ${localValidated.length}`,
+    `Potenciales:          ${localPotential.length}`,
+    `Descartados:          ${localDiscarded.length}`,
     `Google:               ${response.engineStats.google}`,
     `Bing:                 ${response.engineStats.bing}`,
     `DuckDuckGo:           ${response.engineStats.duckduckgo}`,
@@ -260,30 +383,43 @@ function exportAllAsTxt(response: MetasearchResponse) {
     `${response.aiAnalysis || 'No disponible'}`,
     ``,
     `================================================================================`,
-    `  RESULTADOS DETALLADOS (${response.resultCount})`,
+    `  RESULTADOS DETALLADOS (${allResults.length})`,
     `================================================================================`,
     ``,
   ];
 
-  for (const r of response.results) {
-    lines.push(`--- Resultado #${r.position} ---`);
-    lines.push(`Titulo:        ${r.title}`);
-    lines.push(`URL:           ${r.url}`);
-    lines.push(`Fuente:        ${r.source}`);
-    lines.push(`Dominio:       ${r.sourceDomain || 'N/A'}`);
-    lines.push(`Actores:       ${r.actors || 'No identificado'}`);
-    lines.push(`F. Publicacion:${r.publicationDate || 'No disponible'}`);
-    lines.push(`IDs Match:     ${r.matchedIdentifiers?.join(', ') || 'Ninguno'}`);
-    lines.push(`Tipo Archivo:  ${r.fileType || 'html'}`);
-    lines.push(`Descargable:   ${r.isDownloadable ? 'Si' : 'No'}`);
-    lines.push(`Snippet:       ${r.snippet || 'Sin snippet'}`);
-    lines.push(`Query:         ${r.querySource || 'N/A'}`);
+  const sections: Array<{ label: string; results: MetasearchResult[] }> = [
+    { label: 'VALIDADOS', results: localValidated },
+    { label: 'POTENCIALES', results: localPotential },
+    { label: 'DESCARTADOS', results: localDiscarded },
+  ];
+
+  for (const section of sections) {
     lines.push(``);
+    lines.push(`--- ${section.label} (${section.results.length}) ---`);
+    lines.push(``);
+    for (const r of section.results) {
+      lines.push(`  Resultado #${r.position}`);
+      lines.push(`  Titulo:        ${r.title}`);
+      lines.push(`  URL:           ${r.url}`);
+      lines.push(`  Fuente:        ${r.source}`);
+      lines.push(`  Dominio:       ${r.sourceDomain || 'N/A'}`);
+      lines.push(`  Clasificacion: ${r.classification?.toUpperCase() || 'N/A'}`);
+      lines.push(`  Razon:         ${r.classificationReason || 'N/A'}`);
+      lines.push(`  Actores:       ${r.actors || 'No identificado'}`);
+      lines.push(`  F. Publicacion:${r.publicationDate || 'No disponible'}`);
+      lines.push(`  IDs Match:     ${r.matchedIdentifiers?.join(', ') || 'Ninguno'}`);
+      lines.push(`  Tipo Archivo:  ${r.fileType || 'html'}`);
+      lines.push(`  Descargable:   ${r.isDownloadable ? 'Si' : 'No'}`);
+      lines.push(`  Snippet:       ${r.snippet || 'Sin snippet'}`);
+      lines.push(`  Query:         ${r.querySource || 'N/A'}`);
+      lines.push(``);
+    }
   }
 
   const safeName = (response.executive?.fullName || 'custom').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
   downloadAsFile(lines.join('\n'), `OSINT_${safeName}_complete_${new Date().toISOString().slice(0, 10)}.txt`, 'text/plain');
-  toast.success(`Exportados ${response.resultCount} resultados como TXT`);
+  toast.success(`Exportados ${allResults.length} resultados (todas las clasificaciones) como TXT`);
 }
 
 // ============================================================================
@@ -298,8 +434,14 @@ export default function ProteccionEjecutivosPage() {
   const [metasearchResults, setMetasearchResults] = useState<MetasearchResponse | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [searchProgress, setSearchProgress] = useState('');
-  const [expandedResult, setExpandedResult] = useState<number | null>(null);
+  const [expandedResult, setExpandedResult] = useState<string | null>(null);
   const [resultFilter, setResultFilter] = useState<'all' | 'documents' | 'web'>('all');
+
+  // V6.0 Classification tab state
+  const [activeResultTab, setActiveResultTab] = useState<'validated' | 'potential' | 'discarded'>('validated');
+  const [localValidated, setLocalValidated] = useState<MetasearchResult[]>([]);
+  const [localPotential, setLocalPotential] = useState<MetasearchResult[]>([]);
+  const [localDiscarded, setLocalDiscarded] = useState<MetasearchResult[]>([]);
 
   // Dialog states
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -386,14 +528,43 @@ export default function ProteccionEjecutivosPage() {
     setShowEditDialog(true);
   };
 
-  // Execute metabusqueda with OSINT query matrix
+  // V6.0 Promote/Demote handlers
+  const promoteToValidated = (result: MetasearchResult) => {
+    const updated = { ...result, classification: 'validated' as const, classificationReason: 'Promovido manualmente a validado' };
+    setLocalPotential(prev => prev.filter(r => r.url !== result.url));
+    setLocalDiscarded(prev => prev.filter(r => r.url !== result.url));
+    setLocalValidated(prev => [...prev, updated]);
+    toast.success('Resultado promovido a Validado');
+  };
+
+  const demoteToPotential = (result: MetasearchResult) => {
+    const updated = { ...result, classification: 'potential' as const, classificationReason: 'Reclasificado como potencial' };
+    setLocalValidated(prev => prev.filter(r => r.url !== result.url));
+    setLocalDiscarded(prev => prev.filter(r => r.url !== result.url));
+    setLocalPotential(prev => [...prev, updated]);
+    toast.info('Resultado reclasificado como Potencial');
+  };
+
+  const demoteToDiscarded = (result: MetasearchResult) => {
+    const updated = { ...result, classification: 'discarded' as const, classificationReason: 'Descartado manualmente' };
+    setLocalValidated(prev => prev.filter(r => r.url !== result.url));
+    setLocalPotential(prev => prev.filter(r => r.url !== result.url));
+    setLocalDiscarded(prev => [...prev, updated]);
+    toast.info('Resultado descartado');
+  };
+
+  // Execute metabusqueda with OSINT query matrix v6.0
   const handleMetasearch = async () => {
     if (!selectedExecutive) return;
     setMetasearchLoading(true);
     setShowResults(true);
     setMetasearchResults(null);
     setExpandedResult(null);
-    setSearchProgress('Iniciando Meta-Busqueda OSINT v5.0 (Filtro Anti-Falsos Positivos + Dorking)...');
+    setActiveResultTab('validated');
+    setLocalValidated([]);
+    setLocalPotential([]);
+    setLocalDiscarded([]);
+    setSearchProgress('Iniciando Meta-Busqueda OSINT v6.0 (Clasificacion Inteligente)...');
 
     try {
       const res = await fetch('/api/metasearch', {
@@ -412,8 +583,18 @@ export default function ProteccionEjecutivosPage() {
       setMetasearchResults(data);
       setSearchProgress('');
 
-      const filtered = data.filteredOutCount || 0;
-      toast.success(`Busqueda completada: ${data.resultCount} resultados validados (${filtered} falsos positivos filtrados)`);
+      // Initialize local classification state from API response
+      const validated = data.validatedResults || [];
+      const potential = data.potentialResults || [];
+      const discarded = data.discardedResults || [];
+      setLocalValidated(validated);
+      setLocalPotential(potential);
+      setLocalDiscarded(discarded);
+
+      const vCount = validated.length;
+      const pCount = potential.length;
+      const dCount = discarded.length;
+      toast.success(`Busqueda completada: ${vCount} validados, ${pCount} potenciales, ${dCount} descartados`);
     } catch {
       toast.error('Error de conexion en metabusqueda');
       setSearchProgress('');
@@ -434,12 +615,20 @@ export default function ProteccionEjecutivosPage() {
     acc[e.riskLevel] = (acc[e.riskLevel] || 0) + 1; return acc;
   }, {} as Record<string, number>);
 
-  // Filter results for display
-  const filteredDisplayResults = metasearchResults?.results.filter(r => {
-    if (resultFilter === 'documents') return r.isDownloadable;
-    if (resultFilter === 'web') return !r.isDownloadable;
-    return true;
-  }) || [];
+  // Get current tab results with doc/web filter
+  const currentTabResults = (() => {
+    let results: MetasearchResult[] = [];
+    switch (activeResultTab) {
+      case 'validated': results = localValidated; break;
+      case 'potential': results = localPotential; break;
+      case 'discarded': results = localDiscarded; break;
+    }
+    return results.filter(r => {
+      if (resultFilter === 'documents') return r.isDownloadable;
+      if (resultFilter === 'web') return !r.isDownloadable;
+      return true;
+    });
+  })();
 
   return (
     <div className="min-h-screen bg-background">
@@ -453,7 +642,7 @@ export default function ProteccionEjecutivosPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-foreground tracking-tight">Proteccion de Ejecutivos</h1>
-                <p className="text-xs text-muted-foreground">Modulo OSINT v5.0 - Filtro Anti-Falsos Positivos</p>
+                <p className="text-xs text-muted-foreground">Modulo OSINT v6.0 - Clasificacion Inteligente</p>
               </div>
             </div>
             <a href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -478,7 +667,7 @@ export default function ProteccionEjecutivosPage() {
                 <p className="text-2xl font-bold text-foreground">{riskStats[level] || 0}</p>
                 <p className="text-xs text-muted-foreground">Riesgo {level.charAt(0).toUpperCase() + level.slice(1)}</p>
               </CardContent>
-            </Card>
+          </Card>
           ))}
         </div>
 
@@ -500,7 +689,7 @@ export default function ProteccionEjecutivosPage() {
               onClick={handleMetasearch}
               disabled={!selectedExecutive || metasearchLoading}
               className="bg-[#1a1a5e] hover:bg-[#252580] text-white font-medium gap-2 disabled:opacity-40"
-              title={selectedExecutive ? `Meta-Busqueda OSINT v5.0: ${selectedExecutive.fullName}` : 'Seleccione un ejecutivo primero'}
+              title={selectedExecutive ? `Meta-Busqueda OSINT v6.0: ${selectedExecutive.fullName}` : 'Seleccione un ejecutivo primero'}
             >
               {metasearchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               Meta-Busqueda OSINT
@@ -537,7 +726,7 @@ export default function ProteccionEjecutivosPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base text-foreground">Directorio de Ejecutivos</CardTitle>
             <CardDescription className="text-muted-foreground text-xs">
-              Seleccione un ejecutivo para habilitar la Meta-Busqueda OSINT v5.0 (Filtro Anti-FP + Dorking 40+ extensiones)
+              Seleccione un ejecutivo para habilitar la Meta-Busqueda OSINT v6.0 (Clasificacion Inteligente + Dorking 40+ extensiones)
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -611,7 +800,7 @@ export default function ProteccionEjecutivosPage() {
           </CardContent>
         </Card>
 
-        {/* Metasearch Results - Enterprise Dashboard */}
+        {/* Metasearch Results - Enterprise Dashboard v6.0 */}
         <AnimatePresence>
           {showResults && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
@@ -621,12 +810,12 @@ export default function ProteccionEjecutivosPage() {
                     <div>
                       <CardTitle className="text-base text-foreground flex items-center gap-2">
                         <Globe className="w-4 h-4 text-amber-500" />
-                        Resultados de Meta-Busqueda OSINT v5.0
+                        Resultados de Meta-Busqueda OSINT v6.0
                       </CardTitle>
                       {metasearchResults && (
                         <CardDescription className="text-xs text-muted-foreground mt-1">
-                          {metasearchResults.searchEngine} - {metasearchResults.resultCount} resultados validados
-                          {metasearchResults.filteredOutCount ? ` (${metasearchResults.filteredOutCount} falsos positivos filtrados)` : ''}
+                          {metasearchResults.searchEngine} - {localValidated.length} validados / {localPotential.length} potenciales / {localDiscarded.length} descartados
+                          {metasearchResults.elapsedSeconds ? ` - ${metasearchResults.elapsedSeconds}s` : ''}
                         </CardDescription>
                       )}
                     </div>
@@ -636,18 +825,18 @@ export default function ProteccionEjecutivosPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => exportAllAsJson(metasearchResults)}
+                            onClick={() => exportAllAsJson(metasearchResults, localValidated, localPotential, localDiscarded)}
                             className="text-[10px] h-7 gap-1 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
                           >
-                            <FileJson className="w-3 h-3" /> Exportar JSON
+                            <FileJson className="w-3 h-3" /> Exportar TODO JSON
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => exportAllAsTxt(metasearchResults)}
+                            onClick={() => exportAllAsTxt(metasearchResults, localValidated, localPotential, localDiscarded)}
                             className="text-[10px] h-7 gap-1 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
                           >
-                            <FileCode className="w-3 h-3" /> Exportar TXT
+                            <FileCode className="w-3 h-3" /> Exportar TODO TXT
                           </Button>
                         </>
                       )}
@@ -661,18 +850,18 @@ export default function ProteccionEjecutivosPage() {
                   {metasearchLoading ? (
                     <div className="flex flex-col items-center justify-center py-12">
                       <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-3" />
-                      <p className="text-sm text-muted-foreground">Ejecutando Meta-Busqueda OSINT v5.0...</p>
+                      <p className="text-sm text-muted-foreground">Ejecutando Meta-Busqueda OSINT v6.0...</p>
                       <p className="text-xs text-muted-foreground mt-1">
                         Consultando: &quot;{selectedExecutive?.fullName}&quot; en Google + Bing + DuckDuckGo + Web Search
                       </p>
-                      <p className="text-xs text-amber-400 mt-2">Filtro Anti-Falsos Positivos activado</p>
+                      <p className="text-xs text-amber-400 mt-2">Clasificacion Inteligente de 3 niveles activada</p>
                       {searchProgress && (
                         <p className="text-xs text-amber-400 mt-1">{searchProgress}</p>
                       )}
                     </div>
                   ) : metasearchResults ? (
                     <>
-                      {/* Engine Stats + Filter Stats Row */}
+                      {/* Engine Stats + Classification Stats Row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                         {/* Engine Stats */}
                         {metasearchResults.engineStats && (
@@ -702,23 +891,32 @@ export default function ProteccionEjecutivosPage() {
                           </div>
                         )}
 
-                        {/* Filter Stats */}
-                        <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                        {/* V6.0 Classification Stats - 3 columns */}
+                        <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
                           <div className="flex items-center gap-2 mb-2">
-                            <Filter className="w-3.5 h-3.5 text-emerald-400" />
-                            <p className="text-[10px] font-medium text-emerald-400">Filtro Anti-Falsos Positivos</p>
+                            <Shield className="w-3.5 h-3.5 text-amber-400" />
+                            <p className="text-[10px] font-medium text-amber-400">Clasificacion Inteligente v6.0</p>
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-center">
                             <div>
-                              <p className="text-sm font-bold text-muted-foreground">{metasearchResults.rawResultCount || metasearchResults.resultCount}</p>
-                              <p className="text-[9px] text-muted-foreground">Crudos</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-emerald-400">{metasearchResults.resultCount}</p>
+                              <div className="flex items-center justify-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                <p className="text-sm font-bold text-emerald-400">{localValidated.length}</p>
+                              </div>
                               <p className="text-[9px] text-muted-foreground">Validados</p>
                             </div>
                             <div>
-                              <p className="text-sm font-bold text-red-400">{metasearchResults.filteredOutCount || 0}</p>
+                              <div className="flex items-center justify-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-amber-400" />
+                                <p className="text-sm font-bold text-amber-400">{localPotential.length}</p>
+                              </div>
+                              <p className="text-[9px] text-muted-foreground">Potenciales</p>
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-center gap-1">
+                                <XCircle className="w-3 h-3 text-red-400" />
+                                <p className="text-sm font-bold text-red-400">{localDiscarded.length}</p>
+                              </div>
                               <p className="text-[9px] text-muted-foreground">Descartados</p>
                             </div>
                           </div>
@@ -786,243 +984,358 @@ export default function ProteccionEjecutivosPage() {
                         </div>
                       )}
 
-                      {/* Results Filter Tabs */}
-                      {metasearchResults.results.length > 0 && (
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-[10px] text-muted-foreground">Filtrar:</span>
+                      {/* V6.0 Three-tab Results Panel */}
+                      <div className="mb-4">
+                        {/* Tab Headers */}
+                        <div className="flex items-center gap-1 mb-3 flex-wrap">
                           {[
-                            { key: 'all' as const, label: 'Todos', count: metasearchResults.results.length },
-                            { key: 'documents' as const, label: 'Documentos', count: metasearchResults.results.filter(r => r.isDownloadable).length },
-                            { key: 'web' as const, label: 'Web', count: metasearchResults.results.filter(r => !r.isDownloadable).length },
-                          ].map(tab => (
-                            <button
-                              key={tab.key}
-                              onClick={() => setResultFilter(tab.key)}
-                              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
-                                resultFilter === tab.key
-                                  ? 'border-amber-500/40 text-amber-400 bg-amber-500/10'
-                                  : 'border-border text-muted-foreground hover:text-foreground'
-                              }`}
-                            >
-                              {tab.label} ({tab.count})
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Results List - Enterprise Style */}
-                      {filteredDisplayResults.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                          <Search className="w-10 h-10 mb-3 opacity-30" />
-                          <p className="text-sm">No se encontraron resultados validados</p>
-                          {metasearchResults.filteredOutCount ? (
-                            <p className="text-xs text-red-400 mt-1">{metasearchResults.filteredOutCount} resultados fueron filtrados como falsos positivos</p>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {filteredDisplayResults.map((result, index) => {
-                            const isExpanded = expandedResult === result.position;
+                            { key: 'validated' as const, label: 'Validados', count: localValidated.length, icon: CheckCircle2, color: 'emerald' },
+                            { key: 'potential' as const, label: 'Potenciales', count: localPotential.length, icon: AlertTriangle, color: 'amber' },
+                            { key: 'discarded' as const, label: 'Descartados', count: localDiscarded.length, icon: XCircle, color: 'red' },
+                          ].map(tab => {
+                            const isActive = activeResultTab === tab.key;
+                            const colorMap: Record<string, string> = {
+                              emerald: isActive ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10' : 'border-border text-muted-foreground hover:text-emerald-400',
+                              amber: isActive ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' : 'border-border text-muted-foreground hover:text-amber-400',
+                              red: isActive ? 'border-red-500/40 text-red-400 bg-red-500/10' : 'border-border text-muted-foreground hover:text-red-400',
+                            };
                             return (
-                              <motion.div
-                                key={index}
-                                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: index * 0.02 }}
-                                className={`rounded-lg border transition-colors overflow-hidden ${
-                                  result.isDownloadable
-                                    ? 'border-amber-500/20 bg-amber-500/5'
-                                    : 'border-border bg-muted/20'
+                              <button
+                                key={tab.key}
+                                onClick={() => { setActiveResultTab(tab.key); setResultFilter('all'); }}
+                                className={`text-[11px] px-3 py-1.5 rounded-md border transition-colors flex items-center gap-1.5 font-medium ${colorMap[tab.color]}`}
+                              >
+                                <tab.icon className="w-3.5 h-3.5" />
+                                {tab.label}
+                                <span className="ml-0.5 px-1.5 py-0 rounded-full text-[9px] bg-muted/50">{tab.count}</span>
+                              </button>
+                            );
+                          })}
+
+                          {/* Tab Export Buttons */}
+                          {metasearchResults && !metasearchLoading && (
+                            <div className="ml-auto flex items-center gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const tabResults = activeResultTab === 'validated' ? localValidated : activeResultTab === 'potential' ? localPotential : localDiscarded;
+                                  exportTabAsJson(tabResults, activeResultTab, metasearchResults);
+                                }}
+                                className="text-[9px] h-6 gap-1 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                              >
+                                <FileJson className="w-2.5 h-2.5" /> Tab JSON
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const tabResults = activeResultTab === 'validated' ? localValidated : activeResultTab === 'potential' ? localPotential : localDiscarded;
+                                  exportTabAsTxt(tabResults, activeResultTab, metasearchResults);
+                                }}
+                                className="text-[9px] h-6 gap-1 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                              >
+                                <FileCode className="w-2.5 h-2.5" /> Tab TXT
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Document/Web Filter */}
+                        {currentTabResults.length > 0 && (
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-[10px] text-muted-foreground">Filtrar:</span>
+                            {[
+                              { key: 'all' as const, label: 'Todos', count: (activeResultTab === 'validated' ? localValidated : activeResultTab === 'potential' ? localPotential : localDiscarded).length },
+                              { key: 'documents' as const, label: 'Documentos', count: (activeResultTab === 'validated' ? localValidated : activeResultTab === 'potential' ? localPotential : localDiscarded).filter(r => r.isDownloadable).length },
+                              { key: 'web' as const, label: 'Web', count: (activeResultTab === 'validated' ? localValidated : activeResultTab === 'potential' ? localPotential : localDiscarded).filter(r => !r.isDownloadable).length },
+                            ].map(tab => (
+                              <button
+                                key={tab.key}
+                                onClick={() => setResultFilter(tab.key)}
+                                className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                                  resultFilter === tab.key
+                                    ? 'border-amber-500/40 text-amber-400 bg-amber-500/10'
+                                    : 'border-border text-muted-foreground hover:text-foreground'
                                 }`}
                               >
-                                {/* Main Row - Always Visible */}
-                                <div
-                                  className="p-3 cursor-pointer"
-                                  onClick={() => setExpandedResult(isExpanded ? null : result.position)}
+                                {tab.label} ({tab.count})
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Results List for Current Tab */}
+                        {currentTabResults.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                            {activeResultTab === 'validated' && <CheckCircle2 className="w-10 h-10 mb-3 opacity-30" />}
+                            {activeResultTab === 'potential' && <AlertTriangle className="w-10 h-10 mb-3 opacity-30" />}
+                            {activeResultTab === 'discarded' && <XCircle className="w-10 h-10 mb-3 opacity-30" />}
+                            <p className="text-sm">
+                              {activeResultTab === 'validated' && 'No hay resultados validados'}
+                              {activeResultTab === 'potential' && 'No hay resultados potenciales'}
+                              {activeResultTab === 'discarded' && 'No hay resultados descartados'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 max-h-96 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
+                            {currentTabResults.map((result, index) => {
+                              const isExpanded = expandedResult === `${activeResultTab}-${result.position}-${index}`;
+                              const classificationBorderMap: Record<string, string> = {
+                                validated: 'border-emerald-500/20 bg-emerald-500/5',
+                                potential: 'border-amber-500/20 bg-amber-500/5',
+                                discarded: 'border-red-500/20 bg-red-500/5',
+                              };
+                              const borderClass = classificationBorderMap[result.classification || 'validated'] || classificationBorderMap.validated;
+
+                              return (
+                                <motion.div
+                                  key={`${result.url}-${index}`}
+                                  initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: index * 0.02 }}
+                                  className={`rounded-lg border transition-colors overflow-hidden ${borderClass}`}
                                 >
-                                  <div className="flex items-start gap-3">
-                                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-mono">
-                                      {result.position}
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                      {/* Title + External Link */}
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <a
-                                          href={result.url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="text-sm font-medium text-amber-500 hover:text-amber-400 hover:underline truncate max-w-[80%]"
-                                        >
-                                          {result.title}
-                                        </a>
-                                        <a
-                                          href={result.url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20"
-                                          title="Navegar al sitio original"
-                                        >
-                                          <ExternalLink className="w-3 h-3" /> Abrir Fuente
-                                        </a>
+                                  {/* Main Row - Always Visible */}
+                                  <div
+                                    className="p-3 cursor-pointer"
+                                    onClick={() => setExpandedResult(isExpanded ? null : `${activeResultTab}-${result.position}-${index}`)}
+                                  >
+                                    <div className="flex items-start gap-3">
+                                      {/* Status Icon + Position */}
+                                      <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                                        <ClassificationIcon classification={result.classification || 'validated'} size={4} />
+                                        <span className="text-[9px] text-muted-foreground font-mono">#{result.position}</span>
                                       </div>
-
-                                      {/* Snippet */}
-                                      {result.snippet && (
-                                        <p className="text-xs text-muted-foreground/80 line-clamp-2 mb-1.5">{result.snippet}</p>
-                                      )}
-
-                                      {/* Metadata Row */}
-                                      <div className="flex flex-wrap items-center gap-1.5">
-                                        {/* Source Badge */}
-                                        <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-border">
-                                          {result.source}
-                                        </Badge>
-
-                                        {/* File Type */}
-                                        {result.fileType && result.fileType !== 'html' && (
-                                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-amber-500/30 text-amber-400">
-                                            .{result.fileType}
-                                          </Badge>
-                                        )}
-
-                                        {/* Matched Identifiers */}
-                                        {result.matchedIdentifiers && result.matchedIdentifiers.length > 0 && (
-                                          <Badge className="text-[9px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border">
-                                            <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" /> {result.matchedIdentifiers.join(' + ')}
-                                          </Badge>
-                                        )}
-
-                                        {/* Source Domain */}
-                                        {result.sourceDomain && (
-                                          <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
-                                            <Globe2 className="w-2.5 h-2.5" /> {result.sourceDomain}
-                                          </span>
-                                        )}
-
-                                        {/* Expand toggle */}
-                                        <span className="ml-auto text-[9px] text-muted-foreground flex items-center gap-0.5">
-                                          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                          {isExpanded ? 'Cerrar' : 'Detalle'}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Expanded Detail Panel */}
-                                <AnimatePresence>
-                                  {isExpanded && (
-                                    <motion.div
-                                      initial={{ height: 0, opacity: 0 }}
-                                      animate={{ height: 'auto', opacity: 1 }}
-                                      exit={{ height: 0, opacity: 0 }}
-                                      transition={{ duration: 0.2 }}
-                                      className="border-t border-border overflow-hidden"
-                                    >
-                                      <div className="p-4 bg-muted/10 space-y-3">
-                                        {/* Analytical Metadata Grid */}
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                          {/* Source */}
-                                          <div className="p-2 rounded bg-card/50 border border-border">
-                                            <div className="flex items-center gap-1.5 mb-1">
-                                              <Globe2 className="w-3 h-3 text-purple-400" />
-                                              <p className="text-[10px] font-medium text-purple-400">Fuente</p>
-                                            </div>
-                                            <p className="text-xs text-foreground font-mono break-all">{result.sourceDomain || 'No disponible'}</p>
-                                          </div>
-
-                                          {/* Actors */}
-                                          <div className="p-2 rounded bg-card/50 border border-border">
-                                            <div className="flex items-center gap-1.5 mb-1">
-                                              <Users className="w-3 h-3 text-cyan-400" />
-                                              <p className="text-[10px] font-medium text-cyan-400">Actores</p>
-                                            </div>
-                                            <p className="text-xs text-foreground">{result.actors || 'No identificado'}</p>
-                                          </div>
-
-                                          {/* Publication Date */}
-                                          <div className="p-2 rounded bg-card/50 border border-border">
-                                            <div className="flex items-center gap-1.5 mb-1">
-                                              <Calendar className="w-3 h-3 text-amber-400" />
-                                              <p className="text-[10px] font-medium text-amber-400">Fecha Publicacion</p>
-                                            </div>
-                                            <p className="text-xs text-foreground">{result.publicationDate || 'No disponible'}</p>
-                                          </div>
-                                        </div>
-
-                                        {/* Full URL */}
-                                        <div className="p-2 rounded bg-card/50 border border-border">
-                                          <p className="text-[10px] text-muted-foreground mb-0.5">URL Completa:</p>
+                                      <div className="flex-1 min-w-0">
+                                        {/* Title + Abrir Fuente */}
+                                        <div className="flex items-center gap-2 mb-1">
                                           <a
                                             href={result.url}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-xs text-blue-400 hover:text-blue-300 break-all font-mono"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="text-sm font-medium text-amber-500 hover:text-amber-400 hover:underline truncate max-w-[75%]"
                                           >
-                                            {result.url}
+                                            {result.title}
+                                          </a>
+                                          <a
+                                            href={result.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20"
+                                            title="Abrir URL directamente"
+                                          >
+                                            <ExternalLink className="w-3 h-3" /> Abrir Fuente
                                           </a>
                                         </div>
 
-                                        {/* Full Snippet */}
+                                        {/* Snippet */}
                                         {result.snippet && (
-                                          <div className="p-2 rounded bg-card/50 border border-border">
-                                            <p className="text-[10px] text-muted-foreground mb-0.5">Snippet Completo:</p>
-                                            <p className="text-xs text-foreground/90">{result.snippet}</p>
-                                          </div>
+                                          <p className="text-xs text-muted-foreground/80 line-clamp-2 mb-1.5">{result.snippet}</p>
                                         )}
 
-                                        {/* Query Source + Matched Identifiers */}
-                                        <div className="flex flex-wrap gap-3">
-                                          {result.querySource && (
-                                            <div>
-                                              <p className="text-[10px] text-muted-foreground">Query Origen:</p>
-                                              <p className="text-[10px] text-foreground font-mono">{result.querySource}</p>
-                                            </div>
+                                        {/* Metadata Row */}
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                          {/* Source Badge */}
+                                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-border">
+                                            {result.source}
+                                          </Badge>
+
+                                          {/* File Type Badge */}
+                                          {result.fileType && result.fileType !== 'html' && (
+                                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-amber-500/30 text-amber-400">
+                                              .{result.fileType}
+                                            </Badge>
                                           )}
-                                          {result.matchedIdentifiers && result.matchedIdentifiers.length > 0 && (
-                                            <div>
-                                              <p className="text-[10px] text-muted-foreground">Identificadores Coincidentes:</p>
-                                              <div className="flex gap-1 mt-0.5">
-                                                {result.matchedIdentifiers.map((id, i) => (
-                                                  <Badge key={i} className="text-[9px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border">
-                                                    {id}
-                                                  </Badge>
-                                                ))}
-                                              </div>
-                                            </div>
+
+                                          {/* Matched Identifiers - only for validated */}
+                                          {result.classification === 'validated' && result.matchedIdentifiers && result.matchedIdentifiers.length > 0 && (
+                                            <Badge className="text-[9px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border">
+                                              <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" /> {result.matchedIdentifiers.join(' + ')}
+                                            </Badge>
                                           )}
+
+                                          {/* Classification Reason */}
+                                          {result.classificationReason && (
+                                            <span className="text-[9px] text-muted-foreground/60 italic truncate max-w-[200px]">
+                                              {result.classificationReason}
+                                            </span>
+                                          )}
+
+                                          {/* Expand toggle */}
+                                          <span className="ml-auto text-[9px] text-muted-foreground flex items-center gap-0.5">
+                                            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                            {isExpanded ? 'Cerrar' : 'Detalle'}
+                                          </span>
                                         </div>
 
-                                        {/* Export Buttons per Result */}
-                                        <div className="flex items-center gap-2 pt-2 border-t border-border">
-                                          <span className="text-[10px] text-muted-foreground">Exportar resultado:</span>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-[10px] h-6 gap-1 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
-                                            onClick={() => exportResultAsJson(result, metasearchResults.executive?.fullName || 'unknown')}
-                                          >
-                                            <FileJson className="w-3 h-3" /> .JSON
-                                          </Button>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-[10px] h-6 gap-1 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
-                                            onClick={() => exportResultAsTxt(result, metasearchResults.executive?.fullName || 'unknown')}
-                                          >
-                                            <FileCode className="w-3 h-3" /> .TXT
-                                          </Button>
-                                        </div>
+                                        {/* Promote/Demote Buttons */}
+                                        {(result.classification === 'potential' || result.classification === 'discarded' || result.classification === 'validated') && (
+                                          <div className="flex items-center gap-1.5 mt-2" onClick={(e) => e.stopPropagation()}>
+                                            {result.classification !== 'validated' && (
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="text-[9px] h-5 px-2 gap-0.5 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                                                onClick={() => promoteToValidated(result)}
+                                              >
+                                                <ArrowUpCircle className="w-3 h-3" /> Promover a Validado
+                                              </Button>
+                                            )}
+                                            {result.classification !== 'discarded' && (
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="text-[9px] h-5 px-2 gap-0.5 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                                                onClick={() => demoteToDiscarded(result)}
+                                              >
+                                                <XCircle className="w-3 h-3" /> Descartar
+                                              </Button>
+                                            )}
+                                            {result.classification === 'validated' && (
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="text-[9px] h-5 px-2 gap-0.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                                                onClick={() => demoteToPotential(result)}
+                                              >
+                                                <ArrowDownCircle className="w-3 h-3" /> Reclasificar Potencial
+                                              </Button>
+                                            )}
+                                          </div>
+                                        )}
                                       </div>
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
-                              </motion.div>
-                            );
-                          })}
-                        </div>
-                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Expanded Detail Panel */}
+                                  <AnimatePresence>
+                                    {isExpanded && (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="border-t border-border overflow-hidden"
+                                      >
+                                        <div className="p-4 bg-muted/10 space-y-3">
+                                          {/* Analytical Metadata Grid */}
+                                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            {/* Source Domain */}
+                                            <div className="p-2 rounded bg-card/50 border border-border">
+                                              <div className="flex items-center gap-1.5 mb-1">
+                                                <Globe2 className="w-3 h-3 text-purple-400" />
+                                                <p className="text-[10px] font-medium text-purple-400">Fuente</p>
+                                              </div>
+                                              <p className="text-xs text-foreground font-mono break-all">{result.sourceDomain || 'No disponible'}</p>
+                                            </div>
+
+                                            {/* Actors */}
+                                            <div className="p-2 rounded bg-card/50 border border-border">
+                                              <div className="flex items-center gap-1.5 mb-1">
+                                                <Users className="w-3 h-3 text-cyan-400" />
+                                                <p className="text-[10px] font-medium text-cyan-400">Actores</p>
+                                              </div>
+                                              <p className="text-xs text-foreground">{result.actors || 'No identificado'}</p>
+                                            </div>
+
+                                            {/* Publication Date */}
+                                            <div className="p-2 rounded bg-card/50 border border-border">
+                                              <div className="flex items-center gap-1.5 mb-1">
+                                                <Calendar className="w-3 h-3 text-amber-400" />
+                                                <p className="text-[10px] font-medium text-amber-400">Fecha Publicacion</p>
+                                              </div>
+                                              <p className="text-xs text-foreground">{result.publicationDate || 'No disponible'}</p>
+                                            </div>
+                                          </div>
+
+                                          {/* Classification Detail */}
+                                          <div className="p-2 rounded bg-card/50 border border-border">
+                                            <div className="flex items-center gap-2">
+                                              <ClassificationIcon classification={result.classification || 'validated'} size={3.5} />
+                                              <span className="text-[10px] font-medium">
+                                                Clasificacion: {result.classification?.toUpperCase() || 'VALIDATED'}
+                                              </span>
+                                              {result.classificationReason && (
+                                                <span className="text-[10px] text-muted-foreground">- {result.classificationReason}</span>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          {/* Full URL */}
+                                          <div className="p-2 rounded bg-card/50 border border-border">
+                                            <p className="text-[10px] text-muted-foreground mb-0.5">URL Completa:</p>
+                                            <a
+                                              href={result.url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-xs text-blue-400 hover:text-blue-300 break-all font-mono"
+                                            >
+                                              {result.url}
+                                            </a>
+                                          </div>
+
+                                          {/* Full Snippet */}
+                                          {result.snippet && (
+                                            <div className="p-2 rounded bg-card/50 border border-border">
+                                              <p className="text-[10px] text-muted-foreground mb-0.5">Snippet Completo:</p>
+                                              <p className="text-xs text-foreground/90">{result.snippet}</p>
+                                            </div>
+                                          )}
+
+                                          {/* Query Source + Matched Identifiers */}
+                                          <div className="flex flex-wrap gap-3">
+                                            {result.querySource && (
+                                              <div>
+                                                <p className="text-[10px] text-muted-foreground">Query Origen:</p>
+                                                <p className="text-[10px] text-foreground font-mono">{result.querySource}</p>
+                                              </div>
+                                            )}
+                                            {result.matchedIdentifiers && result.matchedIdentifiers.length > 0 && (
+                                              <div>
+                                                <p className="text-[10px] text-muted-foreground">Identificadores Coincidentes:</p>
+                                                <div className="flex gap-1 mt-0.5">
+                                                  {result.matchedIdentifiers.map((id, i) => (
+                                                    <Badge key={i} className="text-[9px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border">
+                                                      {id}
+                                                    </Badge>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+
+                                          {/* Export Buttons per Result */}
+                                          <div className="flex items-center gap-2 pt-2 border-t border-border">
+                                            <span className="text-[10px] text-muted-foreground">Exportar resultado:</span>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="text-[10px] h-6 gap-1 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                                              onClick={() => exportResultAsJson(result, metasearchResults.executive?.fullName || 'unknown')}
+                                            >
+                                              <FileJson className="w-3 h-3" /> .JSON
+                                            </Button>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="text-[10px] h-6 gap-1 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                                              onClick={() => exportResultAsTxt(result, metasearchResults.executive?.fullName || 'unknown')}
+                                            >
+                                              <FileCode className="w-3 h-3" /> .TXT
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </>
                   ) : null}
                 </CardContent>
