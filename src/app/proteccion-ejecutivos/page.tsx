@@ -9,6 +9,7 @@ import {
   Download, FileCheck, FileX, HardDrive, FolderOpen, FileJson,
   FileCode, Calendar, Users, Globe2, CheckCircle2, Filter,
   XCircle, ArrowUpCircle, ArrowDownCircle,
+  FileSpreadsheet, Presentation, FileArchive, ChevronRight,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,15 +53,12 @@ interface MetasearchResult {
   position: number;
   fileType?: string;
   isDownloadable?: boolean;
-  downloaded?: boolean;
-  localPath?: string;
   querySource?: string;
-  // V6.0 - Analytical metadata
+  queryBlock?: string;
   sourceDomain?: string;
   actors?: string;
   publicationDate?: string;
   matchedIdentifiers?: string[];
-  // V6.0 - Classification
   classification?: 'validated' | 'potential' | 'discarded';
   classificationReason?: string;
 }
@@ -78,19 +76,41 @@ interface EvidenceDetail {
   error?: string;
 }
 
+interface EngineDetail {
+  name: string;
+  queriesRun: number;
+  resultsFound: number;
+  status: 'active' | 'failed' | 'skipped';
+  details: string;
+}
+
+interface ExtensionGroup {
+  label: string;
+  exts: string[];
+  icon: string;
+}
+
+interface QueryGroup {
+  label: string;
+  queryCount: number;
+  blockType: string;
+  resultsFound: number;
+  sampleQueries: string[];
+}
+
 interface MetasearchResponse {
   success: boolean;
   searchEngine: string;
   enginesUsed: string[];
-  engineStats: { google: number; bing: number; yandex: number; duckduckgo: number; brave: number; webSearch: number };
-  queryGroups: Array<{ label: string; queryCount: number; blockType: string }>;
+  engineDetails: EngineDetail[];
+  queryGroups: QueryGroup[];
   resultCount: number;
   rawResultCount?: number;
   filteredOutCount?: number;
+  classificationStats: { validated: number; potential: number; discarded: number };
   downloadableCount: number;
   downloadedCount: number;
   results: MetasearchResult[];
-  classificationStats: { validated: number; potential: number; discarded: number };
   validatedResults: MetasearchResult[];
   potentialResults: MetasearchResult[];
   discardedResults: MetasearchResult[];
@@ -100,6 +120,7 @@ interface MetasearchResponse {
   executive: { id: string; fullName: string; identificationNum: string; email: string | null } | null;
   timestamp: string;
   extensionsMonitored?: string[];
+  extensionGroups?: ExtensionGroup[];
   elapsedSeconds: number;
 }
 
@@ -139,6 +160,22 @@ function ClassificationIcon({ classification, size = 4 }: { classification: stri
 }
 
 // ============================================================================
+// Extension Group Icon Helper
+// ============================================================================
+function ExtGroupIcon({ iconName, className }: { iconName: string; className?: string }) {
+  const cn = className || 'w-4 h-4';
+  switch (iconName) {
+    case 'file-text': return <FileText className={cn} />;
+    case 'file-spreadsheet': return <FileSpreadsheet className={cn} />;
+    case 'presentation': return <Presentation className={cn} />;
+    case 'file-archive': return <FileArchive className={cn} />;
+    case 'folder': return <FolderOpen className={cn} />;
+    case 'globe': return <Globe className={cn} />;
+    default: return <FileText className={cn} />;
+  }
+}
+
+// ============================================================================
 // Export helpers
 // ============================================================================
 function downloadAsFile(data: string, filename: string, mimeType: string) {
@@ -158,7 +195,7 @@ function exportResultAsJson(result: MetasearchResult, execName: string) {
     metadata: {
       exportedAt: new Date().toISOString(),
       executiveName: execName,
-      agent: 'ActorTrace OSINT v6.0',
+      agent: 'ActorTrace OSINT v7.0',
     },
     result: {
       title: result.title,
@@ -169,6 +206,7 @@ function exportResultAsJson(result: MetasearchResult, execName: string) {
       fileType: result.fileType || 'html',
       isDownloadable: result.isDownloadable || false,
       querySource: result.querySource || '',
+      queryBlock: result.queryBlock || '',
       sourceDomain: result.sourceDomain || '',
       actors: result.actors || '',
       publicationDate: result.publicationDate || '',
@@ -190,7 +228,7 @@ function exportResultAsJson(result: MetasearchResult, execName: string) {
 function exportResultAsTxt(result: MetasearchResult, execName: string) {
   const lines = [
     `================================================================================`,
-    `  ACTORTRACE OSINT v6.0 - REPORTE DE RESULTADO INDIVIDUAL`,
+    `  ACTORTRACE OSINT v7.0 - REPORTE DE RESULTADO INDIVIDUAL`,
     `================================================================================`,
     ``,
     `EJECUTIVO: ${execName}`,
@@ -206,6 +244,7 @@ function exportResultAsTxt(result: MetasearchResult, execName: string) {
     `Descargable:   ${result.isDownloadable ? 'Si' : 'No'}`,
     `Clasificacion: ${result.classification?.toUpperCase() || 'VALIDATED'}`,
     `Razon:         ${result.classificationReason || 'N/A'}`,
+    `Bloque Query:  ${result.queryBlock || 'N/A'}`,
     ``,
     `--- METADATOS ANALITICOS ---`,
     ``,
@@ -234,7 +273,7 @@ function exportTabAsJson(results: MetasearchResult[], tabName: string, response:
   const payload = {
     metadata: {
       exportedAt: new Date().toISOString(),
-      agent: 'ActorTrace OSINT v6.0',
+      agent: 'ActorTrace OSINT v7.0',
       tab: tabName,
       searchEngine: response.searchEngine,
       enginesUsed: response.enginesUsed,
@@ -256,7 +295,7 @@ function exportTabAsJson(results: MetasearchResult[], tabName: string, response:
 function exportTabAsTxt(results: MetasearchResult[], tabName: string, response: MetasearchResponse) {
   const lines = [
     `================================================================================`,
-    `  ACTORTRACE OSINT v6.0 - REPORTE DE RESULTADOS ${tabName.toUpperCase()}`,
+    `  ACTORTRACE OSINT v7.0 - REPORTE DE RESULTADOS ${tabName.toUpperCase()}`,
     `================================================================================`,
     ``,
     `Fecha:           ${new Date().toISOString()}`,
@@ -287,6 +326,7 @@ function exportTabAsTxt(results: MetasearchResult[], tabName: string, response: 
     lines.push(`Fuente:        ${r.source}`);
     lines.push(`Clasificacion: ${r.classification?.toUpperCase() || 'N/A'}`);
     lines.push(`Razon:         ${r.classificationReason || 'N/A'}`);
+    lines.push(`Bloque Query:  ${r.queryBlock || 'N/A'}`);
     lines.push(`Dominio:       ${r.sourceDomain || 'N/A'}`);
     lines.push(`Actores:       ${r.actors || 'No identificado'}`);
     lines.push(`F. Publicacion:${r.publicationDate || 'No disponible'}`);
@@ -313,7 +353,7 @@ function exportAllAsJson(
   const payload = {
     metadata: {
       exportedAt: new Date().toISOString(),
-      agent: 'ActorTrace OSINT v6.0',
+      agent: 'ActorTrace OSINT v7.0',
       searchEngine: response.searchEngine,
       enginesUsed: response.enginesUsed,
       elapsedSeconds: response.elapsedSeconds,
@@ -324,7 +364,7 @@ function exportAllAsJson(
       rawResults: response.rawResultCount || response.resultCount,
       filteredOut: response.filteredOutCount || 0,
       downloadable: response.downloadableCount,
-      engineStats: response.engineStats,
+      engineDetails: response.engineDetails,
       classificationStats: {
         validated: localValidated.length,
         potential: localPotential.length,
@@ -332,6 +372,7 @@ function exportAllAsJson(
       },
     },
     queryGroups: response.queryGroups,
+    extensionGroups: response.extensionGroups,
     aiAnalysis: response.aiAnalysis,
     validatedResults: localValidated.map(r => ({ ...r, rawPayload: { ...r }, captureTimestamp: new Date().toISOString() })),
     potentialResults: localPotential.map(r => ({ ...r, rawPayload: { ...r }, captureTimestamp: new Date().toISOString() })),
@@ -353,7 +394,7 @@ function exportAllAsTxt(
   const allResults = [...localValidated, ...localPotential, ...localDiscarded];
   const lines = [
     `================================================================================`,
-    `  ACTORTRACE OSINT v6.0 - REPORTE COMPLETO DE METABUSQUEDA`,
+    `  ACTORTRACE OSINT v7.0 - REPORTE COMPLETO DE METABUSQUEDA`,
     `================================================================================`,
     ``,
     `Fecha:           ${new Date().toISOString()}`,
@@ -373,10 +414,11 @@ function exportAllAsTxt(
     `Validados:            ${localValidated.length}`,
     `Potenciales:          ${localPotential.length}`,
     `Descartados:          ${localDiscarded.length}`,
-    `Google:               ${response.engineStats.google}`,
-    `Bing:                 ${response.engineStats.bing}`,
-    `DuckDuckGo:           ${response.engineStats.duckduckgo}`,
-    `Web Search:           ${response.engineStats.webSearch}`,
+    ``,
+    `--- MOTORES DE BUSQUEDA ---`,
+    ...(response.engineDetails || []).map(ed =>
+      `  ${ed.name}: ${ed.resultsFound} resultados / ${ed.queriesRun} consultas [${ed.status.toUpperCase()}] - ${ed.details}`
+    ),
     ``,
     `--- ANALISIS IA ---`,
     ``,
@@ -406,6 +448,7 @@ function exportAllAsTxt(
       lines.push(`  Dominio:       ${r.sourceDomain || 'N/A'}`);
       lines.push(`  Clasificacion: ${r.classification?.toUpperCase() || 'N/A'}`);
       lines.push(`  Razon:         ${r.classificationReason || 'N/A'}`);
+      lines.push(`  Bloque Query:  ${r.queryBlock || 'N/A'}`);
       lines.push(`  Actores:       ${r.actors || 'No identificado'}`);
       lines.push(`  F. Publicacion:${r.publicationDate || 'No disponible'}`);
       lines.push(`  IDs Match:     ${r.matchedIdentifiers?.join(', ') || 'Ninguno'}`);
@@ -437,11 +480,17 @@ export default function ProteccionEjecutivosPage() {
   const [expandedResult, setExpandedResult] = useState<string | null>(null);
   const [resultFilter, setResultFilter] = useState<'all' | 'documents' | 'web'>('all');
 
-  // V6.0 Classification tab state
+  // V7.0 Classification tab state
   const [activeResultTab, setActiveResultTab] = useState<'validated' | 'potential' | 'discarded'>('validated');
   const [localValidated, setLocalValidated] = useState<MetasearchResult[]>([]);
   const [localPotential, setLocalPotential] = useState<MetasearchResult[]>([]);
   const [localDiscarded, setLocalDiscarded] = useState<MetasearchResult[]>([]);
+
+  // V7.0 Expandable panel states
+  const [enginesExpanded, setEnginesExpanded] = useState(false);
+  const [classificationExpanded, setClassificationExpanded] = useState(false);
+  const [extensionsExpanded, setExtensionsExpanded] = useState(false);
+  const [expandedQueryGroup, setExpandedQueryGroup] = useState<number | null>(null);
 
   // Dialog states
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -528,7 +577,7 @@ export default function ProteccionEjecutivosPage() {
     setShowEditDialog(true);
   };
 
-  // V6.0 Promote/Demote handlers
+  // V7.0 Promote/Demote handlers
   const promoteToValidated = (result: MetasearchResult) => {
     const updated = { ...result, classification: 'validated' as const, classificationReason: 'Promovido manualmente a validado' };
     setLocalPotential(prev => prev.filter(r => r.url !== result.url));
@@ -553,7 +602,7 @@ export default function ProteccionEjecutivosPage() {
     toast.info('Resultado descartado');
   };
 
-  // Execute metabusqueda with OSINT query matrix v6.0
+  // Execute metabusqueda with OSINT query matrix v7.0
   const handleMetasearch = async () => {
     if (!selectedExecutive) return;
     setMetasearchLoading(true);
@@ -563,7 +612,11 @@ export default function ProteccionEjecutivosPage() {
     setLocalValidated([]);
     setLocalPotential([]);
     setLocalDiscarded([]);
-    setSearchProgress('Iniciando Meta-Busqueda OSINT v6.0 (Clasificacion Inteligente)...');
+    setEnginesExpanded(false);
+    setClassificationExpanded(false);
+    setExtensionsExpanded(false);
+    setExpandedQueryGroup(null);
+    setSearchProgress('Iniciando Meta-Busqueda OSINT v7.0 (ZAI Web Search + Dorking)...');
 
     try {
       const res = await fetch('/api/metasearch', {
@@ -640,6 +693,15 @@ export default function ProteccionEjecutivosPage() {
     });
   })();
 
+  // Helper: get results for a given classification
+  const getResultsForClass = (cls: 'validated' | 'potential' | 'discarded') => {
+    switch (cls) {
+      case 'validated': return localValidated;
+      case 'potential': return localPotential;
+      case 'discarded': return localDiscarded;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -652,7 +714,7 @@ export default function ProteccionEjecutivosPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-foreground tracking-tight">Proteccion de Ejecutivos</h1>
-                <p className="text-xs text-muted-foreground">Modulo OSINT v6.0 - Clasificacion Inteligente</p>
+                <p className="text-xs text-muted-foreground">Modulo OSINT v7.0 - Clasificacion Inteligente</p>
               </div>
             </div>
             <a href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -699,7 +761,7 @@ export default function ProteccionEjecutivosPage() {
               onClick={handleMetasearch}
               disabled={!selectedExecutive || metasearchLoading}
               className="bg-[#1a1a5e] hover:bg-[#252580] text-white font-medium gap-2 disabled:opacity-40"
-              title={selectedExecutive ? `Meta-Busqueda OSINT v6.0: ${selectedExecutive.fullName}` : 'Seleccione un ejecutivo primero'}
+              title={selectedExecutive ? `Meta-Busqueda OSINT v7.0: ${selectedExecutive.fullName}` : 'Seleccione un ejecutivo primero'}
             >
               {metasearchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               Meta-Busqueda OSINT
@@ -736,7 +798,7 @@ export default function ProteccionEjecutivosPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base text-foreground">Directorio de Ejecutivos</CardTitle>
             <CardDescription className="text-muted-foreground text-xs">
-              Seleccione un ejecutivo para habilitar la Meta-Busqueda OSINT v6.0 (Clasificacion Inteligente + Dorking 40+ extensiones)
+              Seleccione un ejecutivo para habilitar la Meta-Busqueda OSINT v7.0 (ZAI Web Search + Dorking 40+ extensiones)
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -810,7 +872,7 @@ export default function ProteccionEjecutivosPage() {
           </CardContent>
         </Card>
 
-        {/* Metasearch Results - Enterprise Dashboard v6.0 */}
+        {/* Metasearch Results - Enterprise Dashboard v7.0 */}
         <AnimatePresence>
           {showResults && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
@@ -820,7 +882,7 @@ export default function ProteccionEjecutivosPage() {
                     <div>
                       <CardTitle className="text-base text-foreground flex items-center gap-2">
                         <Globe className="w-4 h-4 text-amber-500" />
-                        Resultados de Meta-Busqueda OSINT v6.0
+                        Resultados de Meta-Busqueda OSINT v7.0
                       </CardTitle>
                       {metasearchResults && (
                         <CardDescription className="text-xs text-muted-foreground mt-1">
@@ -860,9 +922,9 @@ export default function ProteccionEjecutivosPage() {
                   {metasearchLoading ? (
                     <div className="flex flex-col items-center justify-center py-12">
                       <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-3" />
-                      <p className="text-sm text-muted-foreground">Ejecutando Meta-Busqueda OSINT v6.0...</p>
+                      <p className="text-sm text-muted-foreground">Ejecutando Meta-Busqueda OSINT v7.0...</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Consultando: &quot;{selectedExecutive?.fullName}&quot; en Google + Bing + DuckDuckGo + Web Search
+                        Consultando: &quot;{selectedExecutive?.fullName}&quot; en ZAI Web Search + Dorking OSINT (40+ extensiones)
                       </p>
                       <p className="text-xs text-amber-400 mt-2">Clasificacion Inteligente de 3 niveles activada</p>
                       {searchProgress && (
@@ -871,114 +933,369 @@ export default function ProteccionEjecutivosPage() {
                     </div>
                   ) : metasearchResults ? (
                     <>
-                      {/* Engine Stats + Classification Stats Row */}
+                      {/* V7.0 Expandable Panels Row */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                        {/* Engine Stats */}
-                        {metasearchResults.engineStats && (
-                          <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Globe className="w-3.5 h-3.5 text-purple-400" />
-                              <p className="text-[10px] font-medium text-purple-400">Motores de Busqueda</p>
-                            </div>
-                            <div className="grid grid-cols-4 gap-2 text-center">
-                              <div>
-                                <p className="text-sm font-bold text-blue-400">{metasearchResults.engineStats.google}</p>
-                                <p className="text-[9px] text-muted-foreground">Google</p>
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-cyan-400">{metasearchResults.engineStats.bing}</p>
-                                <p className="text-[9px] text-muted-foreground">Bing</p>
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-orange-400">{metasearchResults.engineStats.duckduckgo}</p>
-                                <p className="text-[9px] text-muted-foreground">DDG</p>
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-foreground">{metasearchResults.engineStats.webSearch}</p>
-                                <p className="text-[9px] text-muted-foreground">Web S.</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
 
-                        {/* V6.0 Classification Stats - 3 columns CLICKABLE */}
-                        <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                          <div className="flex items-center gap-2 mb-2">
+                        {/* ============================================
+                            MOTORES DE BUSQUEDA - EXPANDABLE v7.0
+                            ============================================ */}
+                        <div className="rounded-lg bg-purple-500/5 border border-purple-500/20 overflow-hidden">
+                          <button
+                            onClick={() => setEnginesExpanded(!enginesExpanded)}
+                            className="w-full p-3 flex items-center gap-2 hover:bg-purple-500/5 transition-colors"
+                          >
+                            <Globe className="w-3.5 h-3.5 text-purple-400" />
+                            <p className="text-[10px] font-medium text-purple-400">Motores de Busqueda</p>
+                            <span className="ml-auto flex items-center gap-1">
+                              {metasearchResults.engineDetails && metasearchResults.engineDetails.length > 0 && (
+                                <span className="text-[9px] text-purple-400/60">
+                                  {metasearchResults.engineDetails.filter(e => e.status === 'active').length} activo{metasearchResults.engineDetails.filter(e => e.status === 'active').length !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                              {enginesExpanded ? <ChevronUp className="w-3.5 h-3.5 text-purple-400/60" /> : <ChevronDown className="w-3.5 h-3.5 text-purple-400/60" />}
+                            </span>
+                          </button>
+
+                          {/* Collapsed preview */}
+                          {!enginesExpanded && metasearchResults.engineDetails && (
+                            <div className="px-3 pb-3 flex flex-wrap gap-2">
+                              {metasearchResults.engineDetails.map((engine, idx) => (
+                                <div key={idx} className="flex items-center gap-1.5 text-[10px]">
+                                  {engine.status === 'active' ? (
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                  ) : engine.status === 'failed' ? (
+                                    <XCircle className="w-3 h-3 text-red-400" />
+                                  ) : (
+                                    <AlertTriangle className="w-3 h-3 text-amber-400" />
+                                  )}
+                                  <span className="text-foreground/80">{engine.name}</span>
+                                  <span className="text-muted-foreground">({engine.resultsFound})</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Expanded details */}
+                          <AnimatePresence>
+                            {enginesExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="px-3 pb-3 space-y-3">
+                                  {/* Engine Details Table */}
+                                  {metasearchResults.engineDetails && metasearchResults.engineDetails.length > 0 && (
+                                    <div className="space-y-1.5">
+                                      {metasearchResults.engineDetails.map((engine, idx) => (
+                                        <div key={idx} className="flex items-center gap-2 p-2 rounded bg-card/50 border border-border">
+                                          {engine.status === 'active' ? (
+                                            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                          ) : engine.status === 'failed' ? (
+                                            <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                                          ) : (
+                                            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                                          )}
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-medium text-foreground">{engine.name}</p>
+                                            <p className="text-[9px] text-muted-foreground">{engine.details}</p>
+                                          </div>
+                                          <div className="flex items-center gap-3 text-[10px] flex-shrink-0">
+                                            <span className="text-muted-foreground">{engine.queriesRun} consultas</span>
+                                            <span className="font-bold text-foreground">{engine.resultsFound} resultados</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Query Groups - Ver consultas ejecutadas */}
+                                  {metasearchResults.queryGroups && metasearchResults.queryGroups.length > 0 && (
+                                    <div>
+                                      <p className="text-[10px] font-medium text-purple-400 mb-2 flex items-center gap-1">
+                                        <ChevronRight className="w-3 h-3" /> Consultas Ejecutadas ({metasearchResults.queryGroups.reduce((s, g) => s + g.queryCount, 0)} queries)
+                                      </p>
+                                      <div className="space-y-1">
+                                        {metasearchResults.queryGroups.map((group, idx) => {
+                                          const blockColors: Record<string, string> = {
+                                            name: 'border-blue-500/30 text-blue-400',
+                                            email: 'border-purple-500/30 text-purple-400',
+                                            id: 'border-amber-500/30 text-amber-400',
+                                            extension: 'border-green-500/30 text-green-400',
+                                            combined: 'border-red-500/30 text-red-400',
+                                            custom: 'border-cyan-500/30 text-cyan-400',
+                                          };
+                                          const color = blockColors[group.blockType] || 'border-border';
+                                          const isExpandedGroup = expandedQueryGroup === idx;
+
+                                          return (
+                                            <div key={idx} className="rounded border border-border overflow-hidden">
+                                              <button
+                                                onClick={() => setExpandedQueryGroup(isExpandedGroup ? null : idx)}
+                                                className="w-full flex items-center gap-2 p-1.5 hover:bg-muted/20 transition-colors text-left"
+                                              >
+                                                <Badge variant="outline" className={`text-[8px] h-4 px-1 ${color}`}>
+                                                  {group.blockType?.toUpperCase()}
+                                                </Badge>
+                                                <span className="text-[10px] text-foreground/80 flex-1">{group.label}</span>
+                                                <span className="text-[9px] text-muted-foreground">{group.queryCount}q</span>
+                                                <span className="text-[9px] font-bold text-foreground">{group.resultsFound}r</span>
+                                                {isExpandedGroup ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
+                                              </button>
+                                              <AnimatePresence>
+                                                {isExpandedGroup && group.sampleQueries && group.sampleQueries.length > 0 && (
+                                                  <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    transition={{ duration: 0.15 }}
+                                                    className="overflow-hidden"
+                                                  >
+                                                    <div className="px-2 pb-2 pt-1 space-y-0.5">
+                                                      {group.sampleQueries.map((q, qi) => (
+                                                        <p key={qi} className="text-[9px] font-mono text-muted-foreground/80 truncate" title={q}>
+                                                          {q}
+                                                        </p>
+                                                      ))}
+                                                      {group.queryCount > group.sampleQueries.length && (
+                                                        <p className="text-[8px] text-muted-foreground/50 italic">
+                                                          +{group.queryCount - group.sampleQueries.length} consultas mas...
+                                                        </p>
+                                                      )}
+                                                    </div>
+                                                  </motion.div>
+                                                )}
+                                              </AnimatePresence>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        {/* ============================================
+                            CLASIFICACION INTELIGENTE - EXPANDABLE v7.0
+                            ============================================ */}
+                        <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 overflow-hidden">
+                          <button
+                            onClick={() => setClassificationExpanded(!classificationExpanded)}
+                            className="w-full p-3 flex items-center gap-2 hover:bg-amber-500/5 transition-colors"
+                          >
                             <Shield className="w-3.5 h-3.5 text-amber-400" />
-                            <p className="text-[10px] font-medium text-amber-400">Clasificacion Inteligente v6.0</p>
-                            <span className="text-[8px] text-amber-400/50 ml-auto">clic para ver</span>
+                            <p className="text-[10px] font-medium text-amber-400">Clasificacion Inteligente v7.0</p>
+                            <span className="ml-auto flex items-center gap-1">
+                              <span className="text-[9px] text-amber-400/60">
+                                {localValidated.length + localPotential.length + localDiscarded.length} total
+                              </span>
+                              {classificationExpanded ? <ChevronUp className="w-3.5 h-3.5 text-amber-400/60" /> : <ChevronDown className="w-3.5 h-3.5 text-amber-400/60" />}
+                            </span>
+                          </button>
+
+                          {/* Classification Buttons Row (always visible) */}
+                          <div className="px-3 pb-2">
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setActiveResultTab('validated'); setResultFilter('all'); setClassificationExpanded(true); }}
+                                className={`rounded p-1.5 transition-all relative group ${activeResultTab === 'validated' ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'hover:bg-emerald-500/10'}`}
+                                title={`${localValidated.length} resultados validados`}
+                              >
+                                <div className="flex items-center justify-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                  <p className="text-sm font-bold text-emerald-400">{localValidated.length}</p>
+                                </div>
+                                <p className="text-[9px] text-muted-foreground">Validados</p>
+                                {/* Tooltip */}
+                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-[9px] px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                                  {localValidated.length} validados
+                                </div>
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setActiveResultTab('potential'); setResultFilter('all'); setClassificationExpanded(true); }}
+                                className={`rounded p-1.5 transition-all relative group ${activeResultTab === 'potential' ? 'bg-amber-500/15 ring-1 ring-amber-500/40' : 'hover:bg-amber-500/10'}`}
+                                title={`${localPotential.length} resultados potenciales`}
+                              >
+                                <div className="flex items-center justify-center gap-1">
+                                  <AlertTriangle className="w-3 h-3 text-amber-400" />
+                                  <p className="text-sm font-bold text-amber-400">{localPotential.length}</p>
+                                </div>
+                                <p className="text-[9px] text-muted-foreground">Potenciales</p>
+                                {/* Tooltip */}
+                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-[9px] px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                                  {localPotential.length} potenciales
+                                </div>
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setActiveResultTab('discarded'); setResultFilter('all'); setClassificationExpanded(true); }}
+                                className={`rounded p-1.5 transition-all relative group ${activeResultTab === 'discarded' ? 'bg-red-500/15 ring-1 ring-red-500/40' : 'hover:bg-red-500/10'}`}
+                                title={`${localDiscarded.length} resultados descartados`}
+                              >
+                                <div className="flex items-center justify-center gap-1">
+                                  <XCircle className="w-3 h-3 text-red-400" />
+                                  <p className="text-sm font-bold text-red-400">{localDiscarded.length}</p>
+                                </div>
+                                <p className="text-[9px] text-muted-foreground">Descartados</p>
+                                {/* Tooltip */}
+                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-[9px] px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                                  {localDiscarded.length} descartados
+                                </div>
+                              </button>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-center">
-                            <button
-                              onClick={() => { setActiveResultTab('validated'); setResultFilter('all'); }}
-                              className={`rounded p-1.5 transition-all ${activeResultTab === 'validated' ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'hover:bg-emerald-500/10'}`}
-                            >
-                              <div className="flex items-center justify-center gap-1">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                <p className="text-sm font-bold text-emerald-400">{localValidated.length}</p>
-                              </div>
-                              <p className="text-[9px] text-muted-foreground">Validados</p>
-                            </button>
-                            <button
-                              onClick={() => { setActiveResultTab('potential'); setResultFilter('all'); }}
-                              className={`rounded p-1.5 transition-all ${activeResultTab === 'potential' ? 'bg-amber-500/15 ring-1 ring-amber-500/40' : 'hover:bg-amber-500/10'}`}
-                            >
-                              <div className="flex items-center justify-center gap-1">
-                                <AlertTriangle className="w-3 h-3 text-amber-400" />
-                                <p className="text-sm font-bold text-amber-400">{localPotential.length}</p>
-                              </div>
-                              <p className="text-[9px] text-muted-foreground">Potenciales</p>
-                            </button>
-                            <button
-                              onClick={() => { setActiveResultTab('discarded'); setResultFilter('all'); }}
-                              className={`rounded p-1.5 transition-all ${activeResultTab === 'discarded' ? 'bg-red-500/15 ring-1 ring-red-500/40' : 'hover:bg-red-500/10'}`}
-                            >
-                              <div className="flex items-center justify-center gap-1">
-                                <XCircle className="w-3 h-3 text-red-400" />
-                                <p className="text-sm font-bold text-red-400">{localDiscarded.length}</p>
-                              </div>
-                              <p className="text-[9px] text-muted-foreground">Descartados</p>
-                            </button>
-                          </div>
+
+                          {/* Expanded mini-panel showing result titles */}
+                          <AnimatePresence>
+                            {classificationExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="px-3 pb-3 space-y-2">
+                                  {(['validated', 'potential', 'discarded'] as const).map(cls => {
+                                    const results = getResultsForClass(cls);
+                                    const colorMap: Record<string, string> = {
+                                      validated: 'text-emerald-400 border-emerald-500/20',
+                                      potential: 'text-amber-400 border-amber-500/20',
+                                      discarded: 'text-red-400 border-red-500/20',
+                                    };
+                                    const iconMap: Record<string, React.ReactNode> = {
+                                      validated: <CheckCircle2 className="w-3 h-3 text-emerald-400" />,
+                                      potential: <AlertTriangle className="w-3 h-3 text-amber-400" />,
+                                      discarded: <XCircle className="w-3 h-3 text-red-400" />,
+                                    };
+                                    const labelMap: Record<string, string> = {
+                                      validated: 'Validados',
+                                      potential: 'Potenciales',
+                                      discarded: 'Descartados',
+                                    };
+
+                                    return (
+                                      <div key={cls} className="rounded border border-border overflow-hidden">
+                                        <button
+                                          onClick={() => { setActiveResultTab(cls); setResultFilter('all'); }}
+                                          className={`w-full flex items-center gap-2 p-2 hover:bg-muted/20 transition-colors ${activeResultTab === cls ? 'bg-muted/10' : ''}`}
+                                        >
+                                          {iconMap[cls]}
+                                          <span className={`text-[10px] font-medium ${colorMap[cls].split(' ')[0]}`}>
+                                            {labelMap[cls]} ({results.length})
+                                          </span>
+                                        </button>
+                                        {results.length > 0 ? (
+                                          <div className="max-h-24 overflow-y-auto px-2 pb-2 space-y-0.5" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
+                                            {results.slice(0, 5).map((r, ri) => (
+                                              <div
+                                                key={ri}
+                                                className="flex items-center gap-1.5 text-[9px] cursor-pointer hover:bg-muted/20 rounded px-1 py-0.5"
+                                                onClick={() => setActiveResultTab(cls)}
+                                              >
+                                                <span className="text-muted-foreground font-mono flex-shrink-0">#{r.position}</span>
+                                                <span className="text-foreground/80 truncate">{r.title}</span>
+                                                {r.fileType && r.fileType !== 'html' && (
+                                                  <span className="text-amber-400 flex-shrink-0">.{r.fileType}</span>
+                                                )}
+                                              </div>
+                                            ))}
+                                            {results.length > 5 && (
+                                              <p className="text-[8px] text-muted-foreground/50 italic pl-1">
+                                                +{results.length - 5} resultados mas...
+                                              </p>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <p className="text-[9px] text-muted-foreground/50 px-2 pb-2 italic">Sin resultados</p>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                       </div>
 
-                      {/* Query Groups Summary */}
-                      {metasearchResults.queryGroups && metasearchResults.queryGroups.length > 0 && (
-                        <div className="mb-4 p-3 rounded-lg bg-muted/20 border border-border">
-                          <p className="text-[10px] font-medium text-foreground mb-2">Matriz de Dorking OSINT Ejecutada:</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {metasearchResults.queryGroups.map((group, idx) => {
-                              const blockColors: Record<string, string> = {
-                                name: 'border-blue-500/30 text-blue-400',
-                                email: 'border-purple-500/30 text-purple-400',
-                                id: 'border-amber-500/30 text-amber-400',
-                                combined: 'border-red-500/30 text-red-400',
-                                custom: 'border-green-500/30 text-green-400',
-                              };
-                              const color = blockColors[group.blockType] || 'border-border';
-                              return (
-                                <Badge key={idx} variant="outline" className={`text-[9px] ${color}`}>
-                                  [{group.blockType?.toUpperCase()}] {group.label} ({group.queryCount})
-                                </Badge>
-                              );
-                            })}
-                          </div>
+                      {/* ============================================
+                          EXTENSIONES MONITOREADAS - EXPANDABLE v7.0
+                          ============================================ */}
+                      {metasearchResults.extensionGroups && metasearchResults.extensionGroups.length > 0 && (
+                        <div className="mb-4 rounded-lg bg-green-500/5 border border-green-500/20 overflow-hidden">
+                          <button
+                            onClick={() => setExtensionsExpanded(!extensionsExpanded)}
+                            className="w-full p-3 flex items-center gap-2 hover:bg-green-500/5 transition-colors"
+                          >
+                            <FolderOpen className="w-3.5 h-3.5 text-green-400" />
+                            <p className="text-[10px] font-medium text-green-400">Extensiones Monitoreadas</p>
+                            <span className="text-[9px] text-green-400/60 ml-1">
+                              {metasearchResults.extensionGroups.reduce((s, g) => s + g.exts.length, 0)} tipos
+                            </span>
+                            <span className="ml-auto flex items-center gap-1">
+                              {!extensionsExpanded && (
+                                <div className="flex items-center gap-1 mr-2">
+                                  {metasearchResults.extensionGroups.slice(0, 4).map((g, i) => (
+                                    <Badge key={i} variant="outline" className="text-[8px] h-4 px-1 border-green-500/20 text-green-400/70">
+                                      {g.label}
+                                    </Badge>
+                                  ))}
+                                  {metasearchResults.extensionGroups.length > 4 && (
+                                    <span className="text-[8px] text-muted-foreground">+{metasearchResults.extensionGroups.length - 4}</span>
+                                  )}
+                                </div>
+                              )}
+                              {extensionsExpanded ? <ChevronUp className="w-3.5 h-3.5 text-green-400/60" /> : <ChevronDown className="w-3.5 h-3.5 text-green-400/60" />}
+                            </span>
+                          </button>
+                          <AnimatePresence>
+                            {extensionsExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                  {metasearchResults.extensionGroups.map((group, idx) => (
+                                    <div key={idx} className="p-2 rounded bg-card/50 border border-border">
+                                      <div className="flex items-center gap-2 mb-1.5">
+                                        <ExtGroupIcon iconName={group.icon} className="w-4 h-4 text-green-400" />
+                                        <p className="text-[10px] font-medium text-foreground">{group.label}</p>
+                                        <span className="text-[9px] text-muted-foreground ml-auto">{group.exts.length}</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1">
+                                        {group.exts.map((ext, ei) => (
+                                          <Badge key={ei} variant="outline" className="text-[8px] h-3.5 px-1 border-green-500/20 text-green-400/70">
+                                            {ext}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                       )}
 
-                      {/* AI Analysis */}
-                      {metasearchResults.aiAnalysis && (
-                        <div className="mb-4 p-4 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                          <div className="flex items-center gap-2 mb-3">
-                            <Shield className="w-4 h-4 text-amber-400" />
-                            <p className="text-xs font-semibold text-amber-400">Analisis de Inteligencia OSINT - IA</p>
-                          </div>
-                          <div className="text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                            {metasearchResults.aiAnalysis}
-                          </div>
+                      {/* AI Analysis - ALWAYS SHOW v7.0 */}
+                      <div className="mb-4 p-4 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Shield className="w-4 h-4 text-amber-400" />
+                          <p className="text-xs font-semibold text-amber-400">Analisis de Inteligencia OSINT - IA</p>
                         </div>
-                      )}
+                        <div className="text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                          {metasearchResults.aiAnalysis || 'Sin resultados para analizar. Intente ampliar los criterios de busqueda.'}
+                        </div>
+                      </div>
 
                       {/* Evidence Summary */}
                       {(metasearchResults.downloadedCount > 0 || metasearchResults.downloadableCount > 0) && (
@@ -1004,7 +1321,7 @@ export default function ProteccionEjecutivosPage() {
                         </div>
                       )}
 
-                      {/* V6.0 Three-tab Results Panel */}
+                      {/* V7.0 Three-tab Results Panel */}
                       <div className="mb-4">
                         {/* Tab Headers */}
                         <div className="flex items-center gap-1 mb-3 flex-wrap">
@@ -1190,6 +1507,13 @@ export default function ProteccionEjecutivosPage() {
                                             </Badge>
                                           )}
 
+                                          {/* Query Block Badge - v7.0 */}
+                                          {result.queryBlock && (
+                                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-cyan-500/30 text-cyan-400">
+                                              {result.queryBlock}
+                                            </Badge>
+                                          )}
+
                                           {/* Matched Identifiers - only for validated */}
                                           {result.classification === 'validated' && result.matchedIdentifiers && result.matchedIdentifiers.length > 0 && (
                                             <Badge className="text-[9px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border">
@@ -1331,6 +1655,12 @@ export default function ProteccionEjecutivosPage() {
                                               <div>
                                                 <p className="text-[10px] text-muted-foreground">Query Origen:</p>
                                                 <p className="text-[10px] text-foreground font-mono">{result.querySource}</p>
+                                              </div>
+                                            )}
+                                            {result.queryBlock && (
+                                              <div>
+                                                <p className="text-[10px] text-muted-foreground">Bloque Query:</p>
+                                                <p className="text-[10px] text-cyan-400 font-mono">{result.queryBlock}</p>
                                               </div>
                                             )}
                                             {result.matchedIdentifiers && result.matchedIdentifiers.length > 0 && (
