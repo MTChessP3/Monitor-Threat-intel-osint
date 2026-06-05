@@ -498,7 +498,13 @@ REGLAS ESTRICTAS:
 2. Si no puedes identificar algo, di "No identificado en los datos proporcionados" — NO inventes.
 3. Cada amenaza debe tener EVIDENCIA concreta del contenido.
 4. Mínimo 3 amenazas identificadas.
-5. El resumen ejecutivo debe ser COMPREHENSIVO (mínimo 600 palabras).`;
+5. El resumen ejecutivo debe ser COMPREHENSIVO (mínimo 600 palabras).
+6. El overallRiskLevel debe basarse en los HALLAZGOS REALES, NO uses 'alto' como valor por defecto. Si los datos no muestran riesgo alto, asigna 'medio' o 'bajo' según corresponda.
+7. NO incluyas secciones vacías o con contenido placeholder - solo secciones con datos reales.
+8. Si el contenido de URLs fue leído exitosamente (server_fetch), enfatiza el análisis de URLs.
+9. Si los resultados OSINT fueron la fuente principal, enfatiza el análisis OSINT.
+10. Si solo se proporcionaron datos escritos, enfócate en analizar esos datos.
+11. La estructura del informe debe ADAPTARSE a los datos disponibles, no ser siempre la misma plantilla.`;
 
   const userPrompt = `=== INFORMACIÓN SUMINISTRADA POR EL ANALISTA PARA ANÁLISIS DE INTELIGENCIA ===
 
@@ -569,18 +575,18 @@ Analiza EN PROFUNDIDAD toda la información proporcionada arriba. Produce un inf
           : 'No se pudo determinar la legitimidad de la publicación.',
         riskAssessment: 'Se requiere evaluación detallada del contenido expuesto.',
       })),
-      threats: [{
-        title: `Exposición de información en ${urls.length} sitio(s) web`,
-        description: `Se ha identificado exposición de información en ${urls.length} sitio(s) web. Los datos pueden incluir información personal, profesional y financiera del ejecutivo. Esta exposición representa un riesgo significativo de ingeniería social, suplantación de identidad y posibles ataques dirigidos al VIP. Se requiere evaluación inmediata del contenido expuesto y acciones de remediación.`,
-        severity: 'alto',
+      threats: urlIntelligence.filter(ui => ui.success).length > 0 ? [{
+        title: `Exposición de información en ${urlIntelligence.filter(ui => ui.success).length} sitio(s) web`,
+        description: `Se ha identificado exposición de información en ${urlIntelligence.filter(ui => ui.success).length} sitio(s) web con contenido accesible. Los datos pueden incluir información personal, profesional y financiera del ejecutivo. Esta exposición representa un riesgo de ingeniería social, suplantación de identidad y posibles ataques dirigidos al VIP. Se requiere evaluación del contenido expuesto y acciones de remediación.`,
+        severity: 'medio',
         category: 'exposicion_datos',
-        likelihood: 'alta',
-        impactDetail: 'El impacto potencial incluye riesgo de ingeniería social dirigida, suplantación de identidad, fraude BEC, y amenazas físicas.',
-        evidence: `Datos proporcionados por el analista. Fuentes: ${urlIntelligence.map(ui => ui.siteType).join(', ')}.`,
-        affectedParties: ['VIP', 'Organización', 'Familia del VIP'],
-      }],
-      overallRiskLevel: 'alto',
-      summary: `Se detectó exposición de información sensible en ${urls.length} sitio(s) web. Las fuentes incluyen: ${urlIntelligence.map(ui => ui.siteType).join(', ')}. ${urlIntelligence.map(ui => ui.urlMetadata).join('. ')}. Esta exposición representa un riesgo ALTO que requiere acción inmediata.`,
+        likelihood: 'media',
+        impactDetail: 'El impacto potencial incluye riesgo de ingeniería social, suplantación de identidad y fraude BEC. Se requiere evaluación detallada del contenido para determinar la severidad real.',
+        evidence: `Datos proporcionados por el analista. Fuentes: ${urlIntelligence.filter(ui => ui.success).map(ui => ui.siteType).join(', ')}.`,
+        affectedParties: ['VIP', 'Organización'],
+      }] : [],
+      overallRiskLevel: urlIntelligence.filter(ui => ui.success).length > 0 ? 'medio' : 'bajo',
+      summary: `Se detectó exposición de información en ${urlIntelligence.filter(ui => ui.success).length} de ${urls.length} sitio(s) web analizados. Las fuentes incluyen: ${urlIntelligence.filter(ui => ui.success).map(ui => ui.siteType).join(', ')}. ${urlIntelligence.map(ui => ui.urlMetadata).join('. ')}. El nivel de riesgo se determina como ${urlIntelligence.filter(ui => ui.success).length > 0 ? 'MEDIO' : 'BAJO'} basado en los datos disponibles. Se recomienda evaluación adicional con IA para un análisis más profundo.`,
       immediateActions: [
         'Documentar toda la información expuesta en cada URL proporcionada',
         'Evaluar el riesgo de ingeniería social derivado de la información expuesta',

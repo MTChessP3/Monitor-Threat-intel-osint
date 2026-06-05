@@ -32,6 +32,7 @@ interface MetasearchResult {
   matchedIdentifiers?: string[];
   classification?: 'validated' | 'potential' | 'discarded';
   classificationReason?: string;
+  fromTargetedQuery?: boolean;
 }
 
 interface SearchQueryGroup {
@@ -364,10 +365,27 @@ function classifyResults(
         idGroup.patterns.some(pattern => pattern.test(queryText))
       );
 
+      // Also check if the result comes from a filetype dorking query
+      const isFiletypeQuery = queryText.includes('filetype:');
+
+      // Mark the result with fromTargetedQuery flag
+      result.fromTargetedQuery = isFromTargetedQuery || isFiletypeQuery;
+
       if (isFromTargetedQuery) {
+        // Results from queries containing the executive's identifiers
+        // are automatically at least 'potential' - they were found because
+        // the search specifically targeted the executive
         result.classification = 'potential';
         result.matchedIdentifiers = [];
         result.classificationReason = 'Resultado de busqueda dirigida con identificador del ejecutivo';
+        potential.push(result);
+      } else if (isFiletypeQuery) {
+        // Results from filetype dorking queries are also at least 'potential'
+        // because the filetype operator was used specifically to find documents
+        // related to the executive
+        result.classification = 'potential';
+        result.matchedIdentifiers = [];
+        result.classificationReason = 'Resultado de busqueda con operador filetype dirigido al ejecutivo';
         potential.push(result);
       } else {
         result.classification = 'discarded';

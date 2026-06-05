@@ -477,7 +477,7 @@ export default function ProteccionEjecutivosPage() {
   const [metasearchResults, setMetasearchResults] = useState<MetasearchResponse | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [searchProgress, setSearchProgress] = useState('');
-  const [expandedResult, setExpandedResult] = useState<string | null>(null);
+  const [expandedResult, setExpandedResult] = useState<string | null>(null); // tracked by URL
   const [resultFilter, setResultFilter] = useState<'all' | 'documents' | 'web'>('all');
 
   // V7.0 Classification tab state
@@ -1149,7 +1149,7 @@ export default function ProteccionEjecutivosPage() {
                             </div>
                           </div>
 
-                          {/* Expanded mini-panel showing result titles */}
+                          {/* Expanded panel: stats breakdown, summary, and result previews */}
                           <AnimatePresence>
                             {classificationExpanded && (
                               <motion.div
@@ -1159,7 +1159,72 @@ export default function ProteccionEjecutivosPage() {
                                 transition={{ duration: 0.2 }}
                                 className="overflow-hidden"
                               >
-                                <div className="px-3 pb-3 space-y-2">
+                                <div className="px-3 pb-3 space-y-3">
+                                  {/* Stats Breakdown Bar */}
+                                  {(() => {
+                                    const total = localValidated.length + localPotential.length + localDiscarded.length;
+                                    if (total === 0) return null;
+                                    const vPct = Math.round((localValidated.length / total) * 100);
+                                    const pPct = Math.round((localPotential.length / total) * 100);
+                                    const dPct = 100 - vPct - pPct;
+                                    return (
+                                      <div>
+                                        <p className="text-[10px] font-medium text-amber-400 mb-1.5">Desglose de Clasificacion</p>
+                                        {/* Stacked bar */}
+                                        <div className="flex h-3 rounded-full overflow-hidden bg-muted/30">
+                                          {localValidated.length > 0 && (
+                                            <div className="bg-emerald-500/70 transition-all" style={{ width: `${vPct}%` }} title={`${localValidated.length} validados (${vPct}%)`} />
+                                          )}
+                                          {localPotential.length > 0 && (
+                                            <div className="bg-amber-500/70 transition-all" style={{ width: `${pPct}%` }} title={`${localPotential.length} potenciales (${pPct}%)`} />
+                                          )}
+                                          {localDiscarded.length > 0 && (
+                                            <div className="bg-red-500/70 transition-all" style={{ width: `${dPct}%` }} title={`${localDiscarded.length} descartados (${dPct}%)`} />
+                                          )}
+                                        </div>
+                                        {/* Legend + percentages */}
+                                        <div className="flex items-center gap-4 mt-1.5">
+                                          <div className="flex items-center gap-1">
+                                            <div className="w-2 h-2 rounded-full bg-emerald-500/70" />
+                                            <span className="text-[9px] text-emerald-400">Validados: {localValidated.length} ({vPct}%)</span>
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                            <div className="w-2 h-2 rounded-full bg-amber-500/70" />
+                                            <span className="text-[9px] text-amber-400">Potenciales: {localPotential.length} ({pPct}%)</span>
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                            <div className="w-2 h-2 rounded-full bg-red-500/70" />
+                                            <span className="text-[9px] text-red-400">Descartados: {localDiscarded.length} ({dPct}%)</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {/* Summary text */}
+                                  {(() => {
+                                    const total = localValidated.length + localPotential.length + localDiscarded.length;
+                                    if (total === 0) return null;
+                                    const ratio = localValidated.length > 0
+                                      ? (localPotential.length / localValidated.length).toFixed(1)
+                                      : 'N/A';
+                                    const summaryText = localValidated.length > localPotential.length + localDiscarded.length
+                                      ? `Alta tasa de validacion: ${Math.round((localValidated.length / total) * 100)}% de los resultados fueron confirmados como relevantes para el ejecutivo.`
+                                      : localPotential.length > localValidated.length
+                                      ? `Proporcion significativa de resultados potenciales (${localPotential.length}) frente a validados (${localValidated.length}). Se recomienda revision manual. Razon potencial/validado: ${ratio}.`
+                                      : `Resultados distribuidos: ${localValidated.length} validados, ${localPotential.length} potenciales, ${localDiscarded.length} descartados de ${total} totales.`;
+                                    return (
+                                      <div className="p-2 rounded bg-card/50 border border-border">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <Shield className="w-3 h-3 text-amber-400" />
+                                          <p className="text-[10px] font-medium text-amber-400">Resumen de Clasificacion</p>
+                                        </div>
+                                        <p className="text-[9px] text-foreground/80 leading-relaxed">{summaryText}</p>
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {/* Per-category result previews */}
                                   {(['validated', 'potential', 'discarded'] as const).map(cls => {
                                     const results = getResultsForClass(cls);
                                     const colorMap: Record<string, string> = {
@@ -1195,19 +1260,25 @@ export default function ProteccionEjecutivosPage() {
                                               <div
                                                 key={ri}
                                                 className="flex items-center gap-1.5 text-[9px] cursor-pointer hover:bg-muted/20 rounded px-1 py-0.5"
-                                                onClick={() => setActiveResultTab(cls)}
+                                                onClick={() => { setActiveResultTab(cls); setExpandedResult(r.url); }}
                                               >
                                                 <span className="text-muted-foreground font-mono flex-shrink-0">#{r.position}</span>
                                                 <span className="text-foreground/80 truncate">{r.title}</span>
                                                 {r.fileType && r.fileType !== 'html' && (
                                                   <span className="text-amber-400 flex-shrink-0">.{r.fileType}</span>
                                                 )}
+                                                {r.sourceDomain && (
+                                                  <span className="text-muted-foreground/60 flex-shrink-0 ml-auto">{r.sourceDomain}</span>
+                                                )}
                                               </div>
                                             ))}
                                             {results.length > 5 && (
-                                              <p className="text-[8px] text-muted-foreground/50 italic pl-1">
+                                              <button
+                                                onClick={() => setActiveResultTab(cls)}
+                                                className="text-[8px] text-amber-400/70 hover:text-amber-400 italic pl-1"
+                                              >
                                                 +{results.length - 5} resultados mas...
-                                              </p>
+                                              </button>
                                             )}
                                           </div>
                                         ) : (
@@ -1438,7 +1509,7 @@ export default function ProteccionEjecutivosPage() {
                         ) : (
                           <div className="space-y-2 max-h-96 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
                             {currentTabResults.map((result, index) => {
-                              const isExpanded = expandedResult === `${activeResultTab}-${result.position}-${index}`;
+                              const isExpanded = expandedResult === result.url;
                               const classificationBorderMap: Record<string, string> = {
                                 validated: 'border-emerald-500/20 bg-emerald-500/5',
                                 potential: 'border-amber-500/20 bg-amber-500/5',
@@ -1456,7 +1527,7 @@ export default function ProteccionEjecutivosPage() {
                                   {/* Main Row - Always Visible */}
                                   <div
                                     className="p-3 cursor-pointer"
-                                    onClick={() => setExpandedResult(isExpanded ? null : `${activeResultTab}-${result.position}-${index}`)}
+                                    onClick={() => setExpandedResult(isExpanded ? null : result.url)}
                                   >
                                     <div className="flex items-start gap-3">
                                       {/* Status Icon + Position */}

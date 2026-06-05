@@ -23,143 +23,6 @@ async function createZAI(): Promise<InstanceType<typeof ZAI>> {
 }
 
 // ============================================================================
-// THREAT INTELLIGENCE DATABASE (from scripts/analyze.js)
-// Comprehensive threat intelligence database for Colombia VIP protection
-// ============================================================================
-const THREAT_DB: Record<string, { threats: Array<{ title: string; description: string; severity: string; category: string }> }> = {
-  seguridad: {
-    threats: [
-      {
-        title: 'Grupos armados organizados - Amenaza a ejecutivos',
-        description: 'Los grupos armados organizados (GAO) en Colombia, incluyendo disidencias de las FARC y estructuras del Clan del Golfo, continuan representando una amenaza significativa para ejecutivos de alto perfil. Estos grupos han diversificado sus actividades ilicitas hacia la extorsion, el secuestro express y la intimidacion de directivos empresariales, especialmente en zonas rurales y semiurbanas de Antioquia, Valle del Cauca, Cesar y Narino. Segun reportes de InSight Crime y medios colombianos como El Tiempo y El Espectador, los GAO han intensificado sus operaciones de control territorial, lo que incrementa el riesgo para ejecutivos que viajan a zonas de influencia de estos grupos. Las empresas del sector financiero y energetico son particularmente vulnerables debido a los altos montos de extorsion que se les exigen.',
-        severity: 'critico',
-        category: 'seguridad'
-      },
-      {
-        title: 'Secuestro extorsivo dirigido a directivos corporativos',
-        description: 'El secuestro extorsivo continúa siendo una amenaza critica para ejecutivos VIP en Colombia. Las modalidades incluyen el secuestro tradicional con demands millonarias, el secuestro express (duraciones de 24-72 horas) y la pseudoextorsion mediante llamadas falsas de secuestro. Segun datos del Centro Nacional de Analisis de Informacion (CNAI) y reportes de Blu Radio y Caracol Radio, los sectores bancario, energetico y minero son los mas afectados. Los patrones mas frecuentes involucran vigilancia previa del objetivo, identificacion de rutas habituales y explotacion de vulnerabilidades en escoltas y protocolos de seguridad. La Alerta Temprana de la Defensoria del Pueblo ha senalado riesgos especificos en 12 departamentos del pais.',
-        severity: 'critico',
-        category: 'seguridad'
-      },
-      {
-        title: 'Extorsion empresarial y criminalidad organizada',
-        description: 'La extorsion a empresas y ejecutivos ha mostrado un incremento sostenido en Colombia. Las modalidades van desde las tradicionales vacunas a negocios hasta extorsiones sofisticadas dirigidas a altos directivos mediante amenazas de atentados o revelacion de informacion comprometedora. Segun fuentes como El Tiempo, Portafolio e InSight Crime, el Clan del Golfo y las disidencias de las FARC son los principales responsables. El sector bancario, representado por entidades como Bancolombia, ha implementado protocolos reforzados de seguridad para sus directivos ante el incremento de amenazas. Las cifras oficiales indican que la extorsion aumento mas del 15% en el ultimo año, con concentracion en areas urbanas de Medellin, Cali y Bogota.',
-        severity: 'alto',
-        category: 'seguridad'
-      }
-    ]
-  },
-  ciberseguridad: {
-    threats: [
-      {
-        title: 'Ataques de phishing dirigido (spear phishing) a ejecutivos',
-        description: 'Los ataques de phishing dirigido a ejecutivos (whaling) han incrementado significativamente en Colombia y la region. Segun reportes de Kaspersky, The Hacker News y BleepingComputer, los atacantes utilizan tecnicas de ingenieria social sofisticadas que incluyen correos electronicos falsificados que imitan comunicaciones de Bancolombia, la Superintendencia Financiera o entidades gubernamentales colombianas. Los ataques buscan comprometer credenciales corporativas, instalar malware de acceso remoto o inducir transferencias fraudulentas. Las campanas mas recientes explotan el contexto de regulaciones financieras y cambios normativos para aumentar su efectividad. Kaspersky reporta un incremento del 67% en ataques de phishing dirigido al sector financiero colombiano.',
-        severity: 'critico',
-        category: 'ciberseguridad'
-      },
-      {
-        title: 'Ransomware dirigido al sector financiero colombiano',
-        description: 'El ransomware representa una de las amenazas ciberneticas mas severas para las instituciones financieras en Colombia. Grupos como LockBit, BlackCat y Cl0p han dirigido ataques especificos contra entidades bancarias y financieras latinoamericanas. Segun reportes de Dark Reading y Infosecurity Magazine, los ataques de ransomware en Colombia aumentaron un 40% en el ultimo periodo, con el sector financiero como uno de los mas afectados. Los atacantes utilizan la doble extorsion: cifrar datos y amenazar con publicar informacion confidencial de clientes y ejecutivos. Las instituciones financieras colombianas, incluyendo Bancolombia, han invertido significativamente en infraestructura de ciberseguridad y planes de respuesta a incidentes.',
-        severity: 'alto',
-        category: 'ciberseguridad'
-      },
-      {
-        title: 'Robo de credenciales e identidad digital de ejecutivos',
-        description: 'El robo de identidad digital de ejecutivos es una amenaza creciente que combina tecnicas de OSINT, ingenieria social y explotacion de vulnerabilidades en redes sociales y plataformas corporativas. Los atacantes recopilan informacion publica de ejecutivos desde LinkedIn, Twitter y otras redes para crear perfiles falsos o acceder a cuentas corporativas. Segun BleepingComputer y The Hacker News, se han detectado campanas especificas dirigidas a directivos del sector financiero colombiano, utilizando informacion de dominios corporativos filtrados en brechas de datos previas. LaCredential stuffing y el password spraying son las tecnicas mas utilizadas contra cuentas corporativas.',
-        severity: 'alto',
-        category: 'ciberseguridad'
-      }
-    ]
-  },
-  politica: {
-    threats: [
-      {
-        title: 'Inestabilidad politica y su impacto en seguridad empresarial',
-        description: 'El panorama politico colombiano presenta factores de inestabilidad que impactan directamente la seguridad de ejecutivos y operaciones corporativas. Las reformas en curso del gobierno, los cambios en la politica de seguridad y las tensiones politicas generan un entorno de incertidumbre que los grupos criminales explotan. Segun analisis de Semana, CNN Espanol y BBC Mundo, la polarizacion politica y los cambios en la estrategia de seguridad publica han creado vacios que son aprovechados por organizaciones criminales. Los ejecutivos de empresas multinacionales y del sector financiero enfrentan riesgos adicionales cuando sus organizaciones se posicionan en debates publicos o son percibidas como alineadas con sectores politicos especificos.',
-        severity: 'medio',
-        category: 'politica'
-      },
-      {
-        title: 'Protestas sociales y disturbios - Riesgo para movilidad ejecutiva',
-        description: 'Las movilizaciones sociales y protestas en Colombia representan un riesgo operativo para la seguridad de ejecutivos VIP. Los bloqueos de vias, disturbios en centros urbanos y la interrupcion de servicios basicos pueden afectar la movilidad y seguridad del personal directivo. Segun reportes de El Tiempo, El Espectador y Blu Radio, las protestas han mostrado patrones de escalada rapida con bloqueo de arterias viales en Bogota, Medellin y Cali. Los riesgos incluyen la exposicion a violencia casual, la imposibilidad de evacuacion y la interrupcion de cadena de suministro. Bancolombia y otras instituciones han debido implementar planes de contingencia para garantizar la continuidad operativa durante periodos de unrest social.',
-        severity: 'medio',
-        category: 'politica'
-      }
-    ]
-  },
-  economia: {
-    threats: [
-      {
-        title: 'Fraude financiero sofisticado dirigido al sector corporativo',
-        description: 'El fraude financiero dirigido al sector corporativo colombiano ha alcanzado niveles de sofisticacion sin precedentes. Las modalidades incluyen el Business Email Compromise (BEC), las transferencias fraudulentas mediante suplantacion de directivos, y el fraude con cheques y titulos valores. Segun reportes de Portafolio y Bancolombia, las perdidas por fraude financiero corporativo en Colombia superan los millones de dolares anualmente. Los atacantes utilizan informacion filtrada de brechas de datos para hacer mas convincentes sus intentos de suplantacion. El sector bancario ha implementado protocolos de verificacion multiple y retrasos en transferencias internacionales para mitigar este riesgo, pero los atacantes evolucionan constantemente sus metodos.',
-        severity: 'alto',
-        category: 'economia'
-      },
-      {
-        title: 'Lavado de activos y riesgo reputacional para directivos',
-        description: 'El lavado de activos en Colombia representa un riesgo significativo tanto operativo como reputacional para directivos del sector financiero. Las redes de lavado de activos han infiltrado operaciones inmobiliarias, comerciales y financieras legitima, creando riesgos de vinculacion involuntaria para ejecutivos y sus organizaciones. Segun analisis de Portafolio e InSight Crime, los esquemas de lavado de activos en Colombia se han sofisticado, utilizando criptomonedas, comercio transfronterizo y estructuras societarias complejas. Los directivos bancarios enfrentan riesgo personal cuando son vinculados, incluso erroneamente, a operaciones de lavado de activos, lo que puede resultar en investigaciones penales y danio reputacional severo.',
-        severity: 'medio',
-        category: 'economia'
-      }
-    ]
-  },
-  fisica: {
-    threats: [
-      {
-        title: 'Vigilancia y contravigilancia no detectada contra ejecutivos',
-        description: 'La vigilancia no detectada contra ejecutivos VIP es una amenaza fisica critica que frecuentemente precede a ataques mas severos como secuestros o atentados. Los grupos criminales utilizan tecnicas de vigilancia que incluyen seguimiento fisico, dispositivos GPS en vehiculos, drones de reconocimiento y monitoreo de redes sociales. Segun fuentes de inteligencia y reportes de seguridad, en Colombia se han detectado al menos 15 casos de vigilancia activa contra directivos del sector financiero en el ultimo año. La falta de programas de contravigilancia efectivos es una vulnerabilidad comun que permite que los atacantes recopilen informacion detallada sobre rutinas, rutas y vulnerabilidades del objetivo.',
-        severity: 'alto',
-        category: 'fisica'
-      },
-      {
-        title: 'Vulnerabilidades en seguridad residencial de ejecutivos',
-        description: 'Las residencias de ejecutivos VIP en Colombia presentan vulnerabilidades de seguridad que son explotadas por grupos criminales para recopilacion de inteligencia, intrusos y atentados. Las debilidades mas comunes incluyen: perimetros inadecuados, falta de sistemas de CCTV con monitoreo 24/7, personal de seguridad sin formacion especializada, y ausencia de protocolos de acceso rigurosos. Segun fuentes de seguridad privada y reportes de Red Alert Colombia, se han registrado intentos de intrusos residenciales contra directivos bancarios en zonas exclusivas de Medellin y Bogota. La implementacion de domoticos y sistemas IoT sin seguridad adecuada amplifica la superficie de ataque.',
-        severity: 'alto',
-        category: 'fisica'
-      }
-    ]
-  }
-};
-
-// ============================================================================
-// RECOMMENDATIONS DATABASE (from scripts/analyze.js)
-// ============================================================================
-const RECOMMENDATIONS_DB: Record<string, string[]> = {
-  seguridad: [
-    'Implementar protocolos de seguridad fisica multicapa para ejecutivos: escoltas capacitados, vehiculos blindados, rutas alternas y ventanas de tiempo variables para desplazamientos',
-    'Establecer un programa integral de inteligencia de amenazas con monitoreo continuo de fuentes OSINT y coordinacion con la fuerza publica y organismos de inteligencia del Estado',
-    'Desarrollar y practicar planes de respuesta ante emergencias que incluyan escenarios de secuestro, extorsion y atentado, con protocolos de comunicacion con familiares y autoridades',
-    'Realizar evaluaciones de riesgo trimestrales con actualizacion del perfil de amenaza para cada ejecutivo, considerando variables como cargo, exposicion publica, rutas y zonas de influencia',
-    'Contratar servicios de monitoreo de extorsion y secuestro con empresas especializadas que mantengan redes de informantes y capacidad de respuesta inmediata'
-  ],
-  ciberseguridad: [
-    'Implementar autenticacion multifactor (MFA) obligatoria para todas las cuentas corporativas de ejecutivos, priorizando llaves de seguridad hardware (FIDO2) sobre SMS',
-    'Desplegar soluciones de proteccion de correo electronico con analisis avanzado de URLs y adjuntos, especificamente calibradas para detectar ataques de whaling y BEC dirigidos a ejecutivos',
-    'Establecer un programa de formacion continua en conciencia de seguridad cibernetica para ejecutivos, incluyendo simulacros de phishing personalizados y capacitacion sobre ingenieria social',
-    'Implementar monitoreo proactivo de credenciales filtradas en la dark web y deep web para deteccion temprana de amenazas dirigidas a directivos',
-    'Desarrollar y probar planes de respuesta a incidentes de ransomware con backups offline verificados y procedimientos de aislamiento rapido de sistemas criticos'
-  ],
-  politica: [
-    'Mantener un equipo de analisis politico dedicado que evalúe el impacto de la coyuntura politica en las operaciones y seguridad del personal directivo',
-    'Desarrollar protocolos de neutralidad corporativa y comunicacion de crisis para evitar la percepcion de alineamiento politico que pueda generar amenazas dirigidas',
-    'Implementar planes de contingencia de movilidad con rutas alternas y medios de transporte de emergencia para periodos de protestas y disturbios sociales',
-    'Establecer canales de comunicacion directos con organismos de seguridad del Estado y empresas de inteligencia privada para alertas tempranas de situaciones de unrest social'
-  ],
-  economia: [
-    'Implementar controles internos rigurosos para transacciones financieras de alto valor, incluyendo verificacion por canales multiples y autorizacion dual para transferencias internacionales',
-    'Desarrollar programas de due diligence reforzada para socios comerciales y proveedores que mitiguen el riesgo de vinculacion involuntaria con esquemas de lavado de activos',
-    'Establecer protocolos de verificacion de comunicaciones financieras que incluyan confirmacion por voz con contrasenas preestablecidas antes de ejecutar transferencias solicitadas por via electronica',
-    'Implementar sistemas de monitoreo transaccional basados en IA que detecten patrones anomalos de comportamiento financiero en tiempo real'
-  ],
-  fisica: [
-    'Implementar un programa integral de contravigilancia que incluya rutas variadas, deteccion de seguimiento, barridos de vehiculos y dispositivos, y contramedidas electronicas',
-    'Realizar auditorias trimestrales de seguridad residencial que evalúen perimetros, sistemas de CCTV, control de acceso, y seguridad del personal de vigilancia',
-    'Desarrollar protocolos de seguridad para desplazamientos que incluyan vehiculos de apoyo, rutas pre-planificadas con puntos de refuge, y comunicacion continua con centro de monitoreo',
-    'Implementar sistemas de geolocalizacion seguro para vehiculos y dispositivos de ejecutivos con alertas automaticas de desviacion de ruta o zonas de riesgo'
-  ]
-};
-
-// ============================================================================
 // Source metadata helpers
 // ============================================================================
 const hostnameCategoryMap: Record<string, string> = {
@@ -182,8 +45,17 @@ const hostnameNameMap: Record<string, string> = {
   'grupobancolombia.com': 'Bancolombia', 'redalert.col': 'Red Alert Colombia'
 };
 
+const categoryTopicMap: Record<string, string> = {
+  seguridad: 'seguridad amenazas ejecutivos secuestro extorsion grupos armados',
+  ciberseguridad: 'ciberataques phishing malware ransomware hackeo seguridad digital',
+  politica: 'politica conflictos protestas inestabilidad movilidad seguridad',
+  economia: 'fraude financiero lavado activos estafa bancaria riesgo corporativo',
+  fisica: 'vigilancia contravigilancia seguridad residencial proteccion fisica ejecutivos'
+};
+
 // ============================================================================
 // FALLBACK REPORT GENERATOR (from scripts/generate-report.js)
+// Kept for report generation, but NOT used for analysis fallback
 // ============================================================================
 function generateFallbackReport(
   analysis: {
@@ -353,13 +225,6 @@ ${detailedRecommendations}
 
 El panorama de amenazas para la proteccion VIP de ejecutivos en Colombia presenta un nivel de riesgo **${riskLevel.toUpperCase()}**, sustentado en el analisis de ${configuredSources.length > 0 ? configuredSources.length : sources.length} fuentes de inteligencia y la identificacion de ${threats.length} amenazas activas.
 
-### Hallazgos Principales
-
-1. **Convergencia de amenazas:** Se observa una tendencia creciente hacia la convergencia de amenazas fisicas y ciberneticas, donde los atacantes utilizan inteligencia digital para planificar ataques fisicos y viceversa.
-2. **Sofisticacion de ataques:** Los grupos criminales y actores de amenazas ciberneticos han incrementado la sofisticacion de sus operaciones, utilizando tecnicas avanzadas de ingenieria social, vigilancia y explotacion de vulnerabilidades.
-3. **Sector financiero como objetivo prioritario:** Los ejecutivos del sector financiero y bancario, incluyendo entidades como Bancolombia, enfrentan un riesgo elevado debido a la combinacion de atractivo economico para la criminalidad y la exposicion publica inherente a sus cargos.
-4. **Necesidad de enfoque integral:** La proteccion efectiva requiere un enfoque multidimensional que combine seguridad fisica, ciberseguridad, inteligencia de amenazas y gestion de crisis de manera coordinada.
-
 ### Acciones Prioritarias
 
 ${threats.filter(t => t.severity === 'critico' || t.severity === 'alto').length > 0 ? `Se requiere accion INMEDIATA sobre las ${threats.filter(t => t.severity === 'critico' || t.severity === 'alto').length} amenazas de severidad critica/alta identificadas en este informe. Se recomienda convocar al Comite de Crisis en las proximas 24 horas para revision y aprobacion del plan de accion.` : 'Las amenazas identificadas requieren monitoreo continuo y la implementacion gradual de las medidas recomendadas.'}
@@ -440,7 +305,7 @@ ${sourcesSection}
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
 // ============================================================================
-// ANALYZ OPERATION (from scripts/analyze.js)
+// ANALYZ OPERATION - Dynamic, source-aware analysis
 // ============================================================================
 async function handleAnalyze(data: { urls?: string[]; searchQueries?: string[] }) {
   const urls = data.urls || [];
@@ -452,45 +317,72 @@ async function handleAnalyze(data: { urls?: string[]; searchQueries?: string[] }
     hostname: string; searchQuery: string; category: string; date: string;
   }> = [];
 
-  // Build source list
-  const sourceList = urls.map(url => {
+  // Build structured source info
+  const sourceInfoList = urls.map(url => {
     let hostname: string;
     try { hostname = new URL(url).hostname; } catch { hostname = url; }
     const name = hostnameNameMap[hostname] || hostname;
     const category = hostnameCategoryMap[hostname] || 'seguridad';
-    return `- ${name} (${category}): ${url}`;
-  }).join('\n');
+    return { url, hostname, name, category };
+  });
 
-  // Determine active categories from configured sources
+  const sourceList = sourceInfoList.map(s => `- ${s.name} (${s.category}): ${s.url}`).join('\n');
+
+  // Determine active categories ONLY from configured sources
   const activeCategories = new Set<string>();
-  for (const url of urls) {
-    let hostname: string;
-    try { hostname = new URL(url).hostname; } catch { hostname = url; }
-    activeCategories.add(hostnameCategoryMap[hostname] || 'seguridad');
+  for (const s of sourceInfoList) {
+    activeCategories.add(s.category);
   }
-  activeCategories.add('seguridad');
-  activeCategories.add('ciberseguridad');
-  activeCategories.add('fisica');
 
-  // === PHASE 1: Try web searches ===
+  // If no categories detected, default to seguridad (minimum viable)
+  if (activeCategories.size === 0) {
+    activeCategories.add('seguridad');
+  }
+
+  const categoryNamesList = [...activeCategories].join(', ');
+
+  // === PHASE 1: Build SOURCE-SPECIFIC search queries ===
   let webSearchWorked = false;
 
   const searchTasks: string[] = [];
-  for (const q of searchQueries.slice(0, 2)) {
+
+  // Add user-provided search queries first (highest priority)
+  for (const q of searchQueries.slice(0, 3)) {
     searchTasks.push(q);
   }
-  if (activeCategories.has('seguridad')) searchTasks.push('seguridad Colombia amenazas ejecutivos secuestro extorsion 2025 2026');
-  if (activeCategories.has('ciberseguridad')) searchTasks.push('ciberataques phishing ejecutivos malware Colombia 2025 2026');
-  if (activeCategories.has('politica')) searchTasks.push('Colombia politica seguridad conflictos 2025 2026');
-  if (activeCategories.has('economia')) searchTasks.push('Colombia fraude financiero estafa bancaria 2025 2026');
-  searchTasks.push('proteccion VIP ejecutivos Colombia amenazas 2025 2026');
 
-  const limitedSearches = searchTasks.slice(0, 5);
+  // Build source-specific queries: for each source, search for content
+  // relevant to the selected categories on that specific source
+  for (const s of sourceInfoList.slice(0, 5)) {
+    const topicKeywords = categoryTopicMap[s.category] || 'seguridad amenazas ejecutivos';
+    // Site-specific search combining the source domain with its category topic
+    searchTasks.push(`site:${s.hostname} ${topicKeywords} 2025 2026`);
+  }
+
+  // Add broader queries that combine ALL active categories with source names
+  const sourceNames = sourceInfoList.map(s => s.name).filter(n => n !== s.hostname);
+  if (sourceNames.length > 0) {
+    for (const cat of activeCategories) {
+      const topicKeywords = categoryTopicMap[cat] || 'seguridad amenazas';
+      // Reference the actual source names in the query
+      searchTasks.push(`${topicKeywords} Colombia ${sourceNames.slice(0, 3).join(' OR ')} 2025 2026`);
+    }
+  }
+
+  // Only add a generic query if no source-specific queries exist yet
+  if (searchTasks.length === 0) {
+    for (const cat of activeCategories) {
+      const topicKeywords = categoryTopicMap[cat] || 'seguridad amenazas ejecutivos';
+      searchTasks.push(`${topicKeywords} Colombia 2025 2026`);
+    }
+  }
+
+  const limitedSearches = [...new Set(searchTasks)].slice(0, 8);
 
   for (let i = 0; i < limitedSearches.length; i++) {
     const query = limitedSearches[i];
     try {
-      console.log(`[ANALYZ] Search ${i+1}/${limitedSearches.length}: "${query.substring(0, 60)}"`);
+      console.log(`[ANALYZ] Search ${i+1}/${limitedSearches.length}: "${query.substring(0, 80)}"`);
       const result = await (zai as any).functions.invoke('web_search', { query, num: 8 });
 
       if (result && Array.isArray(result) && result.length > 0) {
@@ -509,7 +401,7 @@ async function handleAnalyze(data: { urls?: string[]; searchQueries?: string[] }
         webSearchWorked = true;
       }
 
-      if (i < limitedSearches.length - 1) await sleep(8000);
+      if (i < limitedSearches.length - 1) await sleep(500);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('429')) {
@@ -553,46 +445,62 @@ async function handleAnalyze(data: { urls?: string[]; searchQueries?: string[] }
 
     try {
       let analysisPrompt: string;
+
       if (uniqueData.length > 0) {
         analysisPrompt = `Eres un ANALISTA SENIOR de inteligencia ejecutiva y ciberseguridad con 20 anos de experiencia en proteccion VIP y contrainteligencia en Colombia.
 
-FUENTES CONFIGURADAS:
+FUENTES CONFIGURADAS POR EL USUARIO (estas son las fuentes que el usuario selecciono para monitorear):
 ${sourceList}
 
-INFORMACION RECOPILADA DE BUSQUEDAS OSINT:
+CATEGORIAS SELECCIONADAS: ${categoryNamesList}
+
+INFORMACION RECOPILADA DE BUSQUEDAS OSINT (basada en las fuentes y categorias seleccionadas):
 ${rawDataText.substring(0, 10000)}
 
-INSTRUCCIONES:
+INSTRUCCIONES CRITICAS:
 1. Analiza cada fragmento de informacion individualmente
-2. Identifica amenazas ESPECIFICAS con datos concretos
+2. Identifica amenazas ESPECIFICAS con datos concretos extraidos de los resultados de busqueda
 3. Para cada amenaza: probabilidad, impacto, vector, mitigacion
-4. Clasifica severidad basandote en EVIDENCIA REAL
+4. Clasifica severidad basandote en EVIDENCIA REAL de los resultados de busqueda
 5. Identifica patrones entre fuentes
-6. Recomendaciones ACCIONABLES
-7. Atribuye cada dato a su fuente
+6. Recomendaciones ACCIONABLES especificas para las categorias seleccionadas (${categoryNamesList})
+7. Atribuye cada dato a su fuente por nombre
+8. Tu analisis DEBE diferir significativamente segun las fuentes y categorias seleccionadas
+9. Si las fuentes son principalmente de ciberseguridad, enfocate en amenazas ciberneticas
+10. Si las fuentes son de seguridad, enfocate en amenazas fisicas y criminales
+11. NO generes amenazas genericas que no esten respaldadas por la informacion recopilada
 
 Responde SOLO con JSON valido:
 {
-  "threats": [{"title": "titulo", "description": "minimo 100 palabras con datos de fuentes", "severity": "bajo|medio|alto|critico", "category": "seguridad|politica|economia|ciberseguridad|fisica"}],
+  "threats": [{"title": "titulo especifico basado en datos reales", "description": "minimo 100 palabras con datos de fuentes recopiladas", "severity": "bajo|medio|alto|critico", "category": "${[...activeCategories].join('|')}"}],
   "overallRiskLevel": "bajo|medio|alto|critico",
-  "summary": "Resumen DETALLADO minimo 300 palabras con fuentes citadas",
-  "recommendations": ["recomendacion 1", "recomendacion 2"],
-  "sources": [{"title": "nombre", "url": "url", "relevance": "que aporto"}]
+  "summary": "Resumen DETALLADO minimo 300 palabras citando las fuentes recopiladas por nombre",
+  "recommendations": ["recomendacion especifica para las categorias ${categoryNamesList}", "recomendacion 2"],
+  "sources": [{"title": "nombre de la fuente", "url": "url", "relevance": "que informacion especifica aporto esta fuente"}]
 }`;
       } else {
         analysisPrompt = `Eres un ANALISTA SENIOR de inteligencia ejecutiva y ciberseguridad con 20 anos de experiencia en proteccion VIP y contrainteligencia en Colombia.
 
-FUENTES CONFIGURADAS EN EL SISTEMA:
-${sourceList}
+FUENTES CONFIGURADAS POR EL USUARIO:
+${sourceList || 'No se configuraron fuentes especificas'}
 
-Realiza un analisis REALISTA y ACTUAL sobre amenazas a ejecutivos VIP en Colombia basandote en tu conocimiento. Referencia las fuentes configuradas como si hubieran sido consultadas.
+CATEGORIAS SELECCIONADAS: ${categoryNamesList}
+
+No se pudo obtener informacion de busquedas web. Realiza un analisis basado en tu conocimiento experto, pero enfocado EXCLUSIVAMENTE en las categorias seleccionadas (${categoryNamesList}) y las fuentes configuradas.
+
+INSTRUCCIONES:
+1. Enfocate SOLO en las categorias que el usuario selecciono: ${categoryNamesList}
+2. Si solo se selecciono economia, NO hables de ciberseguridad o seguridad fisica
+3. Si solo se selecciono ciberseguridad, NO hables de economia o politica
+4. Menciona las fuentes configuradas por nombre como referencia
+5. No generes amenazas para categorias que no fueron seleccionadas
 
 Responde SOLO con JSON valido:
 {
-  "threats": [{"title": "titulo", "description": "minimo 100 palabras con datos especificos", "severity": "bajo|medio|alto|critico", "category": "seguridad|politica|economia|ciberseguridad|fisica"}],
+  "threats": [{"title": "titulo especifico para la categoria", "description": "minimo 100 palabras con datos especificos", "severity": "bajo|medio|alto|critico", "category": "${[...activeCategories].join('|')}"}],
   "overallRiskLevel": "bajo|medio|alto|critico",
-  "summary": "Resumen DETALLADO minimo 300 palabras con fuentes citadas",
-  "recommendations": ["recomendacion 1", "recomendacion 2"],
+  "summary": "Resumen DETALLADO minimo 300 palabras enfocado en ${categoryNamesList}",
+  "recommendations": ["recomendacion especifica", "recomendacion 2"],
   "sources": [{"title": "nombre fuente", "url": "url", "relevance": "que aporto"}]
 }`;
       }
@@ -601,7 +509,7 @@ Responde SOLO con JSON valido:
         messages: [
           {
             role: 'system',
-            content: 'Eres un analista de inteligencia senior experto en proteccion VIP en Colombia. Respondes SOLO con JSON valido.'
+            content: 'Eres un analista de inteligencia senior experto en proteccion VIP en Colombia. Respondes SOLO con JSON valido. Tu analisis siempre refleja las fuentes y categorias especificas proporcionadas, NUNCA generas el mismo analisis generico.'
           },
           { role: 'user', content: analysisPrompt }
         ],
@@ -631,66 +539,41 @@ Responde SOLO con JSON valido:
     }
   }
 
-  // === PHASE 4: Fallback ===
+  // === PHASE 4: No static fallback - return error if AI is unavailable ===
   if (!aiWorked) {
-    console.log(`[ANALYZ] AI unavailable. Building analysis from threat intelligence database.`);
+    console.log(`[ANALYZ] AI unavailable. Returning error instead of static data.`);
 
-    const threats: Array<{ title: string; description: string; severity: string; category: string }> = [];
-    for (const cat of activeCategories) {
-      const dbThreats = THREAT_DB[cat]?.threats || [];
-      for (const t of dbThreats) threats.push(t);
-    }
-
-    const recommendations: string[] = [];
-    for (const cat of activeCategories) {
-      const dbRecs = RECOMMENDATIONS_DB[cat] || [];
-      for (const r of dbRecs) recommendations.push(r);
-    }
-
-    const fallbackSources = urls.slice(0, 16).map(url => {
-      let hostname: string;
-      try { hostname = new URL(url).hostname; } catch { hostname = url; }
-      const category = hostnameCategoryMap[hostname] || 'seguridad';
-      return {
-        title: hostnameNameMap[hostname] || hostname,
-        url,
-        relevance: `Fuente de inteligencia OSINT configurada - Categoria: ${category}`
-      };
-    });
-
-    const severities = threats.map(t => t.severity);
-    let overallRiskLevel = 'bajo';
-    if (severities.includes('critico')) overallRiskLevel = 'critico';
-    else if (severities.includes('alto')) overallRiskLevel = 'alto';
-    else if (severities.includes('medio')) overallRiskLevel = 'medio';
-
-    const today = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
-    const categoryNames = [...activeCategories].map(c => {
-      const names: Record<string, string> = { seguridad: 'Seguridad Fisica', ciberseguridad: 'Ciberseguridad', politica: 'Politica', economia: 'Economia', fisica: 'Seguridad Fisica Avanzada' };
-      return names[c] || c;
-    });
-
-    const summaryText = `INFORME DE INTELIGENCIA EJECUTIVA - ${today}\n\nAnalisis de amenazas para la proteccion VIP de ejecutivos en Colombia, elaborado a partir de las ${fallbackSources.length} fuentes de inteligencia configuradas en el sistema que cubren las categorias de ${categoryNames.join(', ')}.\n\nEl panorama de amenazas actual para ejecutivos de alto perfil en Colombia se caracteriza por la convergencia de riesgos de seguridad fisica, ciberseguridad y criminalidad organizada. Se han identificado ${threats.length} amenazas activas, de las cuales ${severities.filter(s => s === 'critico').length} son de nivel critico, ${severities.filter(s => s === 'alto').length} de nivel alto, y ${severities.filter(s => s === 'medio').length} de nivel medio.\n\nLas principales areas de preocupacion incluyen: (1) la actividad persistente de grupos armados organizados que representan amenazas de secuestro y extorsion dirigidas a directivos corporativos, especialmente del sector financiero; (2) el incremento sostenido de ataques de phishing dirigido y ransomware contra el sector financiero colombiano; (3) las vulnerabilidades en seguridad fisica y residencial de ejecutivos que son explotadas para recopilacion de inteligencia por parte de actores criminales; y (4) los riesgos derivados de la inestabilidad politica y social que impactan la movilidad y seguridad del personal directivo.\n\nLas fuentes consultadas - incluyendo El Tiempo, El Espectador, Kaspersky, The Hacker News, InSight Crime, Portafolio, entre otras - coinciden en senalar un entorno de amenaza elevado que requiere la implementacion urgente de medidas de proteccion integrales. Se recomienda una revision inmediata de los protocolos de seguridad vigentes y la adopcion de un enfoque de defensa en profundidad que contemple tanto la seguridad fisica como la cibernetica.`;
-
-    analysisResult = {
-      threats,
-      overallRiskLevel,
-      summary: summaryText,
-      recommendations,
-      sources: fallbackSources
+    // Return a structured error instead of fake static data
+    const errorResult: Record<string, unknown> = {
+      error: 'AI_UNAVAILABLE',
+      errorMessage: 'El servicio de inteligencia artificial no esta disponible en este momento. No se puede generar un analisis confiable sin IA. Por favor intente nuevamente en unos minutos.',
+      threats: [],
+      overallRiskLevel: 'indeterminado',
+      summary: 'No fue posible completar el analisis de inteligencia debido a que el servicio de IA no se encuentra disponible. Los resultados de busqueda web si fueron recopilados y pueden ser revisados manualmente.',
+      recommendations: ['Reintentar el analisis en unos minutos cuando el servicio de IA este disponible', 'Revisar manualmente los resultados de busqueda OSINT recopilados'],
+      sources: sourceInfoList.slice(0, 16).map(s => ({
+        title: s.name,
+        url: s.url,
+        relevance: `Fuente configurada - Categoria: ${s.category}`
+      })),
+      rawData: uniqueData.slice(0, 30),
+      rawDataText: rawDataText.substring(0, 12000),
+      configuredSources: sourceInfoList.map(s => ({ name: s.name, url: s.url, category: s.category })),
+      webSearchResults: uniqueData.length,
+      categoriesAnalyzed: categoryNamesList,
     };
+
+    return errorResult;
   }
 
   // Attach data for report generation
   (analysisResult as Record<string, unknown>).rawData = uniqueData.slice(0, 30);
   (analysisResult as Record<string, unknown>).rawDataText = rawDataText.substring(0, 12000);
-  (analysisResult as Record<string, unknown>).configuredSources = urls.map(url => {
-    let hostname: string;
-    try { hostname = new URL(url).hostname; } catch { hostname = url; }
-    return { name: hostnameNameMap[hostname] || hostname, url, category: hostnameCategoryMap[hostname] || 'seguridad' };
-  });
+  (analysisResult as Record<string, unknown>).configuredSources = sourceInfoList.map(s => ({
+    name: s.name, url: s.url, category: s.category
+  }));
 
-  console.log(`[ANALYZ] Complete. Threats: ${(analysisResult as Record<string, unknown>).threats ? ((analysisResult as Record<string, unknown>).threats as unknown[]).length : 0}, Risk: ${(analysisResult as Record<string, unknown>).overallRiskLevel}, AI: ${aiWorked ? 'YES' : 'FALLBACK'}`);
+  console.log(`[ANALYZ] Complete. Threats: ${(analysisResult as Record<string, unknown>).threats ? ((analysisResult as Record<string, unknown>).threats as unknown[]).length : 0}, Risk: ${(analysisResult as Record<string, unknown>).overallRiskLevel}, AI: YES`);
 
   return analysisResult;
 }
@@ -737,6 +620,16 @@ async function handleGenerateReport(data: { templateContent?: string; analysis: 
   const now = new Date();
   const fechaStr = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+  // Determine data composition for adaptive report structure
+  const hasUrlContent = (rawData && rawData.length > 0) || (rawDataText && rawDataText.length > 100);
+  const hasThreats = (analysis.threats as unknown[]) && (analysis.threats as unknown[]).length > 0;
+  const hasRecommendations = (analysis.recommendations as string[]) && (analysis.recommendations as string[]).length > 0;
+  const dataComposition = [
+    hasUrlContent ? 'RESULTADOS_OSINT' : '',
+    hasThreats ? 'AMENAZAS_IDENTIFICADAS' : '',
+    hasRecommendations ? 'RECOMENDACIONES' : '',
+  ].filter(Boolean).join(', ') || 'DATOS_LIMITADOS';
+
   const systemPrompt = `Eres el REDACTOR JEFE de informes de inteligencia ejecutiva de una agencia de proteccion VIP de alto nivel. Tienes 25 anos de experiencia redactando informes clasificados para ejecutivos C-suite, directores de seguridad y comites de crisis.
 
 CARACTERISTICAS:
@@ -746,7 +639,15 @@ CARACTERISTICAS:
 - Recomendaciones accionables con prioridad, responsable y plazo
 - Formato Markdown profesional con jerarquia clara
 - NUNCA inventas informacion
-- Minimo 3000 palabras de contenido sustancial`;
+- Minimo 3000 palabras de contenido sustancial
+- COMPOSICION DE DATOS DISPONIBLES: ${dataComposition}
+
+REGLAS DE ESTRUCTURA ADAPTATIVA:
+${hasUrlContent ? '- Se encontraron resultados OSINT: INCLUYE una seccion detallada de "Evidencia de Fuentes OSINT" con cada fuente citada' : '- No hay resultados OSINT: NO incluyas seccion de evidencia OSINT'}
+${hasThreats ? '- Se identificaron amenazas: INCLUYE seccion de "Amenazas Identificadas" con analisis detallado de cada una' : '- No se identificaron amenazas: NO incluyas seccion de amenazas, en su lugar enfatiza el bajo riesgo detectado'}
+${hasRecommendations ? '- Hay recomendaciones del analisis: INCLUYE seccion "Recomendaciones" con cada una detallada' : '- No hay recomendaciones especificas: ofrece recomendaciones generales basadas en las fuentes configuradas'}
+- NO incluyas secciones vacias o con placeholder - solo secciones con datos reales
+- El nivel de riesgo debe basarse en los HALLAZGOS REALES, no en un valor por defecto`;
 
   let userPrompt: string;
 
@@ -768,6 +669,7 @@ ${rawDataSummary || 'Informacion limitada'}
 == RECOMENDACIONES == ${recommendations || 'Monitoreo continuo'}
 == FUENTES CONSULTADAS == ${sourcesList || 'Fuentes clasificadas'}
 == FUENTES CONFIGURADAS == ${configuredSourcesInfo || 'No especificadas'}
+== COMPOSICION DE DATOS == ${dataComposition}
 
 INSTRUCCIONES:
 1. USA LA ESTRUCTURA EXACTA DE LA PLANTILLA
@@ -777,6 +679,8 @@ INSTRUCCIONES:
 5. Minimo 3000 palabras
 6. Formato Markdown profesional
 7. NO inventes informacion
+8. Solo incluye secciones que tengan datos reales, omite secciones vacias
+9. El nivel de riesgo debe ser coherente con los hallazgos reales, no un valor por defecto
 
 REDACTA EL INFORME:`;
   } else {
@@ -790,14 +694,21 @@ REDACTA EL INFORME:`;
 == RECOMENDACIONES == ${recommendations || 'Monitoreo'}
 == FUENTES == ${sourcesList || 'Clasificadas'}
 == FUENTES CONFIGURADAS == ${configuredSourcesInfo || 'No especificadas'}
+== COMPOSICION DE DATOS == ${dataComposition}
 
-ESTRUCTURA: Resumen Ejecutivo, Amenazas, Evidencia, Recomendaciones, Conclusiones, Referencias.
+ESTRUCTURA ADAPTATIVA: Construye la estructura del informe segun los datos disponibles.
+${hasUrlContent ? '- INCLUYE seccion de Evidencia OSINT con detalles de cada fuente' : '- NO incluyas seccion de evidencia OSINT (no hay datos)'}
+${hasThreats ? '- INCLUYE seccion de Amenazas con analisis detallado' : '- Enfatiza que no se detectaron amenazas significativas'}
+- INCLUYE siempre: Resumen Ejecutivo, Conclusiones, Referencias
+- Solo incluye secciones con contenido real, NO dejes secciones vacias ni con placeholders
+- El nivel de riesgo debe reflejar los hallazgos reales, NO uses 'alto' como valor por defecto
 Minimo 3000 palabras. Markdown. Citar fuentes.`;
   }
 
   console.log('[GENERATE] Starting report generation...');
   console.log(`[GENERATE] Has template: ${hasTemplate}, Template length: ${templateContent?.length || 0}`);
   console.log(`[GENERATE] Analysis threats: ${(analysis.threats as unknown[])?.length || 0}, Sources: ${(analysis.sources as unknown[])?.length || 0}`);
+  console.log(`[GENERATE] Data composition: ${dataComposition}`);
 
   let content = '';
   let aiSuccess = false;
@@ -866,7 +777,7 @@ async function handleUpdateReport(data: {
   const zai = await createZAI();
   const collectedData: Array<{ sourceName: string; sourceUrl: string; snippet: string; date: string }> = [];
 
-  // Search additional URLs
+  // Search additional URLs with source-specific queries
   if (additionalUrls && additionalUrls.length > 0) {
     for (let i = 0; i < Math.min(additionalUrls.length, 5); i++) {
       try {
@@ -874,7 +785,8 @@ async function handleUpdateReport(data: {
         let query: string;
         try {
           const hostname = new URL(url).hostname;
-          query = `site:${hostname} seguridad amenazas proteccion ejecutivos Colombia 2025 2026`;
+          const name = hostnameNameMap[hostname] || hostname;
+          query = `site:${hostname} seguridad amenazas proteccion ejecutivos Colombia ${name} 2025 2026`;
         } catch {
           query = url.substring(0, 100);
         }
@@ -889,7 +801,7 @@ async function handleUpdateReport(data: {
             });
           }
         }
-        if (i < additionalUrls.length - 1) await sleep(3000);
+        if (i < additionalUrls.length - 1) await sleep(500);
       } catch { /* ignore search errors */ }
     }
   }
@@ -967,7 +879,7 @@ Genera el informe actualizado COMPLETO en Markdown.`;
     if (msg.includes('429')) {
       // Rate limited - return existing content with a note
       return {
-        content: existingContent + `\n\n---\n\n**NOTA:** La actualización con IA no pudo completarse debido a limitaciones del servicio. La información nueva no fue integrada. Por favor reintente en unos minutos.\n\n*Fecha del intento: ${new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}*`
+        content: existingContent + `\n\n---\n\n**NOTA:** La actualizacion con IA no pudo completarse debido a limitaciones del servicio. La informacion nueva no fue integrada. Por favor reintente en unos minutos.\n\n*Fecha del intento: ${new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}*`
       };
     }
     throw e;
@@ -998,11 +910,11 @@ export async function POST(request: Request) {
       });
       return NextResponse.json(result);
     } else {
-      return NextResponse.json({ error: 'Operación inválida' }, { status: 400 });
+      return NextResponse.json({ error: 'Operacion invalida' }, { status: 400 });
     }
   } catch (error: unknown) {
     console.error('AI operation error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Error en la operación de IA';
+    const errorMessage = error instanceof Error ? error.message : 'Error en la operacion de IA';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

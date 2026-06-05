@@ -490,24 +490,44 @@ export default function Home() {
       setAnalysisStep(`Buscando en ${activeSources.length} fuente(s) seleccionada(s)...`);
       setAnalysisProgress(20);
 
-      // Build queries from selected categories or defaults
+      // Build dynamic queries incorporating selected sources and categories
       let queries: string[];
       if (hasSelectedCategories) {
-        queries = Array.from(selectedCategories).map(catId => categorySearchMap[catId]).filter(Boolean);
+        queries = buildDynamicQueries(selectedCategories, activeSources);
       } else {
-        queries = [
-          'amenazas seguridad ejecutivos Colombia 2025 2026',
-          'ciberseguridad phishing ejecutivos Colombia 2025 2026',
-          'secuestro extorsión empresarios Colombia 2025 2026',
-          'protección VIP riesgos digitales Colombia 2025 2026',
-          'criminalidad organizada Colombia directivos 2025 2026'
-        ];
+        queries = buildDynamicQueries(
+          new Set(['amenazas-vip', 'ciberseguridad', 'secuestro-extorsion', 'seguridad-digital', 'crimen-organizado']),
+          activeSources
+        );
       }
+
+      // Include source metadata for the backend
+      const sourceInfo = activeSources.map(s => ({
+        id: s.id,
+        name: s.name,
+        url: s.url,
+        domain: extractDomain(s.url),
+        type: s.type,
+        category: s.category,
+      }));
+
+      const selectedCategoryLabels = hasSelectedCategories
+        ? Array.from(selectedCategories).map(catId => industryCategories.find(c => c.id === catId)?.label).filter(Boolean)
+        : [];
 
       const res = await fetch('/api/ai-operation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operation: 'analyze', data: { urls, searchQueries: queries } }),
+        body: JSON.stringify({
+          operation: 'analyze',
+          data: {
+            urls,
+            searchQueries: queries,
+            sourceInfo,
+            selectedCategories: selectedCategoryLabels,
+            selectedSourceNames: activeSources.map(s => s.name),
+          },
+        }),
       });
 
       setAnalysisStep('Analizando datos recopilados con IA...');
@@ -558,11 +578,62 @@ export default function Home() {
         }
       }
 
-      // Step 1: Generate report content with AI
+      // Build dynamic report title based on actual analysis content
+      const activeSources = selectedSourceIds.size > 0
+        ? sources.filter(s => selectedSourceIds.has(s.id))
+        : sources.filter(s => s.active);
+      const sourceNames = activeSources.map(s => s.name);
+      const categoryLabels = Array.from(selectedCategories).map(
+        catId => industryCategories.find(c => c.id === catId)?.label
+      ).filter(Boolean) as string[];
+
+      const riskLabel = analysisResult.overallRiskLevel
+        ? analysisResult.overallRiskLevel.charAt(0).toUpperCase() + analysisResult.overallRiskLevel.slice(1)
+        : '';
+      const threatCount = analysisResult.threats?.length || 0;
+      const dateStr = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+
+      let dynamicTitle = 'Informe de Inteligencia';
+      if (categoryLabels.length > 0) {
+        dynamicTitle += ` - ${categoryLabels.slice(0, 3).join(', ')}`;
+        if (categoryLabels.length > 3) dynamicTitle += ` +${categoryLabels.length - 3}`;
+      }
+      if (riskLabel) {
+        dynamicTitle += ` [Riesgo ${riskLabel}]`;
+      }
+      if (sourceNames.length > 0) {
+        dynamicTitle += ` - ${sourceNames.slice(0, 2).join(', ')}`;
+        if (sourceNames.length > 2) dynamicTitle += ` +${sourceNames.length - 2}`;
+      }
+      dynamicTitle += ` - ${dateStr}`;
+
+      // Build context metadata for report structure
+      const reportContext = {
+        selectedCategories: categoryLabels,
+        selectedSources: sourceNames,
+        threatCount,
+        riskLevel: analysisResult.overallRiskLevel,
+        summary: analysisResult.summary,
+        topThreats: analysisResult.threats?.slice(0, 5).map(t => ({
+          title: t.title,
+          severity: t.severity,
+          category: t.category,
+        })),
+        sourcesUsed: analysisResult.sources?.slice(0, 10).map(s => s.title),
+      };
+
+      // Step 1: Generate report content with AI, passing context for dynamic structure
       const aiRes = await fetch('/api/ai-operation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operation: 'generate-report', data: { templateContent: activeTemplateContent, analysis: analysisResult } }),
+        body: JSON.stringify({
+          operation: 'generate-report',
+          data: {
+            templateContent: activeTemplateContent,
+            analysis: analysisResult,
+            reportContext,
+          },
+        }),
       });
 
       if (!aiRes.ok) {
@@ -582,8 +653,10 @@ export default function Home() {
         body: JSON.stringify({
           templateId: selectedTemplateId || null,
           analysis: analysisResult,
-          title: `Informe de Inteligencia - ${new Date().toLocaleDateString('es-ES')}`,
+          title: dynamicTitle,
           reportContent: reportContent,
+          selectedCategories: categoryLabels,
+          selectedSources: sourceNames,
         }),
       });
 
@@ -788,23 +861,63 @@ export default function Home() {
     { id: 'seguridad-viajes', label: 'Seguridad en Viajes', icon: Activity, color: 'bg-lime-500/20 text-lime-400 border-lime-500/30' },
   ];
 
-  // Map category IDs to search queries
-  const categorySearchMap: Record<string, string> = {
-    'amenazas-vip': 'amenazas seguridad ejecutivos VIP Colombia 2025 2026',
-    'conflictos-politicos': 'conflictos políticos Colombia impacto seguridad 2025 2026',
-    'riesgos-ejecutiva': 'riesgos protección ejecutiva directivos Colombia 2025 2026',
-    'ciberseguridad': 'ciberseguridad phishing ataques ejecutivos Colombia 2025 2026',
-    'crimen-organizado': 'criminalidad organizada Colombia directivos empresarios 2025 2026',
-    'secuestro-extorsion': 'secuestro extorsión empresarios Colombia 2025 2026',
-    'fraude-corporativo': 'fraude corporativo estafa empresa Colombia 2025 2026',
-    'seguridad-fisica': 'seguridad física protección ejecutiva Colombia 2025 2026',
-    'inteligencia-competitiva': 'inteligencia competitiva espionaje industrial Colombia 2025 2026',
-    'seguridad-informacion': 'seguridad información filtración datos Colombia 2025 2026',
-    'geopolitica': 'geopolítica Colombia riesgos regionales 2025 2026',
-    'riesgos-financieros': 'riesgos financieros lavado activos Colombia 2025 2026',
-    'seguridad-digital': 'seguridad digital amenazas cibernéticas Colombia 2025 2026',
-    'proteccion-datos': 'protección datos privacidad información Colombia 2025 2026',
-    'seguridad-viajes': 'seguridad viajes riesgos movilidad ejecutivos Colombia 2025 2026',
+  // Base search term templates per category (will be enhanced with source context dynamically)
+  const categoryBaseTerms: Record<string, string> = {
+    'amenazas-vip': 'amenazas seguridad ejecutivos VIP',
+    'conflictos-politicos': 'conflictos políticos impacto seguridad',
+    'riesgos-ejecutiva': 'riesgos protección ejecutiva directivos',
+    'ciberseguridad': 'ciberseguridad phishing ataques ejecutivos',
+    'crimen-organizado': 'criminalidad organizada directivos empresarios',
+    'secuestro-extorsion': 'secuestro extorsión empresarios',
+    'fraude-corporativo': 'fraude corporativo estafa empresa',
+    'seguridad-fisica': 'seguridad física protección ejecutiva',
+    'inteligencia-competitiva': 'inteligencia competitiva espionaje industrial',
+    'seguridad-informacion': 'seguridad información filtración datos',
+    'geopolitica': 'geopolítica riesgos regionales',
+    'riesgos-financieros': 'riesgos financieros lavado activos',
+    'seguridad-digital': 'seguridad digital amenazas cibernéticas',
+    'proteccion-datos': 'protección datos privacidad información',
+    'seguridad-viajes': 'seguridad viajes riesgos movilidad ejecutivos',
+  };
+
+  // Extract domain from URL for site: operator
+  const extractDomain = (url: string): string | null => {
+    try {
+      const hostname = new URL(url).hostname;
+      return hostname.replace(/^www\./, '');
+    } catch {
+      return null;
+    }
+  };
+
+  // Build dynamic queries combining category terms with source-specific context
+  const buildDynamicQueries = (categoryIds: Set<string>, activeSources: NewsSource[]): string[] => {
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+    const queries: string[] = [];
+
+    for (const catId of categoryIds) {
+      const baseTerm = categoryBaseTerms[catId];
+      if (!baseTerm) continue;
+
+      if (activeSources.length > 0) {
+        // Create one query per source with site: operator for targeted search
+        for (const source of activeSources) {
+          const domain = extractDomain(source.url);
+          if (domain) {
+            queries.push(`${baseTerm} site:${domain} ${nextYear}`);
+          } else {
+            queries.push(`${baseTerm} ${source.name} ${currentYear} ${nextYear}`);
+          }
+        }
+        // Also add a general query without site: restriction for broader coverage
+        queries.push(`${baseTerm} Colombia ${currentYear} ${nextYear}`);
+      } else {
+        queries.push(`${baseTerm} Colombia ${currentYear} ${nextYear}`);
+      }
+    }
+
+    return queries;
   };
 
   // Toggle source selection
