@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyToken, AUTH_COOKIE_NAME } from '@/lib/auth';
+import ZAI from 'z-ai-web-dev-sdk';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -382,16 +383,30 @@ async function searchDuckDuckGo(query: string): Promise<MetasearchResult[]> {
   return [];
 }
 
-// ZAI WEB SEARCH - PRIMARY
+// ZAI SDK singleton - reuse across calls in same serverless invocation
+let zaiInstance: any = null;
+async function getZAI() {
+  if (!zaiInstance) {
+    try {
+      zaiInstance = await ZAI.create();
+      console.log('[METASEARCH] ZAI SDK initialized successfully');
+    } catch (e: unknown) {
+      console.error(`[METASEARCH] ZAI SDK init FAILED: ${e instanceof Error ? e.message : String(e)}`);
+      throw e;
+    }
+  }
+  return zaiInstance;
+}
+
+// ZAI WEB SEARCH - PRIMARY ENGINE
 async function searchZAI(query: string): Promise<MetasearchResult[]> {
   try {
-    const ZAIModule = await import('z-ai-web-dev-sdk');
-    const ZAI = ZAIModule.default;
-    const zai = await ZAI.create();
+    const zai = await getZAI();
+    console.log(`[METASEARCH] ZAI searching: "${query.substring(0, 60)}"`);
     const searchResult = await zai.functions.invoke('web_search', { query, num: 20 });
-    console.log(`[METASEARCH] ZAI raw response type: ${typeof searchResult}, isArray: ${Array.isArray(searchResult)}, length: ${Array.isArray(searchResult) ? searchResult.length : 'N/A'}`);
+    console.log(`[METASEARCH] ZAI response: type=${typeof searchResult}, isArray=${Array.isArray(searchResult)}, len=${Array.isArray(searchResult) ? searchResult.length : 'N/A'}`);
     if (searchResult && Array.isArray(searchResult)) {
-      return searchResult
+      const mapped = searchResult
         .filter((item: any) => item.url && item.url.startsWith('http'))
         .map((item: any, index: number) => ({
           title: (item.name || 'Sin titulo').substring(0, 300),
@@ -402,9 +417,12 @@ async function searchZAI(query: string): Promise<MetasearchResult[]> {
           isDownloadable: isDocumentUrl(item.url),
           querySource: query.substring(0, 80),
         }));
+      console.log(`[METASEARCH] ZAI returning ${mapped.length} results for: "${query.substring(0, 40)}"`);
+      return mapped;
     }
+    console.log(`[METASEARCH] ZAI returned non-array or empty for: "${query.substring(0, 40)}"`);
   } catch (e: unknown) {
-    console.log(`[METASEARCH] ZAI error: ${e instanceof Error ? e.message.substring(0, 200) : String(e).substring(0, 200)}`);
+    console.error(`[METASEARCH] ZAI search error: ${e instanceof Error ? e.message.substring(0, 200) : String(e).substring(0, 200)}`);
   }
   return [];
 }
@@ -412,9 +430,7 @@ async function searchZAI(query: string): Promise<MetasearchResult[]> {
 // AI EXTRACTION
 async function aiExtractFromHtml(html: string, engineSource: string, query: string): Promise<MetasearchResult[]> {
   try {
-    const ZAIModule = await import('z-ai-web-dev-sdk');
-    const ZAI = ZAIModule.default;
-    const zai = await ZAI.create();
+    const zai = await getZAI();
     const htmlSample = html.substring(0, 8000);
     const completion = await zai.chat.completions.create({
       messages: [
@@ -452,9 +468,7 @@ async function analyzeResultsWithAI(
   results: MetasearchResult[]
 ): Promise<string> {
   try {
-    const ZAIModule = await import('z-ai-web-dev-sdk');
-    const ZAI = ZAIModule.default;
-    const zai = await ZAI.create();
+    const zai = await getZAI();
     const resultsSummary = results.slice(0, 40).map((r, i) =>
       `${i + 1}. [${r.classification?.toUpperCase() || 'N/A'}] [${r.fileType?.toUpperCase() || 'WEB'}] "${r.title}" - ${r.url} | ${r.source} | ${r.snippet.substring(0, 150)}`
     ).join('\n');

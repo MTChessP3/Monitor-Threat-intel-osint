@@ -560,7 +560,6 @@ export default function ProteccionEjecutivosPage() {
     setShowResults(true);
     setMetasearchResults(null);
     setExpandedResult(null);
-    setActiveResultTab('validated');
     setLocalValidated([]);
     setLocalPotential([]);
     setLocalDiscarded([]);
@@ -590,6 +589,17 @@ export default function ProteccionEjecutivosPage() {
       setLocalValidated(validated);
       setLocalPotential(potential);
       setLocalDiscarded(discarded);
+
+      // AUTO-SELECT tab with results (prioritize: validated > potential > discarded)
+      if (validated.length > 0) {
+        setActiveResultTab('validated');
+      } else if (potential.length > 0) {
+        setActiveResultTab('potential');
+      } else if (discarded.length > 0) {
+        setActiveResultTab('discarded');
+      } else {
+        setActiveResultTab('validated');
+      }
 
       const vCount = validated.length;
       const pCount = potential.length;
@@ -891,34 +901,44 @@ export default function ProteccionEjecutivosPage() {
                           </div>
                         )}
 
-                        {/* V6.0 Classification Stats - 3 columns */}
+                        {/* V6.0 Classification Stats - 3 columns CLICKABLE */}
                         <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
                           <div className="flex items-center gap-2 mb-2">
                             <Shield className="w-3.5 h-3.5 text-amber-400" />
                             <p className="text-[10px] font-medium text-amber-400">Clasificacion Inteligente v6.0</p>
+                            <span className="text-[8px] text-amber-400/50 ml-auto">clic para ver</span>
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-center">
-                            <div>
+                            <button
+                              onClick={() => { setActiveResultTab('validated'); setResultFilter('all'); }}
+                              className={`rounded p-1.5 transition-all ${activeResultTab === 'validated' ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'hover:bg-emerald-500/10'}`}
+                            >
                               <div className="flex items-center justify-center gap-1">
                                 <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                                 <p className="text-sm font-bold text-emerald-400">{localValidated.length}</p>
                               </div>
                               <p className="text-[9px] text-muted-foreground">Validados</p>
-                            </div>
-                            <div>
+                            </button>
+                            <button
+                              onClick={() => { setActiveResultTab('potential'); setResultFilter('all'); }}
+                              className={`rounded p-1.5 transition-all ${activeResultTab === 'potential' ? 'bg-amber-500/15 ring-1 ring-amber-500/40' : 'hover:bg-amber-500/10'}`}
+                            >
                               <div className="flex items-center justify-center gap-1">
                                 <AlertTriangle className="w-3 h-3 text-amber-400" />
                                 <p className="text-sm font-bold text-amber-400">{localPotential.length}</p>
                               </div>
                               <p className="text-[9px] text-muted-foreground">Potenciales</p>
-                            </div>
-                            <div>
+                            </button>
+                            <button
+                              onClick={() => { setActiveResultTab('discarded'); setResultFilter('all'); }}
+                              className={`rounded p-1.5 transition-all ${activeResultTab === 'discarded' ? 'bg-red-500/15 ring-1 ring-red-500/40' : 'hover:bg-red-500/10'}`}
+                            >
                               <div className="flex items-center justify-center gap-1">
                                 <XCircle className="w-3 h-3 text-red-400" />
                                 <p className="text-sm font-bold text-red-400">{localDiscarded.length}</p>
                               </div>
                               <p className="text-[9px] text-muted-foreground">Descartados</p>
-                            </div>
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1076,6 +1096,27 @@ export default function ProteccionEjecutivosPage() {
                               {activeResultTab === 'potential' && 'No hay resultados potenciales'}
                               {activeResultTab === 'discarded' && 'No hay resultados descartados'}
                             </p>
+                            {/* Suggest other tabs with results */}
+                            {activeResultTab === 'validated' && localPotential.length > 0 && (
+                              <button onClick={() => setActiveResultTab('potential')} className="mt-2 text-xs text-amber-400 hover:text-amber-300 underline">
+                                Ver {localPotential.length} resultados potenciales
+                              </button>
+                            )}
+                            {activeResultTab === 'validated' && localPotential.length === 0 && localDiscarded.length > 0 && (
+                              <button onClick={() => setActiveResultTab('discarded')} className="mt-2 text-xs text-red-400 hover:text-red-300 underline">
+                                Ver {localDiscarded.length} resultados descartados
+                              </button>
+                            )}
+                            {activeResultTab === 'potential' && localValidated.length > 0 && (
+                              <button onClick={() => setActiveResultTab('validated')} className="mt-2 text-xs text-emerald-400 hover:text-emerald-300 underline">
+                                Ver {localValidated.length} resultados validados
+                              </button>
+                            )}
+                            {activeResultTab === 'discarded' && (localValidated.length + localPotential.length) > 0 && (
+                              <button onClick={() => setActiveResultTab(localValidated.length > 0 ? 'validated' : 'potential')} className="mt-2 text-xs text-amber-400 hover:text-amber-300 underline">
+                                Ver {localValidated.length + localPotential.length} resultados activos
+                              </button>
+                            )}
                           </div>
                         ) : (
                           <div className="space-y-2 max-h-96 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
