@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export const maxDuration = 300;
+export const dynamic = 'force-dynamic';
 
 // ============================================================================
 // AUTH
@@ -58,19 +59,21 @@ interface SearchQueryGroup {
 }
 
 // ============================================================================
-// DYNAMIC ANTI-BLOCK SYSTEM
+// ANTI-BLOCK SYSTEM
 // Rotating user agents, enterprise headers, session simulation, random delays
 // ============================================================================
 
 const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.127 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.142 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.117 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0',
 ];
 
 const ACCEPT_LANGUAGES = [
@@ -81,14 +84,6 @@ const ACCEPT_LANGUAGES = [
   'en-US,en;q=0.9,es;q=0.8',
 ];
 
-const ACCEPT_ENCODINGS = [
-  'gzip, deflate, br',
-  'gzip, deflate',
-  'identity',
-  'br, gzip, deflate',
-];
-
-// Session cookie store for each engine
 const sessionCookies: Record<string, string> = {};
 
 function getRandomElement<T>(arr: T[]): T {
@@ -102,17 +97,16 @@ function randomDelay(minMs: number, maxMs: number): Promise<void> {
 
 function buildDynamicHeaders(engine: string): Record<string, string> {
   const ua = getRandomElement(USER_AGENTS);
-  const lang = getRandomElement(AcCEPT_LANGUAGES);
-  const enc = getRandomElement(ACCEPT_ENCODINGS);
+  const lang = getRandomElement(ACCEPT_LANGUAGES);
 
   const headers: Record<string, string> = {
     'User-Agent': ua,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': lang,
-    'Accept-Encoding': enc,
+    'Accept-Encoding': 'gzip, deflate, br',
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache',
-    'Sec-Ch-Ua': '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+    'Sec-Ch-Ua': '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="24"',
     'Sec-Ch-Ua-Mobile': '?0',
     'Sec-Ch-Ua-Platform': '"Windows"',
     'Sec-Fetch-Dest': 'document',
@@ -120,10 +114,8 @@ function buildDynamicHeaders(engine: string): Record<string, string> {
     'Sec-Fetch-Site': 'none',
     'Sec-Fetch-User': '?1',
     'Upgrade-Insecure-Requests': '1',
-    'Dnt': '1',
   };
 
-  // Add session cookies if available
   if (sessionCookies[engine]) {
     headers['Cookie'] = sessionCookies[engine];
   }
@@ -132,18 +124,217 @@ function buildDynamicHeaders(engine: string): Record<string, string> {
 }
 
 function extractAndStoreCookies(response: Response, engine: string): void {
-  const setCookies = response.headers.getSetCookie?.() || [];
-  if (setCookies.length > 0) {
-    const existing = sessionCookies[engine] || '';
-    const newCookies = setCookies.map(c => c.split(';')[0]).join('; ');
-    sessionCookies[engine] = existing ? `${existing}; ${newCookies}` : newCookies;
+  try {
+    const setCookies = response.headers.getSetCookie?.() || [];
+    if (setCookies.length > 0) {
+      const existing = sessionCookies[engine] || '';
+      const newCookies = setCookies.map(c => c.split(';')[0]).join('; ');
+      sessionCookies[engine] = existing ? `${existing}; ${newCookies}` : newCookies;
+    }
+  } catch { /* ignore */ }
+}
+
+// ============================================================================
+// OSINT DORKING MATRIX v4.0
+// Uses CORRECT operators per engine:
+//   Google/Bing: filetype: (not ext:)
+//   ZAI Web Search: plain queries (no operators)
+//   Keeps queries SHORT (max 3-4 filetype terms per query)
+// ============================================================================
+
+const PRIMARY_EXTENSIONS = [
+  'pdf', 'xlsx', 'xls', 'ppt', 'pptx', 'doc', 'docx', 'txt',
+  'rar', 'zip', '7z', 'htm', 'html', 'csv', 'rtf',
+  'env', 'conf', 'config', 'ini', 'json', 'xml', 'yaml',
+  'bak', 'old', 'sql', 'db',
+];
+
+const SECONDARY_EXTENSIONS = [
+  'odt', 'ods', 'odp', 'yml', 'tmp', 'sqlite',
+  'tar.gz', 'tgz', 'png', 'jpg', 'jpeg', 'svg',
+];
+
+const ALL_EXTENSIONS = [...PRIMARY_EXTENSIONS, ...SECONDARY_EXTENSIONS];
+
+// High-value extensions for targeted dorking
+const HIGH_VALUE_EXTS = ['pdf', 'xlsx', 'doc', 'pptx', 'sql', 'env', 'conf', 'bak'];
+
+interface EngineQuerySet {
+  google: string[];   // Uses filetype: operator
+  bing: string[];     // Uses filetype: operator
+  zai: string[];      // Plain queries (no operators)
+}
+
+function buildOsintQueryMatrix(executive: {
+  fullName: string;
+  identificationNum: string;
+  email: string | null;
+}): { groups: SearchQueryGroup[]; engineQueries: EngineQuerySet } {
+  const name = executive.fullName;
+  const id = executive.identificationNum;
+  const email = executive.email;
+  const nameParts = name.toLowerCase().split(' ');
+  const lastName = nameParts[nameParts.length - 1] || '';
+  const firstName = nameParts[0] || '';
+  const secondLastName = nameParts.length > 2 ? nameParts[nameParts.length - 2] : '';
+
+  const groups: SearchQueryGroup[] = [];
+  const googleQueries: string[] = [];
+  const bingQueries: string[] = [];
+  const zaiQueries: string[] = [];
+
+  // =========================================================================
+  // BLOQUE 1: Por Nombre Completo
+  // =========================================================================
+  const nameGroupQueries: string[] = [];
+
+  // 1a: Simple name search (always works)
+  nameGroupQueries.push(`"${name}"`);
+  googleQueries.push(`"${name}"`);
+  bingQueries.push(`"${name}"`);
+  zaiQueries.push(`"${name}"`);
+
+  // 1b: Name + filetype:pdf (Google/Bing)
+  googleQueries.push(`"${name}" filetype:pdf`);
+  bingQueries.push(`"${name}" filetype:pdf`);
+  zaiQueries.push(`"${name}" PDF documento`);
+  nameGroupQueries.push(`"${name}" filetype:pdf`);
+
+  // 1c: Name + filetype:xlsx OR filetype:doc
+  googleQueries.push(`"${name}" filetype:xlsx OR filetype:doc`);
+  bingQueries.push(`"${name}" filetype:xlsx OR filetype:doc`);
+  zaiQueries.push(`"${name}" Excel Word documento`);
+  nameGroupQueries.push(`"${name}" (filetype:xlsx OR filetype:doc)`);
+
+  // 1d: Name + sensitive file types (env, conf, sql, bak)
+  googleQueries.push(`"${name}" filetype:env OR filetype:conf OR filetype:sql OR filetype:bak`);
+  bingQueries.push(`"${name}" filetype:env OR filetype:conf OR filetype:sql OR filetype:bak`);
+  zaiQueries.push(`"${name}" configuracion credenciales base datos`);
+  nameGroupQueries.push(`"${name}" (filetype:env OR filetype:conf OR filetype:sql OR filetype:bak)`);
+
+  // 1e: Name + ID
+  googleQueries.push(`"${name}" "${id}"`);
+  bingQueries.push(`"${name}" "${id}"`);
+  zaiQueries.push(`"${name}" ${id}`);
+  nameGroupQueries.push(`"${name}" "${id}"`);
+
+  // 1f: Name + filetype:pptx OR filetype:csv
+  googleQueries.push(`"${name}" filetype:pptx OR filetype:csv`);
+  bingQueries.push(`"${name}" filetype:pptx OR filetype:csv`);
+  zaiQueries.push(`"${name}" presentacion datos`);
+  nameGroupQueries.push(`"${name}" (filetype:pptx OR filetype:csv)`);
+
+  groups.push({ label: `Nombre: ${name}`, queries: nameGroupQueries, blockType: 'name' });
+
+  // =========================================================================
+  // BLOQUE 2: Por Correo Electronico
+  // =========================================================================
+  if (email) {
+    const emailGroupQueries: string[] = [];
+    const emailUser = email.split('@')[0];
+    const domain = email.split('@')[1];
+
+    // 2a: Exact email
+    googleQueries.push(`"${email}"`);
+    bingQueries.push(`"${email}"`);
+    zaiQueries.push(`"${email}"`);
+    emailGroupQueries.push(`"${email}"`);
+
+    // 2b: Email + filetype:pdf
+    googleQueries.push(`"${email}" filetype:pdf`);
+    bingQueries.push(`"${email}" filetype:pdf`);
+    zaiQueries.push(`"${email}" PDF documento`);
+    emailGroupQueries.push(`"${email}" filetype:pdf`);
+
+    // 2c: Email + sensitive types
+    googleQueries.push(`"${email}" filetype:xlsx OR filetype:doc OR filetype:sql`);
+    bingQueries.push(`"${email}" filetype:xlsx OR filetype:doc OR filetype:sql`);
+    zaiQueries.push(`"${email}" Excel Word base datos`);
+    emailGroupQueries.push(`"${email}" (filetype:xlsx OR filetype:doc OR filetype:sql)`);
+
+    // 2d: Email username part
+    if (emailUser && emailUser !== email) {
+      googleQueries.push(`"${emailUser}" filetype:pdf OR filetype:xlsx`);
+      bingQueries.push(`"${emailUser}" filetype:pdf OR filetype:xlsx`);
+      zaiQueries.push(`"${emailUser}" documento`);
+      emailGroupQueries.push(`"${emailUser}" (filetype:pdf OR filetype:xlsx)`);
+    }
+
+    // 2e: Name + site:domain
+    if (domain) {
+      googleQueries.push(`"${name}" site:${domain}`);
+      bingQueries.push(`"${name}" site:${domain}`);
+      zaiQueries.push(`"${name}" ${domain}`);
+      emailGroupQueries.push(`"${name}" site:${domain}`);
+    }
+
+    groups.push({ label: `Email: ${email}`, queries: emailGroupQueries, blockType: 'email' });
   }
+
+  // =========================================================================
+  // BLOQUE 3: Por Identificacion
+  // =========================================================================
+  const idGroupQueries: string[] = [];
+
+  // 3a: ID simple search
+  googleQueries.push(`"${id}"`);
+  bingQueries.push(`"${id}"`);
+  zaiQueries.push(`"${id}"`);
+  idGroupQueries.push(`"${id}"`);
+
+  // 3b: ID + filetype:pdf
+  googleQueries.push(`"${id}" filetype:pdf`);
+  bingQueries.push(`"${id}" filetype:pdf`);
+  zaiQueries.push(`"${id}" PDF documento`);
+  idGroupQueries.push(`"${id}" filetype:pdf`);
+
+  // 3c: ID + sensitive types
+  googleQueries.push(`"${id}" filetype:xlsx OR filetype:doc OR filetype:csv`);
+  bingQueries.push(`"${id}" filetype:xlsx OR filetype:doc OR filetype:csv`);
+  zaiQueries.push(`"${id}" Excel Word datos`);
+  idGroupQueries.push(`"${id}" (filetype:xlsx OR filetype:doc OR filetype:csv)`);
+
+  // 3d: ID + inurl
+  googleQueries.push(`"${id}" inurl:${id}`);
+  bingQueries.push(`"${id}" inurl:${id}`);
+  zaiQueries.push(`"${id}" ${id}`);
+  idGroupQueries.push(`"${id}" inurl:${id}`);
+
+  groups.push({ label: `ID: ${id}`, queries: idGroupQueries, blockType: 'id' });
+
+  // =========================================================================
+  // BLOQUE COMBINADO: Cross-reference queries
+  // =========================================================================
+  const combinedGroupQueries: string[] = [];
+
+  if (email) {
+    googleQueries.push(`"${name}" "${email}"`);
+    bingQueries.push(`"${name}" "${email}"`);
+    zaiQueries.push(`"${name}" "${email}"`);
+    combinedGroupQueries.push(`"${name}" "${email}"`);
+  }
+
+  if (lastName) {
+    googleQueries.push(`"${id}" "${lastName}"`);
+    bingQueries.push(`"${id}" "${lastName}"`);
+    zaiQueries.push(`"${id}" "${lastName}"`);
+    combinedGroupQueries.push(`"${id}" "${lastName}"`);
+  }
+
+  groups.push({ label: 'Cruzamiento Multi-Campo', queries: combinedGroupQueries, blockType: 'combined' });
+
+  return {
+    groups,
+    engineQueries: {
+      google: Array.from(new Set(googleQueries)),
+      bing: Array.from(new Set(bingQueries)),
+      zai: Array.from(new Set(zaiQueries)),
+    },
+  };
 }
 
 // ============================================================================
 // FLEXIBLE SEMANTIC HTML PARSER
-// Instead of relying on rigid CSS selectors, this parser extracts all links
-// with meaningful text content and uses heuristics to identify search results
 // ============================================================================
 
 function flexibleHtmlParse(html: string, engineSource: string, query: string): MetasearchResult[] {
@@ -151,12 +342,12 @@ function flexibleHtmlParse(html: string, engineSource: string, query: string): M
   const $ = cheerio.load(html);
   const seenInPage = new Set<string>();
 
-  // Strategy 1: Try engine-specific selectors first (fast path)
+  // Strategy 1: Engine-specific selectors
   const engineSelectors: Record<string, { container: string; link: string; title: string; snippet: string }> = {
-    Google: { container: 'div.g, div[data-hveid], div[data-ved]', link: 'a[href^="http"]', title: 'h3, [data-header-feature] h3', snippet: '.VwiC3b, .st, [data-sncf], .IsZvec, .kb0PBd' },
-    Bing: { container: 'li.b_algo, li.b_vlhit', link: 'h2 a, a[href^="http"]', title: 'h2, .b_promotionText', snippet: '.b_caption p, .b_lineclamp2, p, .b_factrow' },
+    Google: { container: 'div.g, div[data-hveid], div[data-ved], div[data-sokoban-container]', link: 'a[href^="http"], a[href^="/url"]', title: 'h3, [data-header-feature] h3', snippet: '.VwiC3b, .st, [data-sncf], .IsZvec, .kb0PBd' },
+    Bing: { container: 'li.b_algo, li.b_vlhit, .b_algo', link: 'h2 a, a[href^="http"]', title: 'h2, .b_promotionText', snippet: '.b_caption p, .b_lineclamp2, p, .b_factrow' },
     Yandex: { container: 'li.serp-item, div.serp-item, .Organic, .organic__url', link: 'a[href^="http"]', title: '.organic__title, h2, .Typs-heading, span.OrganicTextContentSpan', snippet: '.organic__content-wrapper, .text-container, .Typs-text, .organic__text' },
-    DuckDuckGo: { container: 'div.result, div.web-result', link: 'a.result__a, a[href^="http"]', title: 'a.result__a, h2 a', snippet: '.result__snippet, a.result__snippet, .result__body' },
+    DuckDuckGo: { container: 'div.result, div.web-result, .result', link: 'a.result__a, a[href^="http"]', title: 'a.result__a, h2 a, .result__title', snippet: '.result__snippet, a.result__snippet, .result__body' },
   };
 
   const sel = engineSelectors[engineSource];
@@ -190,11 +381,9 @@ function flexibleHtmlParse(html: string, engineSource: string, query: string): M
     });
   }
 
-  // Strategy 2: If engine-specific selectors found nothing, use semantic extraction
+  // Strategy 2: Semantic extraction (all links with meaningful text)
   if (results.length === 0) {
-    console.log(`[METASEARCH] ${engineSource}: Specific selectors failed, using semantic extraction...`);
-
-    // Look for all anchor tags with href and meaningful text
+    console.log(`[METASEARCH] ${engineSource}: Selectors failed, semantic extraction...`);
     $('a[href]').each((_, el) => {
       if (results.length >= 20) return false;
       const linkEl = $(el);
@@ -206,7 +395,6 @@ function flexibleHtmlParse(html: string, engineSource: string, query: string): M
 
       const urlKey = href.toLowerCase().split('?')[0].split('#')[0];
 
-      // Filter: must have meaningful title, not be a nav/footer link, not a search engine self-link
       if (
         title.length > 8 &&
         href.startsWith('http') &&
@@ -215,8 +403,6 @@ function flexibleHtmlParse(html: string, engineSource: string, query: string): M
         !isNavOrFooterLink(title)
       ) {
         seenInPage.add(urlKey);
-
-        // Try to find snippet near the link
         const parent = linkEl.closest('div, li, article, section');
         const parentText = parent.text().trim();
         const snippetRaw = parentText.replace(title, '').trim().substring(0, 500);
@@ -234,28 +420,30 @@ function flexibleHtmlParse(html: string, engineSource: string, query: string): M
     });
   }
 
-  // Strategy 3: Last resort - extract from raw text with URL patterns
+  // Strategy 3: URL pattern extraction
   if (results.length === 0) {
-    console.log(`[METASEARCH] ${engineSource}: Semantic extraction also failed, trying URL pattern matching...`);
+    console.log(`[METASEARCH] ${engineSource}: Trying URL pattern matching...`);
     const urlPattern = /https?:\/\/[^\s"'<>\]\)]+/g;
     const foundUrls = html.match(urlPattern) || [];
-    const cleanUrls = [...new Set(foundUrls.map(u => u.split(/[<>"'\]\)]/)[0]))];
+    const cleanUrls = Array.from(new Set(foundUrls.map(u => u.split(/[<>"'\]\)]/)[0])));
 
     for (const url of cleanUrls) {
       if (results.length >= 15) break;
       const urlKey = url.toLowerCase().split('?')[0].split('#')[0];
-      if (!isSearchEngineUrl(url, engineSource) && !seenInPage.has(urlKey) && isDocumentUrl(url)) {
+      if (!isSearchEngineUrl(url, engineSource) && !seenInPage.has(urlKey) && (isDocumentUrl(url) || url.length > 20)) {
         seenInPage.add(urlKey);
-        const urlObj = new URL(url);
-        results.push({
-          title: urlObj.pathname.split('/').pop() || urlObj.hostname,
-          url,
-          snippet: '',
-          source: engineSource,
-          position: results.length + 1,
-          isDownloadable: true,
-          querySource: query.substring(0, 80),
-        });
+        try {
+          const urlObj = new URL(url);
+          results.push({
+            title: urlObj.pathname.split('/').pop() || urlObj.hostname,
+            url,
+            snippet: '',
+            source: engineSource,
+            position: results.length + 1,
+            isDownloadable: isDocumentUrl(url),
+            querySource: query.substring(0, 80),
+          });
+        } catch { /* skip invalid URLs */ }
       }
     }
   }
@@ -269,6 +457,11 @@ function cleanRedirectUrl(href: string, engine: string): string {
   // Google redirect
   if (href.includes('google.com/url?') || href.includes('google.com/search?')) {
     const match = href.match(/[?&](?:q|url)=([^&]+)/i);
+    if (match) return decodeURIComponent(match[1]);
+  }
+  // Google /url?q= redirect
+  if (href.startsWith('/url?q=')) {
+    const match = href.match(/[?&]q=([^&]+)/i);
     if (match) return decodeURIComponent(match[1]);
   }
 
@@ -293,213 +486,67 @@ function cleanRedirectUrl(href: string, engine: string): string {
 function normalizeUrl(href: string): string {
   if (!href) return '';
   if (href.startsWith('//')) return 'https:' + href;
-  if (href.startsWith('/')) return ''; // relative URLs can't be resolved without base
+  if (href.startsWith('/')) return '';
   return href;
 }
 
 function isSearchEngineUrl(url: string, engine: string): boolean {
   const engineDomains: Record<string, string[]> = {
-    Google: ['google.com', 'google.co', 'gstatic.com', 'googleapis.com'],
+    Google: ['google.com', 'google.co', 'gstatic.com', 'googleapis.com', 'googleusercontent.com'],
     Bing: ['bing.com', 'microsoft.com', 'msn.com'],
     Yandex: ['yandex.com', 'yandex.ru', 'yandex.net'],
     DuckDuckGo: ['duckduckgo.com'],
+    Brave: ['brave.com', 'search.brave.com'],
   };
   const domains = engineDomains[engine] || [];
   return domains.some(d => url.includes(d));
 }
 
 function isNavOrFooterLink(text: string): boolean {
-  const navPatterns = /^(login|sign|register|home|about|contact|privacy|terms|cookies|buscar|buscar|inicio|privacidad|mapa|images|videos|news|maps|translate|mail|signin|signup|log out|log in|cached|similar|more|next|previous|1|2|3|4|5)$/i;
+  const navPatterns = /^(login|sign|register|home|about|contact|privacy|terms|cookies|buscar|inicio|privacidad|mapa|images|videos|news|maps|translate|mail|signin|signup|log out|log in|cached|similar|more|next|previous)$/i;
   return navPatterns.test(text.trim()) || text.length < 5;
 }
 
 // ============================================================================
-// EXPANDED OSINT DORKING MATRIX
-// 3 Blocks: Name, Email, ID with 30+ file extensions
-// ============================================================================
-
-const PRIMARY_EXTENSIONS = [
-  'pdf', 'xlsx', 'xls', 'ppt', 'pptx', 'doc', 'docx', 'txt',
-  'rar', 'zip', '7z', 'htm', 'html', 'csv', 'rtf',
-  'env', 'conf', 'config', 'ini', 'json', 'xml', 'yaml',
-  'bak', 'old', 'sql', 'db',
-];
-
-const SECONDARY_EXTENSIONS = [
-  'odt', 'ods', 'odp', 'yml', 'tmp', 'sqlite',
-  'tar.gz', 'tgz', 'png', 'jpg', 'jpeg', 'svg',
-];
-
-const ALL_EXTENSIONS = [...PRIMARY_EXTENSIONS, ...SECONDARY_EXTENSIONS];
-
-function buildOsintQueryMatrix(executive: {
-  fullName: string;
-  identificationNum: string;
-  email: string | null;
-}): SearchQueryGroup[] {
-  const groups: SearchQueryGroup[] = [];
-  const name = executive.fullName;
-  const id = executive.identificationNum;
-  const email = executive.email;
-
-  // Build ext: operator string for primary extensions
-  const primaryExtGroup = PRIMARY_EXTENSIONS.map(e => `ext:${e}`).join(' OR ');
-  const secondaryExtGroup = SECONDARY_EXTENSIONS.map(e => `ext:${e}`).join(' OR ');
-
-  // =========================================================================
-  // BLOQUE 1: Por Nombre Completo
-  // =========================================================================
-  const nameQueries: string[] = [];
-
-  // 1a: Name + all primary extensions (single powerful query)
-  nameQueries.push(`"${name}" (${primaryExtGroup})`);
-
-  // 1b: Name + secondary extensions
-  nameQueries.push(`"${name}" (${secondaryExtGroup})`);
-
-  // 1c: Name + specific high-value document types
-  nameQueries.push(`"${name}" (ext:pdf OR ext:xlsx OR ext:doc OR ext:pptx OR ext:sql OR ext:env OR ext:conf OR ext:bak)`);
-
-  // 1d: Name + ID combined (cross-reference)
-  nameQueries.push(`"${name}" "${id}"`);
-
-  // 1e: Name variations (last name + first name)
-  const nameParts = name.toLowerCase().split(' ');
-  const lastName = nameParts[nameParts.length - 1] || '';
-  const firstName = nameParts[0] || '';
-  const secondLastName = nameParts.length > 2 ? nameParts[nameParts.length - 2] : '';
-
-  if (secondLastName && lastName) {
-    nameQueries.push(`"${firstName} ${secondLastName} ${lastName}" (ext:pdf OR ext:xlsx OR ext:doc)`);
-  }
-
-  // 1f: Name in URL paths (intitle/inurl dorking)
-  const nameUrl = name.toLowerCase().replace(/\s+/g, '.');
-  nameQueries.push(`inurl:"${nameUrl}" (ext:pdf OR ext:xlsx OR ext:doc OR ext:csv)`);
-
-  groups.push({ label: `Nombre: ${name}`, queries: nameQueries, blockType: 'name' });
-
-  // =========================================================================
-  // BLOQUE 2: Por Correo Electrónico
-  // =========================================================================
-  if (email) {
-    const emailQueries: string[] = [];
-
-    // 2a: Email + all primary extensions
-    emailQueries.push(`"${email}" (${primaryExtGroup})`);
-
-    // 2b: Email + secondary extensions
-    emailQueries.push(`"${email}" (${secondaryExtGroup})`);
-
-    // 2c: Email + high-value document types
-    emailQueries.push(`"${email}" (ext:pdf OR ext:xlsx OR ext:doc OR ext:sql OR ext:env OR ext:conf OR ext:bak OR ext:json)`);
-
-    // 2d: Email username part (without domain)
-    const emailUser = email.split('@')[0];
-    if (emailUser && emailUser !== email) {
-      emailQueries.push(`"${emailUser}" (ext:pdf OR ext:xlsx OR ext:doc OR ext:csv OR ext:sql)`);
-    }
-
-    // 2e: Email in document metadata
-    emailQueries.push(`"${email}" (ext:pdf OR ext:doc OR ext:xlsx OR ext:pptx)`);
-
-    groups.push({ label: `Email: ${email}`, queries: emailQueries, blockType: 'email' });
-  }
-
-  // =========================================================================
-  // BLOQUE 3: Por Identificación
-  // =========================================================================
-  const idQueries: string[] = [];
-
-  // 3a: ID + all primary extensions
-  idQueries.push(`"${id}" (${primaryExtGroup})`);
-
-  // 3b: ID + secondary extensions
-  idQueries.push(`"${id}" (${secondaryExtGroup})`);
-
-  // 3c: ID + high-value document types
-  idQueries.push(`"${id}" (ext:pdf OR ext:xlsx OR ext:doc OR ext:csv OR ext:sql OR ext:env OR ext:conf OR ext:bak)`);
-
-  // 3d: ID in URL paths
-  idQueries.push(`inurl:"${id}" (ext:pdf OR ext:xlsx OR ext:doc OR ext:html)`);
-
-  groups.push({ label: `ID: ${id}`, queries: idQueries, blockType: 'id' });
-
-  // =========================================================================
-  // BLOQUE COMBINADO: Cross-reference queries
-  // =========================================================================
-  const combinedQueries: string[] = [];
-
-  // 4a: Name + email
-  if (email) {
-    combinedQueries.push(`"${name}" "${email}" (ext:pdf OR ext:xlsx OR ext:doc OR ext:sql)`);
-  }
-
-  // 4b: Name + organization (if we can extract it from email domain)
-  if (email) {
-    const domain = email.split('@')[1];
-    if (domain) {
-      combinedQueries.push(`"${name}" site:${domain} (ext:pdf OR ext:xlsx OR ext:doc OR ext:html OR ext:conf)`);
-    }
-  }
-
-  // 4c: ID + name parts
-  if (lastName) {
-    combinedQueries.push(`"${id}" "${lastName}" (ext:pdf OR ext:xlsx OR ext:doc)`);
-  }
-
-  groups.push({ label: 'Cruzamiento Multi-Campo', queries: combinedQueries, blockType: 'combined' });
-
-  return groups;
-}
-
-// ============================================================================
 // SEARCH ENGINE IMPLEMENTATIONS
-// With dynamic headers, cookie management, and flexible parsing
 // ============================================================================
 
-// --- GOOGLE ---
+// --- GOOGLE (with filetype: operator support) ---
 async function searchGoogle(query: string): Promise<MetasearchResult[]> {
   const results: MetasearchResult[] = [];
   try {
-    await randomDelay(500, 1500); // Random pre-request delay
+    await randomDelay(800, 2000);
     const encodedQuery = encodeURIComponent(query);
-    const url = `https://www.google.com/search?q=${encodedQuery}&num=20&hl=es-419&start=0`;
-    const headers = buildDynamicHeaders('Google');
+    const endpoints = [
+      `https://www.google.com/search?q=${encodedQuery}&num=15&hl=es-419&start=0`,
+      `https://www.google.com.co/search?q=${encodedQuery}&num=15&hl=es`,
+    ];
 
-    const response = await fetch(url, {
-      headers,
-      redirect: 'follow',
-      signal: AbortSignal.timeout(20000),
-    });
-
-    extractAndStoreCookies(response, 'Google');
-
-    if (!response.ok) {
-      console.log(`[METASEARCH] Google HTTP ${response.status}`);
-      return results;
-    }
-
-    const html = await response.text();
-
-    // Check if we got a CAPTCHA/consent page
-    if (html.includes('captcha') || html.includes('unusual traffic') || html.includes('Sorry')) {
-      console.log(`[METASEARCH] Google: CAPTCHA/block detected, trying Google Colombia...`);
-      // Try Google Colombia as fallback
-      const coUrl = `https://www.google.com.co/search?q=${encodedQuery}&num=20&hl=es`;
-      const coResponse = await fetch(coUrl, {
-        headers: buildDynamicHeaders('Google'),
+    for (const url of endpoints) {
+      const headers = buildDynamicHeaders('Google');
+      const response = await fetch(url, {
+        headers,
         redirect: 'follow',
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(15000),
       });
-      if (coResponse.ok) {
-        const coHtml = await coResponse.text();
-        return flexibleHtmlParse(coHtml, 'Google', query);
-      }
-      return results;
-    }
 
-    return flexibleHtmlParse(html, 'Google', query);
+      extractAndStoreCookies(response, 'Google');
+
+      if (!response.ok) {
+        console.log(`[METASEARCH] Google HTTP ${response.status}`);
+        continue;
+      }
+
+      const html = await response.text();
+
+      if (html.includes('captcha') || html.includes('unusual traffic') || html.includes('Sorry') || html.length < 500) {
+        console.log(`[METASEARCH] Google: Block/empty detected from ${url.substring(0, 50)}`);
+        continue;
+      }
+
+      const parsed = flexibleHtmlParse(html, 'Google', query);
+      if (parsed.length > 0) return parsed;
+    }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.log(`[METASEARCH] Google error: ${msg.substring(0, 80)}`);
@@ -507,18 +554,18 @@ async function searchGoogle(query: string): Promise<MetasearchResult[]> {
   return results;
 }
 
-// --- BING ---
+// --- BING (with filetype: operator support) ---
 async function searchBing(query: string): Promise<MetasearchResult[]> {
   try {
-    await randomDelay(400, 1200);
+    await randomDelay(600, 1500);
     const encodedQuery = encodeURIComponent(query);
-    const url = `https://www.bing.com/search?q=${encodedQuery}&count=20&setlang=es-419&cc=co`;
+    const url = `https://www.bing.com/search?q=${encodedQuery}&count=15&setlang=es-419&cc=co`;
     const headers = buildDynamicHeaders('Bing');
 
     const response = await fetch(url, {
       headers,
       redirect: 'follow',
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(15000),
     });
 
     extractAndStoreCookies(response, 'Bing');
@@ -537,51 +584,10 @@ async function searchBing(query: string): Promise<MetasearchResult[]> {
   return [];
 }
 
-// --- YANDEX ---
-async function searchYandex(query: string): Promise<MetasearchResult[]> {
-  try {
-    await randomDelay(600, 1800);
-    const encodedQuery = encodeURIComponent(query);
-
-    // Try multiple Yandex endpoints for better results
-    const endpoints = [
-      `https://yandex.com/search/?text=${encodedQuery}&lr=10636&lang=es`,
-      `https://yandex.com/search/?text=${encodedQuery}&lr=109670`,  // Colombia region
-    ];
-
-    for (const url of endpoints) {
-      const headers = buildDynamicHeaders('Yandex');
-      headers['Accept-Language'] = 'es,es-ES;q=0.9,en;q=0.8';
-
-      const response = await fetch(url, {
-        headers,
-        redirect: 'follow',
-        signal: AbortSignal.timeout(20000),
-      });
-
-      extractAndStoreCookies(response, 'Yandex');
-
-      if (!response.ok) {
-        console.log(`[METASEARCH] Yandex HTTP ${response.status} from ${url.substring(0, 50)}`);
-        continue;
-      }
-
-      const html = await response.text();
-      const results = flexibleHtmlParse(html, 'Yandex', query);
-
-      if (results.length > 0) return results;
-    }
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.log(`[METASEARCH] Yandex error: ${msg.substring(0, 80)}`);
-  }
-  return [];
-}
-
 // --- DUCKDUCKGO ---
 async function searchDuckDuckGo(query: string): Promise<MetasearchResult[]> {
   try {
-    await randomDelay(400, 1000);
+    await randomDelay(500, 1200);
     const encodedQuery = encodeURIComponent(query);
     const url = `https://html.duckduckgo.com/html/?q=${encodedQuery}`;
     const headers = buildDynamicHeaders('DuckDuckGo');
@@ -589,7 +595,7 @@ async function searchDuckDuckGo(query: string): Promise<MetasearchResult[]> {
     const response = await fetch(url, {
       headers,
       redirect: 'follow',
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(15000),
     });
 
     extractAndStoreCookies(response, 'DuckDuckGo');
@@ -605,69 +611,9 @@ async function searchDuckDuckGo(query: string): Promise<MetasearchResult[]> {
   return [];
 }
 
-// --- BRAVE SEARCH (Additional engine for more coverage) ---
-async function searchBrave(query: string): Promise<MetasearchResult[]> {
-  try {
-    await randomDelay(400, 1000);
-    const encodedQuery = encodeURIComponent(query);
-    const url = `https://search.brave.com/search?q=${encodedQuery}&source=web`;
-    const headers = buildDynamicHeaders('Brave');
-
-    const response = await fetch(url, {
-      headers,
-      redirect: 'follow',
-      signal: AbortSignal.timeout(20000),
-    });
-
-    if (!response.ok) return [];
-
-    const html = await response.text();
-    const $ = cheerio.load(html);
-    const results: MetasearchResult[] = [];
-    const seenInPage = new Set<string>();
-
-    // Brave-specific selectors
-    $('div.snippet').each((_, el) => {
-      if (results.length >= 15) return false;
-      const container = $(el);
-      const linkEl = container.find('a.result-header').first();
-      let href = linkEl.attr('href') || '';
-      const title = linkEl.find('.snippet-title').text().trim() || linkEl.text().trim();
-      const snippet = container.find('.snippet-description').text().trim();
-
-      if (href.startsWith('//')) href = 'https:' + href;
-
-      const urlKey = href.toLowerCase().split('?')[0].split('#')[0];
-      if (title && href.startsWith('http') && !seenInPage.has(urlKey)) {
-        seenInPage.add(urlKey);
-        results.push({
-          title: title.substring(0, 300),
-          url: href,
-          snippet: snippet.substring(0, 500),
-          source: 'Brave',
-          position: results.length + 1,
-          isDownloadable: isDocumentUrl(href),
-          querySource: query.substring(0, 80),
-        });
-      }
-    });
-
-    // Fallback with flexible parser if specific selectors failed
-    if (results.length === 0) {
-      return flexibleHtmlParse(html, 'DuckDuckGo', query).map(r => ({ ...r, source: 'Brave' }));
-    }
-
-    return results;
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.log(`[METASEARCH] Brave error: ${msg.substring(0, 80)}`);
-  }
-  return [];
-}
-
 // ============================================================================
-// ZAI WEB SEARCH (PRIMARY FALLBACK - Most Reliable)
-// Always runs alongside scraping engines for maximum coverage
+// ZAI WEB SEARCH - PRIMARY ENGINE (Most Reliable from Server)
+// Runs FIRST with simplified plain queries (no filetype operators)
 // ============================================================================
 async function searchZAI(query: string): Promise<MetasearchResult[]> {
   try {
@@ -680,15 +626,17 @@ async function searchZAI(query: string): Promise<MetasearchResult[]> {
     });
 
     if (searchResult && Array.isArray(searchResult)) {
-      return searchResult.map((item: any, index: number) => ({
-        title: item.name || 'Sin título',
-        url: item.url || '',
-        snippet: item.snippet || '',
-        source: 'Web Search',
-        position: index + 1,
-        isDownloadable: item.url ? isDocumentUrl(item.url) : false,
-        querySource: query.substring(0, 80),
-      }));
+      return searchResult
+        .filter((item: any) => item.url && item.url.startsWith('http'))
+        .map((item: any, index: number) => ({
+          title: (item.name || 'Sin titulo').substring(0, 300),
+          url: item.url,
+          snippet: (item.snippet || '').substring(0, 500),
+          source: 'Web Search',
+          position: index + 1,
+          isDownloadable: isDocumentUrl(item.url),
+          querySource: query.substring(0, 80),
+        }));
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -699,21 +647,19 @@ async function searchZAI(query: string): Promise<MetasearchResult[]> {
 
 // ============================================================================
 // AI-POWERED SEMANTIC EXTRACTION
-// When HTML parsing fails, use AI to extract structured data from raw HTML
 // ============================================================================
 async function aiExtractFromHtml(html: string, engineSource: string, query: string): Promise<MetasearchResult[]> {
   try {
     const ZAI = (await import('z-ai-web-dev-sdk')).default;
     const zai = await ZAI.create();
 
-    // Take a sample of the HTML for AI analysis
-    const htmlSample = html.substring(0, 12000);
+    const htmlSample = html.substring(0, 10000);
 
     const completion = await zai.chat.completions.create({
       messages: [
         {
           role: 'system',
-          content: `You are a web scraping expert. Extract search results from the HTML of a ${engineSource} search results page. Return ONLY a JSON array of objects with: title, url, snippet. Maximum 15 results. If no results found, return empty array [].`
+          content: `You are a web scraping expert. Extract search results from HTML of a ${engineSource} search results page. Return ONLY a JSON array of objects with: title, url, snippet. Maximum 15 results. If no results found, return empty array [].`
         },
         {
           role: 'user',
@@ -730,7 +676,7 @@ async function aiExtractFromHtml(html: string, engineSource: string, query: stri
       const parsed = JSON.parse(jsonMatch[0]);
       if (Array.isArray(parsed)) {
         return parsed.filter((item: any) => item.url && item.url.startsWith('http')).map((item: any, idx: number) => ({
-          title: (item.title || 'Sin título').substring(0, 300),
+          title: (item.title || 'Sin titulo').substring(0, 300),
           url: item.url,
           snippet: (item.snippet || '').substring(0, 500),
           source: `${engineSource} (AI)`,
@@ -785,7 +731,7 @@ function sanitizeFileName(name: string): string {
 }
 
 // ============================================================================
-// AI ANALYSIS OF RESULTS - Enhanced
+// AI ANALYSIS OF RESULTS
 // ============================================================================
 async function analyzeResultsWithAI(
   executive: { fullName: string; identificationNum: string; email: string | null },
@@ -799,53 +745,50 @@ async function analyzeResultsWithAI(
       `${i + 1}. [${r.fileType?.toUpperCase() || 'WEB'}] "${r.title}" - ${r.url} | Fuente: ${r.source} | Snippet: ${r.snippet.substring(0, 200)}`
     ).join('\n');
 
-    const prompt = `Eres un analista de inteligencia OSINT especializado en protección ejecutiva. Analiza los siguientes resultados de metabúsqueda para el ejecutivo y genera un informe de amenazas/exposición digital.
+    const prompt = `Eres un analista de inteligencia OSINT especializado en proteccion ejecutiva. Analiza los siguientes resultados de metabusqueda para el ejecutivo y genera un informe de amenazas/exposicion digital.
 
 EJECUTIVO:
 - Nombre: ${executive.fullName}
-- Identificación: ${executive.identificationNum}
+- Identificacion: ${executive.identificationNum}
 - Email: ${executive.email || 'No disponible'}
 
-RESULTADOS DE METABÚSQUEDA OSINT (${results.length} resultados de múltiples motores):
+RESULTADOS DE METABUSQUEDA OSINT (${results.length} resultados de multiples motores):
 ${resultsSummary}
 
 INSTRUCCIONES:
-1. Clasifica cada resultado según nivel de exposición: CRÍTICO, ALTO, MEDIO, BAJO
-2. Identifica documentos que contengan datos personales del ejecutivo (PDFs con cédula, Excel con datos financieros, configs con credenciales, etc.)
-3. Detecta posibles filtraciones de información sensible (archivos .env, .conf, .sql, .bak expuestos)
-4. Identifica documentos académicos, laborales, financieros o regulatorios asociados
-5. Presta especial atención a archivos de configuración (.env, .conf, .ini, .json, .yaml) que puedan contener credenciales
-6. Genera recomendaciones de protección específicas y accionables
-7. Identifica vectores de ataque potenciales basados en la información expuesta
+1. Clasifica cada resultado segun nivel de exposicion: CRITICO, ALTO, MEDIO, BAJO
+2. Identifica documentos que contengan datos personales del ejecutivo
+3. Detecta posibles filtraciones de informacion sensible
+4. Genera recomendaciones de proteccion especificas y accionables
+5. Identifica vectores de ataque potenciales
 
 FORMATO DE RESPUESTA:
-- Resumen Ejecutivo (3-5 líneas con nivel de riesgo general)
-- Hallazgos Críticos (exposición crítica/alta - documentos con datos personales)
-- Hallazgos de Seguridad (archivos .env, .conf, .sql, .bak expuestos)
-- Hallazgos Moderados (documentos públicos pero relevantes)
-- Documentos Identificados por Tipo de Archivo
+- Resumen Ejecutivo
+- Hallazgos Criticos
+- Hallazgos de Seguridad
+- Hallazgos Moderados
 - Vectores de Ataque Potenciales
-- Recomendaciones de Protección (inmediatas, corto plazo, largo plazo)`;
+- Recomendaciones de Proteccion`;
 
     const completion = await zai.chat.completions.create({
       messages: [
-        { role: 'system', content: 'Eres un analista de inteligencia OSINT experto en protección ejecutiva, ciberseguridad y contrainteligencia. Respondes siempre en español de forma clara, detallada y profesional. Tu análisis debe ser profundo y accionable.' },
+        { role: 'system', content: 'Eres un analista de inteligencia OSINT experto en proteccion ejecutiva, ciberseguridad y contrainteligencia. Respondes siempre en espanol de forma clara, detallada y profesional.' },
         { role: 'user', content: prompt },
       ],
       temperature: 0.3,
       max_tokens: 3000,
     });
 
-    return completion.choices?.[0]?.message?.content || 'Análisis no disponible';
+    return completion.choices?.[0]?.message?.content || 'Analisis no disponible';
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.log(`[METASEARCH] AI analysis error: ${msg.substring(0, 200)}`);
-    return 'Análisis IA no disponible en este momento.';
+    return 'Analisis IA no disponible en este momento.';
   }
 }
 
 // ============================================================================
-// FILE DOWNLOAD AND STORAGE - Enhanced with metadata
+// FILE DOWNLOAD AND STORAGE
 // ============================================================================
 async function downloadAndStoreFile(
   url: string,
@@ -886,7 +829,7 @@ async function downloadAndStoreFile(
         'Accept': '*/*',
       },
       redirect: 'follow',
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(45000),
     });
 
     const contentType = response.headers.get('content-type') || 'unknown';
@@ -915,7 +858,7 @@ async function downloadAndStoreFile(
 }
 
 // ============================================================================
-// EVIDENCE DETAIL FILE GENERATOR - Enhanced with full metadata
+// EVIDENCE DETAIL FILE GENERATOR
 // ============================================================================
 function writeEvidenceDetail(
   executiveName: string,
@@ -938,7 +881,7 @@ function writeEvidenceDetail(
       executiveName,
       generatedAt: new Date().toISOString(),
       captureTimestamp: new Date().toISOString(),
-      generatorAgent: 'ActorTrace OSINT Metasearch v3.0',
+      generatorAgent: 'ActorTrace OSINT Metasearch v4.0',
       queryMatrixUsed: queryGroups.map(g => ({
         block: g.blockType,
         label: g.label,
@@ -973,18 +916,16 @@ function writeEvidenceDetail(
   fs.writeFileSync(detailPath, JSON.stringify(detailData, null, 2), 'utf-8');
   console.log(`[METASEARCH] Evidence detail written: ${detailPath}`);
 
-  // Also write a human-readable TXT version
+  // Human-readable TXT version
   const txtPath = path.join(execDir, 'detalle_identificado.txt');
   const txtContent = [
-    `╔══════════════════════════════════════════════════════════════╗`,
-    `║  ACTORTRACE - REPORTE DE EVIDENCIA DIGITAL OSINT           ║`,
-    `╚══════════════════════════════════════════════════════════════╝`,
+    `ACTORTRACE - REPORTE DE EVIDENCIA DIGITAL OSINT`,
     ``,
     `Ejecutivo: ${executiveName}`,
     `Fecha de captura: ${new Date().toLocaleString('es-CO')}`,
-    `Agente: ActorTrace OSINT Metasearch v3.0`,
+    `Agente: ActorTrace OSINT Metasearch v4.0`,
     ``,
-    `═══ ESTADÍSTICAS ═══`,
+    `ESTADISTICAS`,
     `Total hallazgos: ${evidence.length}`,
     `Archivos descargados: ${evidence.filter(e => e.downloadStatus === 'success').length}`,
     `Descargas fallidas: ${evidence.filter(e => e.downloadStatus === 'failed').length}`,
@@ -993,25 +934,25 @@ function writeEvidenceDetail(
     `Motores consultados:`,
     ...Object.entries(engineStats).map(([engine, count]) => `  - ${engine}: ${count} resultados`),
     ``,
-    `═══ MATRIZ DE CONSULTAS EJECUTADAS ═══`,
+    `MATRIZ DE CONSULTAS EJECUTADAS`,
     ...queryGroups.map(g => `  [${g.blockType.toUpperCase()}] ${g.label} (${g.queries.length} consultas)`),
     ``,
-    `═══ HALLAZGOS DETALLADOS ═══`,
+    `HALLAZGOS DETALLADOS`,
     ...evidence.map((e, i) => [
       ``,
       `  Hallazgo #${i + 1}:`,
       `  URL: ${e.url}`,
       `  Dominio: ${e.sourceDomain}`,
       `  Fecha de captura: ${e.discoveredAt}`,
-      `  Título: ${e.title}`,
+      `  Titulo: ${e.title}`,
       `  Tipo de archivo: ${e.fileType}`,
       `  Estado de descarga: ${e.downloadStatus}`,
       e.localPath ? `  Ruta local: ${e.localPath}` : '',
-      e.fileSize ? `  Tamaño: ${(e.fileSize / 1024).toFixed(1)} KB` : '',
+      e.fileSize ? `  Tamano: ${(e.fileSize / 1024).toFixed(1)} KB` : '',
       e.error ? `  Error: ${e.error}` : '',
     ].filter(Boolean).join('\n')),
     ``,
-    `═══ ANÁLISIS DE IA ═══`,
+    `ANALISIS DE IA`,
     aiAnalysis || 'No disponible',
   ].join('\n');
 
@@ -1048,10 +989,8 @@ function addResults(
 }
 
 // ============================================================================
-// MAIN POST HANDLER - 6 ENGINE METASEARCH v3.0
-// Engines: Google + Bing + Yandex + DuckDuckGo + Brave (parallel scraping)
-//          ZAI Web Search (always runs for maximum coverage)
-//          AI Semantic Extraction (fallback when scraping fails)
+// MAIN POST HANDLER - v4.0
+// Strategy: ZAI Web Search FIRST (most reliable), then scraping engines
 // ============================================================================
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -1073,6 +1012,7 @@ export async function POST(request: NextRequest) {
 
     let executive = null;
     let queryGroups: SearchQueryGroup[] = [];
+    let engineQueries: EngineQuerySet = { google: [], bing: [], zai: [] };
 
     if (executiveId) {
       executive = await db.executive.findUnique({ where: { id: executiveId } });
@@ -1080,37 +1020,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Ejecutivo no encontrado' }, { status: 404 });
       }
 
-      queryGroups = buildOsintQueryMatrix({
+      const matrix = buildOsintQueryMatrix({
         fullName: executive.fullName,
         identificationNum: executive.identificationNum,
         email: executive.email,
       });
+      queryGroups = matrix.groups;
+      engineQueries = matrix.engineQueries;
 
-      console.log(`[METASEARCH] Built ${queryGroups.length} query groups with ${queryGroups.reduce((acc, g) => acc + g.queries.length, 0)} total queries`);
+      console.log(`[METASEARCH] Built ${queryGroups.length} query groups, ZAI=${engineQueries.zai.length}, Google=${engineQueries.google.length}, Bing=${engineQueries.bing.length} queries`);
     } else {
-      queryGroups = [{ label: 'Búsqueda personalizada', queries: [customQuery], blockType: 'custom' }];
+      queryGroups = [{ label: 'Busqueda personalizada', queries: [customQuery], blockType: 'custom' }];
+      engineQueries = { google: [customQuery], bing: [customQuery], zai: [customQuery] };
     }
-
-    // =========================================================================
-    // COLLECT QUERIES - Execute ALL queries (up to 12 for comprehensive coverage)
-    // =========================================================================
-    const allQueries: string[] = [];
-    for (const group of queryGroups) {
-      allQueries.push(...group.queries);
-    }
-    // Take top query from each group first (diversity), then fill remaining
-    const prioritizedQueries: string[] = [];
-    const maxPerGroup = 2;
-    const groupArrays = queryGroups.map(g => g.queries);
-    for (let i = 0; i < Math.max(...groupArrays.map(g => g.length)); i++) {
-      for (const groupArr of groupArrays) {
-        if (i < groupArr.length && prioritizedQueries.length < 12) {
-          prioritizedQueries.push(groupArr[i]);
-        }
-      }
-    }
-    const queriesToExecute = prioritizedQueries.slice(0, 12);
-    console.log(`[METASEARCH] Executing ${queriesToExecute.length} prioritized queries across 6 engines`);
 
     const allResults: MetasearchResult[] = [];
     const seenUrls = new Set<string>();
@@ -1120,99 +1042,108 @@ export async function POST(request: NextRequest) {
     };
 
     // =========================================================================
-    // PHASE 1: SCRAPING ENGINES (Google + Bing + Yandex + DuckDuckGo + Brave)
-    // For each query, hit all 5 engines in parallel with random delays
+    // PHASE 1: ZAI WEB SEARCH (PRIMARY - Most reliable from server)
+    // Execute ALL ZAI queries in parallel
     // =========================================================================
-    console.log('[METASEARCH] Phase 1: Scraping engines (Google + Bing + Yandex + DuckDuckGo + Brave)...');
+    console.log(`[METASEARCH] Phase 1: ZAI Web Search (${engineQueries.zai.length} queries)...`);
 
-    // Process queries in batches of 2 to avoid overwhelming engines
-    const batchSize = 2;
-    for (let i = 0; i < queriesToExecute.length; i += batchSize) {
-      const batch = queriesToExecute.slice(i, i + batchSize);
-
-      const batchPromises = batch.map(query =>
-        Promise.all([
-          searchGoogle(query).catch(() => [] as MetasearchResult[]),
-          searchBing(query).catch(() => [] as MetasearchResult[]),
-          searchYandex(query).catch(() => [] as MetasearchResult[]),
-          searchDuckDuckGo(query).catch(() => [] as MetasearchResult[]),
-          searchBrave(query).catch(() => [] as MetasearchResult[]),
-        ]).then(([google, bing, yandex, ddg, brave]) => {
-          engineStats.google += google.length;
-          engineStats.bing += bing.length;
-          engineStats.yandex += yandex.length;
-          engineStats.duckduckgo += ddg.length;
-          engineStats.brave += brave.length;
-
-          addResults(google, allResults, seenUrls, enginesUsed, 'Google');
-          addResults(bing, allResults, seenUrls, enginesUsed, 'Bing');
-          addResults(yandex, allResults, seenUrls, enginesUsed, 'Yandex');
-          addResults(ddg, allResults, seenUrls, enginesUsed, 'DuckDuckGo');
-          addResults(brave, allResults, seenUrls, enginesUsed, 'Brave');
-        })
+    const zaiBatchSize = 3;
+    for (let i = 0; i < engineQueries.zai.length; i += zaiBatchSize) {
+      const batch = engineQueries.zai.slice(i, i + zaiBatchSize);
+      const zaiPromises = batch.map(query =>
+        searchZAI(query).catch(() => [] as MetasearchResult[])
       );
+      const zaiResultsArray = await Promise.all(zaiPromises);
 
-      await Promise.all(batchPromises);
+      for (const queryResults of zaiResultsArray) {
+        engineStats.webSearch += queryResults.length;
+        addResults(queryResults, allResults, seenUrls, enginesUsed, 'Web Search');
+      }
 
-      // Random delay between batches (1-3 seconds) to avoid rate limiting
-      await randomDelay(1000, 3000);
+      if (i + zaiBatchSize < engineQueries.zai.length) {
+        await randomDelay(500, 1000);
+      }
+    }
+    console.log(`[METASEARCH] ZAI phase done: ${engineStats.webSearch} results, Total unique=${allResults.length}`);
+
+    // =========================================================================
+    // PHASE 2: SCRAPING ENGINES (Google + Bing + DuckDuckGo)
+    // Execute in batches, max 3 queries per engine
+    // =========================================================================
+    console.log('[METASEARCH] Phase 2: Scraping engines (Google + Bing + DuckDuckGo)...');
+
+    const maxScrapingQueries = 4; // Keep it short to avoid rate limiting
+    const googleQueries = engineQueries.google.slice(0, maxScrapingQueries);
+    const bingQueries = engineQueries.bing.slice(0, maxScrapingQueries);
+    const ddgQueries = engineQueries.zai.slice(0, maxScrapingQueries); // DDG uses plain queries
+
+    // Process scraping queries one at a time per engine to avoid blocks
+    for (let i = 0; i < Math.max(googleQueries.length, bingQueries.length, ddgQueries.length); i++) {
+      const promises: Promise<void>[] = [];
+
+      if (i < googleQueries.length) {
+        promises.push(
+          searchGoogle(googleQueries[i])
+            .then(results => {
+              engineStats.google += results.length;
+              addResults(results, allResults, seenUrls, enginesUsed, 'Google');
+            })
+            .catch(() => {})
+        );
+      }
+
+      if (i < bingQueries.length) {
+        promises.push(
+          searchBing(bingQueries[i])
+            .then(results => {
+              engineStats.bing += results.length;
+              addResults(results, allResults, seenUrls, enginesUsed, 'Bing');
+            })
+            .catch(() => {})
+        );
+      }
+
+      if (i < ddgQueries.length) {
+        promises.push(
+          searchDuckDuckGo(ddgQueries[i])
+            .then(results => {
+              engineStats.duckduckgo += results.length;
+              addResults(results, allResults, seenUrls, enginesUsed, 'DuckDuckGo');
+            })
+            .catch(() => {})
+        );
+      }
+
+      await Promise.all(promises);
+      // Delay between scraping rounds
+      await randomDelay(1500, 3000);
     }
 
-    console.log(`[METASEARCH] Scraping phase done: Google=${engineStats.google}, Bing=${engineStats.bing}, Yandex=${engineStats.yandex}, DDG=${engineStats.duckduckgo}, Brave=${engineStats.brave}, Total unique=${allResults.length}`);
+    console.log(`[METASEARCH] Scraping phase done: Google=${engineStats.google}, Bing=${engineStats.bing}, DDG=${engineStats.duckduckgo}, Total unique=${allResults.length}`);
 
     // =========================================================================
-    // PHASE 2: ZAI WEB SEARCH (Always runs for maximum coverage)
+    // PHASE 3: AI EXTRACTION FALLBACK (if scraping returned nothing)
     // =========================================================================
-    console.log('[METASEARCH] Phase 2: ZAI Web Search (always-on for maximum coverage)...');
-    const zaiQueries = queriesToExecute.slice(0, 6);
-    const zaiPromises = zaiQueries.map(query =>
-      searchZAI(query).catch(() => [] as MetasearchResult[])
-    );
-    const zaiResultsArray = await Promise.all(zaiPromises);
-
-    for (const queryResults of zaiResultsArray) {
-      engineStats.webSearch += queryResults.length;
-      addResults(queryResults, allResults, seenUrls, enginesUsed, 'Web Search');
-    }
-    console.log(`[METASEARCH] ZAI phase: ${engineStats.webSearch} results, Total unique=${allResults.length}`);
-
-    // =========================================================================
-    // PHASE 3: AI SEMANTIC EXTRACTION (If scraping engines returned very few)
-    // =========================================================================
-    if (allResults.length < 5 && queriesToExecute.length > 0) {
-      console.log('[METASEARCH] Phase 3: AI Semantic Extraction (scraping returned few results)...');
+    if (allResults.length < 3) {
+      console.log('[METASEARCH] Phase 3: AI extraction fallback (few results)...');
       try {
-        // Re-fetch the most important query with a fresh request and extract with AI
-        const primaryQuery = queriesToExecute[0];
-        const enginesToRetry = [
-          { fn: () => searchBing(primaryQuery), name: 'Bing' },
-          { fn: () => searchDuckDuckGo(primaryQuery), name: 'DuckDuckGo' },
-        ];
+        const primaryQuery = engineQueries.bing[0] || engineQueries.zai[0];
+        if (primaryQuery) {
+          const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(primaryQuery)}&count=20`;
+          const response = await fetch(bingUrl, {
+            headers: buildDynamicHeaders('Bing'),
+            redirect: 'follow',
+            signal: AbortSignal.timeout(15000),
+          });
 
-        for (const engine of enginesToRetry) {
-          try {
-            const response = await fetch(
-              engine.name === 'Bing'
-                ? `https://www.bing.com/search?q=${encodeURIComponent(primaryQuery)}&count=20`
-                : `https://html.duckduckgo.com/html/?q=${encodeURIComponent(primaryQuery)}`,
-              {
-                headers: buildDynamicHeaders(engine.name),
-                redirect: 'follow',
-                signal: AbortSignal.timeout(15000),
-              }
-            );
-
-            if (response.ok) {
-              const html = await response.text();
-              const aiResults = await aiExtractFromHtml(html, engine.name, primaryQuery);
-              if (aiResults.length > 0) {
-                addResults(aiResults, allResults, seenUrls, enginesUsed, `${engine.name} (AI)`);
-                engineStats[engine.name.toLowerCase() as keyof typeof engineStats] += aiResults.length;
-                console.log(`[METASEARCH] AI extraction from ${engine.name}: ${aiResults.length} results`);
-              }
+          if (response.ok) {
+            const html = await response.text();
+            const aiResults = await aiExtractFromHtml(html, 'Bing', primaryQuery);
+            if (aiResults.length > 0) {
+              engineStats.bing += aiResults.length;
+              addResults(aiResults, allResults, seenUrls, enginesUsed, 'Bing (AI)');
+              console.log(`[METASEARCH] AI extraction from Bing: ${aiResults.length} results`);
             }
-          } catch {
-            // Continue to next engine
           }
         }
       } catch (e: unknown) {
@@ -1232,7 +1163,7 @@ export async function POST(request: NextRequest) {
     allResults.forEach((r, i) => { r.position = i + 1; });
 
     const searchEngine = enginesUsed.length > 0
-      ? `OSINT Multi-Engine v3.0 [${enginesUsed.join(' + ')}]`
+      ? `OSINT Multi-Engine v4.0 [${enginesUsed.join(' + ')}]`
       : 'Sin resultados';
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -1268,7 +1199,7 @@ export async function POST(request: NextRequest) {
       const downloadPromises: Promise<void>[] = [];
       let running = 0;
 
-      for (const result of downloadableResults) {
+      for (const result of downloadableResults.slice(0, 20)) { // Cap at 20 downloads
         const downloadPromise = (async () => {
           while (running >= 3) {
             await new Promise(r => setTimeout(r, 500));
@@ -1311,7 +1242,7 @@ export async function POST(request: NextRequest) {
       await Promise.all(downloadPromises);
     }
 
-    // Write evidence detail files (JSON + TXT)
+    // Write evidence detail files
     let evidenceDetailPath = '';
     if (executive && (evidenceDetails.length > 0 || allResults.length > 0)) {
       const allEvidence: EvidenceDetail[] = allResults.map(r => ({
@@ -1383,7 +1314,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Metasearch error:', error);
     return NextResponse.json(
-      { error: 'Error al ejecutar metabúsqueda' },
+      { error: 'Error al ejecutar metabusqueda' },
       { status: 500 }
     );
   }
