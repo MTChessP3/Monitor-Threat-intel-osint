@@ -896,6 +896,14 @@ export default function Home() {
           ))}
           <Separator className="my-2" />
           <a
+            href="/proteccion-ejecutivos"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15"
+          >
+            <Shield className="w-4 h-4" />
+            Protección Ejecutivos
+            <ChevronRight className="w-3 h-3 ml-auto" />
+          </a>
+          <a
             href="/generar-informe"
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15"
           >
@@ -992,6 +1000,14 @@ export default function Home() {
                   </button>
                 ))}
                 <Separator className="my-2" />
+                <a
+                  href="/proteccion-ejecutivos"
+                  onClick={() => setSidebarOpen(false)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15"
+                >
+                  <Shield className="w-4 h-4" />
+                  Protección Ejecutivos
+                </a>
                 <a
                   href="/generar-informe"
                   onClick={() => setSidebarOpen(false)}

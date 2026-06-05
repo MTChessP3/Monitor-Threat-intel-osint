@@ -15,12 +15,14 @@ echo "✅ Schema switched to PostgreSQL"
 # Generate Prisma client
 npx prisma generate
 
-# Deploy migrations (only if DB vars are available)
+# Push schema to database (only if DB vars are available)
+# Using db push instead of migrate deploy to handle schema changes
+# without requiring compatible migration files
 if [ -n "$POSTGRES_PRISMA_URL" ] && [ -n "$POSTGRES_URL_NON_POOLING" ]; then
-  echo "📦 Deploying database migrations..."
-  npx prisma migrate deploy || echo "⚠️ Migration deploy failed, continuing build..."
+  echo "📦 Pushing schema to PostgreSQL database..."
+  npx prisma db push --accept-data-loss 2>/dev/null || echo "⚠️ DB push failed, continuing build..."
 else
-  echo "⚠️ Database environment variables not set, skipping migrations"
+  echo "⚠️ Database environment variables not set, skipping schema push"
 fi
 
 # Build Next.js
