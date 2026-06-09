@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build script for Vercel deployment
-# Uses SQLite with a writable /tmp path for Vercel serverless
+# Uses SQLite for local dev and libSQL/Turso for production
 
 set -e
 
@@ -10,6 +10,6 @@ echo "🔧 Preparing Prisma for Vercel serverless..."
 npx prisma generate
 
 # Build Next.js
-next build
+npx next build
 
 echo "✅ Build complete!"
