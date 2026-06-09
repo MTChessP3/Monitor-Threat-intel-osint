@@ -80,9 +80,8 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     console.error('Signup error:', error);
-    const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
     return NextResponse.json(
-      { error: 'Error interno del servidor', detail: errorMsg.substring(0, 200) },
+      { error: 'Error interno del servidor' },
       { status: 500 }
     );
   }
