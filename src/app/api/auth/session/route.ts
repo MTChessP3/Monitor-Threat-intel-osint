@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, AUTH_COOKIE_NAME } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { db, ensureDatabaseInitialized } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
+    await ensureDatabaseInitialized();
     const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
     if (!token) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });

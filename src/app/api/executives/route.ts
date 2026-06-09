@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, ensureDatabaseInitialized } from '@/lib/db';
 import { verifyToken, AUTH_COOKIE_NAME } from '@/lib/auth';
 
 // Helper to authenticate requests
@@ -14,6 +14,7 @@ async function getAuthenticatedUser(request: NextRequest) {
 // GET /api/executives - List all executives
 export async function GET(request: NextRequest) {
   try {
+    await ensureDatabaseInitialized();
     const user = await getAuthenticatedUser(request);
     if (!user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -61,6 +62,7 @@ export async function GET(request: NextRequest) {
 // POST /api/executives - Create a new executive
 export async function POST(request: NextRequest) {
   try {
+    await ensureDatabaseInitialized();
     const user = await getAuthenticatedUser(request);
     if (!user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -114,6 +116,7 @@ export async function POST(request: NextRequest) {
 // PUT /api/executives - Update an executive
 export async function PUT(request: NextRequest) {
   try {
+    await ensureDatabaseInitialized();
     const user = await getAuthenticatedUser(request);
     if (!user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -170,6 +173,7 @@ export async function PUT(request: NextRequest) {
 // DELETE /api/executives - Delete an executive
 export async function DELETE(request: NextRequest) {
   try {
+    await ensureDatabaseInitialized();
     const user = await getAuthenticatedUser(request);
     if (!user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });

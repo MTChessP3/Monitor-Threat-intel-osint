@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, ensureDatabaseInitialized } from '@/lib/db';
 import { hashPassword, createToken, AUTH_COOKIE_NAME } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
+    // Ensure database is initialized on Vercel serverless
+    await ensureDatabaseInitialized();
+
     const body = await request.json();
     const { name, email, password } = body;
 
