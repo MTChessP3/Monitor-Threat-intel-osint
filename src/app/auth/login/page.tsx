@@ -54,6 +54,17 @@ function LoginForm() {
       }
 
       toast.success('Sesión iniciada correctamente');
+
+      // Cache the session data immediately so navigation doesn't lose it
+      try {
+        const { setCachedUser } = await import('@/lib/session-manager');
+        if (data.user) {
+          setCachedUser(data.user);
+        }
+      } catch {
+        // Non-critical: session will be fetched on next page load
+      }
+
       router.push('/');
     } catch {
       toast.error('Error de conexión');
@@ -85,6 +96,17 @@ function LoginForm() {
       }
 
       toast.success('Sesión iniciada correctamente');
+
+      // Cache the session data immediately so navigation doesn't lose it
+      try {
+        const { setCachedUser } = await import('@/lib/session-manager');
+        if (data.user) {
+          setCachedUser(data.user);
+        }
+      } catch {
+        // Non-critical: session will be fetched on next page load
+      }
+
       router.push('/');
     } catch {
       toast.error('Error de conexión');

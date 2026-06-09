@@ -128,24 +128,37 @@ export default function GenerarInformePage() {
   const [generatedReport, setGeneratedReport] = useState<any>(null);
   const [showResult, setShowResult] = useState(false);
 
-  // Check auth
+  // Check auth — resilient with caching and retry
   useEffect(() => {
-    const checkSession = async () => {
+    const initSession = async () => {
       try {
-        const res = await fetch('/api/auth/session');
-        if (res.ok) {
-          const data = await res.json();
-          setAuthUser(data.user);
+        const { checkSession: checkSess, clearCachedUser } = await import('@/lib/session-manager');
+        const user = await checkSess(2);
+        if (user) {
+          setAuthUser(user);
         } else {
+          clearCachedUser();
           window.location.href = '/auth/login';
         }
       } catch {
-        window.location.href = '/auth/login';
+        // Fallback: direct API call with 401-only redirect
+        try {
+          const res = await fetch('/api/auth/session');
+          if (res.ok) {
+            const data = await res.json();
+            setAuthUser(data.user);
+          } else if (res.status === 401) {
+            window.location.href = '/auth/login';
+          }
+          // Non-401 errors: don't redirect, keep user on page
+        } catch {
+          // Network error: don't redirect, might be temporary
+        }
       } finally {
         setAuthLoading(false);
       }
     };
-    checkSession();
+    initSession();
   }, []);
 
   // URL management

@@ -25,6 +25,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import GoogleDorkingPanel from '@/components/osint/GoogleDorkingPanel';
+import NextLink from 'next/link';
 
 // ============================================================================
 // Types
@@ -472,6 +473,7 @@ function exportAllAsTxt(
 export default function ProteccionEjecutivosPage() {
   const [executives, setExecutives] = useState<Executive[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedExecutive, setSelectedExecutive] = useState<Executive | null>(null);
   const [metasearchLoading, setMetasearchLoading] = useState(false);
@@ -507,6 +509,34 @@ export default function ProteccionEjecutivosPage() {
     identificationNum: '', fullName: '', email: '', phone: '',
     position: '', organization: '', riskLevel: 'bajo', notes: '',
   });
+
+  // Check auth — resilient with caching and retry
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        const { checkSession: checkSess, clearCachedUser } = await import('@/lib/session-manager');
+        const user = await checkSess(2);
+        if (!user) {
+          clearCachedUser();
+          window.location.href = '/auth/login';
+        }
+      } catch {
+        // Fallback: direct API call with 401-only redirect
+        try {
+          const res = await fetch('/api/auth/session');
+          if (res.status === 401) {
+            window.location.href = '/auth/login';
+          }
+          // Non-401 errors: don't redirect, middleware already validated the JWT
+        } catch {
+          // Network error: don't redirect, might be temporary
+        }
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    initSession();
+  }, []);
 
   // Fetch executives
   const fetchExecutives = useCallback(async () => {
@@ -706,6 +736,15 @@ export default function ProteccionEjecutivosPage() {
     }
   };
 
+  // Show auth loading state
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -721,9 +760,9 @@ export default function ProteccionEjecutivosPage() {
                 <p className="text-xs text-muted-foreground">Modulo OSINT v7.0 - Clasificacion Inteligente</p>
               </div>
             </div>
-            <a href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <NextLink href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               &larr; Dashboard
-            </a>
+            </NextLink>
           </div>
         </div>
       </header>

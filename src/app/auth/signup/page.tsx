@@ -49,6 +49,17 @@ export default function SignupPage() {
       }
 
       toast.success('Cuenta creada exitosamente');
+
+      // Cache the session data immediately so navigation doesn't lose it
+      try {
+        const { setCachedUser } = await import('@/lib/session-manager');
+        if (data.user) {
+          setCachedUser(data.user);
+        }
+      } catch {
+        // Non-critical: session will be fetched on next page load
+      }
+
       router.push('/auth/mfa-setup?new=1');
     } catch {
       toast.error('Error de conexión');

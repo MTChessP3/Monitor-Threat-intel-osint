@@ -4,7 +4,7 @@ import { verifyToken, AUTH_COOKIE_NAME } from '@/lib/auth';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow auth pages and API routes
+  // Allow auth pages and API routes (they handle their own auth)
   if (
     pathname.startsWith('/auth') ||
     pathname.startsWith('/api/auth') ||
@@ -19,13 +19,37 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
 
   if (!token) {
+    // For API routes, return 401 JSON response instead of redirecting
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: 'No autenticado', code: 'SESSION_EXPIRED' },
+        { status: 401 }
+      );
+    }
     return NextResponse.redirect(new URL('/auth/login', request.url));
   }
 
   // Verify token
   const payload = await verifyToken(token);
   if (!payload) {
-    // Clear invalid cookie and redirect
+    // For API routes, return 401 JSON response instead of redirecting
+    if (pathname.startsWith('/api/')) {
+      const response = NextResponse.json(
+        { error: 'Sesión expirada', code: 'SESSION_EXPIRED' },
+        { status: 401 }
+      );
+      // Also clear the invalid cookie
+      response.cookies.set(AUTH_COOKIE_NAME, '', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 0,
+        path: '/',
+      });
+      return response;
+    }
+
+    // For page requests, clear invalid cookie and redirect
     const response = NextResponse.redirect(new URL('/auth/login', request.url));
     response.cookies.set(AUTH_COOKIE_NAME, '', {
       httpOnly: true,
@@ -35,6 +59,15 @@ export async function middleware(request: NextRequest) {
       path: '/',
     });
     return response;
+  }
+
+  // Check if token has mfaPending flag — user hasn't completed MFA yet
+  if (payload && typeof payload === 'object' && 'mfaPending' in payload) {
+    // Allow API auth routes through so MFA verification can proceed
+    // For other routes, redirect to MFA verify page
+    if (!pathname.startsWith('/api/')) {
+      return NextResponse.redirect(new URL('/auth/mfa-verify', request.url));
+    }
   }
 
   return NextResponse.next();

@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
+import NextLink from 'next/link';
 
 // Types
 interface ReportTemplate {
@@ -125,29 +126,44 @@ export default function Home() {
   const [disableMfaLoading, setDisableMfaLoading] = useState(false);
   const [showDisableMfaDialog, setShowDisableMfaDialog] = useState(false);
 
-  // Check auth session
+  // Check auth session — resilient with caching and retry
   useEffect(() => {
-    const checkSession = async () => {
+    const initSession = async () => {
       try {
-        const res = await fetch('/api/auth/session');
-        if (res.ok) {
-          const data = await res.json();
-          setAuthUser(data.user);
+        const { checkSession: checkSess, clearCachedUser } = await import('@/lib/session-manager');
+        const user = await checkSess(2);
+        if (user) {
+          setAuthUser(user);
         } else {
+          clearCachedUser();
           window.location.href = '/auth/login';
         }
       } catch {
-        window.location.href = '/auth/login';
+        // Fallback: direct API call with 401-only redirect
+        try {
+          const res = await fetch('/api/auth/session');
+          if (res.ok) {
+            const data = await res.json();
+            setAuthUser(data.user);
+          } else if (res.status === 401) {
+            window.location.href = '/auth/login';
+          }
+          // Non-401 errors: don't redirect, keep user on page
+        } catch {
+          // Network error: don't redirect, might be temporary
+        }
       } finally {
         setAuthLoading(false);
       }
     };
-    checkSession();
+    initSession();
   }, []);
 
   // Logout handler
   const handleLogout = async () => {
     try {
+      const { clearCachedUser } = await import('@/lib/session-manager');
+      clearCachedUser();
       await fetch('/api/auth/logout', { method: 'POST' });
       window.location.href = '/auth/login';
     } catch {
@@ -1008,22 +1024,22 @@ export default function Home() {
             </button>
           ))}
           <Separator className="my-2" />
-          <a
+          <NextLink
             href="/proteccion-ejecutivos"
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15"
           >
             <Shield className="w-4 h-4" />
             Protección Ejecutivos
             <ChevronRight className="w-3 h-3 ml-auto" />
-          </a>
-          <a
+          </NextLink>
+          <NextLink
             href="/generar-informe"
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15"
           >
             <Zap className="w-4 h-4" />
             Generar Informe
             <ChevronRight className="w-3 h-3 ml-auto" />
-          </a>
+          </NextLink>
         </nav>
 
         <div className="p-4 border-t border-border space-y-3">
@@ -1113,22 +1129,22 @@ export default function Home() {
                   </button>
                 ))}
                 <Separator className="my-2" />
-                <a
+                <NextLink
                   href="/proteccion-ejecutivos"
                   onClick={() => setSidebarOpen(false)}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15"
                 >
                   <Shield className="w-4 h-4" />
                   Protección Ejecutivos
-                </a>
-                <a
+                </NextLink>
+                <NextLink
                   href="/generar-informe"
                   onClick={() => setSidebarOpen(false)}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15"
                 >
                   <Zap className="w-4 h-4" />
                   Generar Informe
-                </a>
+                </NextLink>
               </nav>
               {authUser && (
                 <div className="p-4 border-t border-border mt-auto space-y-3">
