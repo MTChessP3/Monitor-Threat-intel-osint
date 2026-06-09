@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import GoogleDorkingPanel from '@/components/osint/GoogleDorkingPanel';
 
 // ============================================================================
 // Types
@@ -492,6 +493,9 @@ export default function ProteccionEjecutivosPage() {
   const [extensionsExpanded, setExtensionsExpanded] = useState(false);
   const [expandedQueryGroup, setExpandedQueryGroup] = useState<number | null>(null);
 
+  // Google Dorking panel state
+  const [showDorkingPanel, setShowDorkingPanel] = useState(false);
+
   // Dialog states
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -758,12 +762,11 @@ export default function ProteccionEjecutivosPage() {
           </div>
           <div className="flex items-center gap-2">
             <Button
-              onClick={handleMetasearch}
-              disabled={!selectedExecutive || metasearchLoading}
-              className="bg-[#1a1a5e] hover:bg-[#252580] text-white font-medium gap-2 disabled:opacity-40"
-              title={selectedExecutive ? `Meta-Busqueda OSINT v7.0: ${selectedExecutive.fullName}` : 'Seleccione un ejecutivo primero'}
+              onClick={() => setShowDorkingPanel(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-2"
+              title={selectedExecutive ? `Google Dorking OSINT: ${selectedExecutive.fullName}` : 'Google Dorking OSINT'}
             >
-              {metasearchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              <Search className="w-4 h-4" />
               Meta-Busqueda OSINT
             </Button>
             <Button
@@ -776,7 +779,7 @@ export default function ProteccionEjecutivosPage() {
         </div>
 
         {/* Selection indicator */}
-        {selectedExecutive && (
+        {selectedExecutive && !showDorkingPanel && (
           <motion.div
             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20"
@@ -792,6 +795,21 @@ export default function ProteccionEjecutivosPage() {
             </button>
           </motion.div>
         )}
+
+        {/* Google Dorking OSINT Panel */}
+        <AnimatePresence>
+          {showDorkingPanel && (
+            <GoogleDorkingPanel
+              executiveTarget={selectedExecutive ? {
+                fullName: selectedExecutive.fullName,
+                email: selectedExecutive.email,
+                phone: selectedExecutive.phone,
+                organization: selectedExecutive.organization,
+              } : undefined}
+              onClose={() => setShowDorkingPanel(false)}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Executives Table */}
         <Card className="border-border bg-card/60 overflow-hidden">
