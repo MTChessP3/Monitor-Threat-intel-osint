@@ -23,6 +23,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import NextLink from 'next/link';
+import { ThemeSelector } from '@/components/ThemeSelector';
 
 // ============================================================================
 // TYPES
@@ -519,6 +520,7 @@ export default function GenerarInformePage() {
               <Shield className="w-3 h-3 mr-1" />
               Clasificado
             </Badge>
+            <ThemeSelector compact />
             <NextLink href="/">
               <Button variant="outline" size="sm" className="border-border hover:border-amber-500/30">
                 ← Volver al Panel

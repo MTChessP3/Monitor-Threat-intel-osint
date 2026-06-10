@@ -25,6 +25,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import GoogleDorkingPanel from '@/components/osint/GoogleDorkingPanel';
+import { ThemeSelector } from '@/components/ThemeSelector';
 import NextLink from 'next/link';
 
 // ============================================================================
@@ -760,9 +761,12 @@ export default function ProteccionEjecutivosPage() {
                 <p className="text-xs text-muted-foreground">Modulo OSINT v7.0 - Clasificacion Inteligente</p>
               </div>
             </div>
-            <NextLink href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              &larr; Dashboard
-            </NextLink>
+            <div className="flex items-center gap-3">
+              <NextLink href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                &larr; Dashboard
+              </NextLink>
+              <ThemeSelector compact />
+            </div>
           </div>
         </div>
       </header>

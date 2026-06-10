@@ -10,6 +10,7 @@ import {
   Upload, CheckSquare, Square, Filter, ListChecks, ToggleLeft, ToggleRight,
   LogOut, User as UserIcon, Lock, Smartphone
 } from 'lucide-react';
+import { ThemeSelector } from '@/components/ThemeSelector';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1042,6 +1043,10 @@ export default function Home() {
           </NextLink>
         </nav>
 
+        <div className="px-4 py-2 border-t border-border">
+          <ThemeSelector compact />
+        </div>
+
         <div className="p-4 border-t border-border space-y-3">
           {authUser && (
             <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
@@ -1146,6 +1151,9 @@ export default function Home() {
                   Generar Informe
                 </NextLink>
               </nav>
+              <div className="px-4 py-2 border-t border-border">
+                <ThemeSelector compact />
+              </div>
               {authUser && (
                 <div className="p-4 border-t border-border mt-auto space-y-3">
                   <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">

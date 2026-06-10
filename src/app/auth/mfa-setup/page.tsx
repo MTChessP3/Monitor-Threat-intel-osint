@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { ThemeSelector } from '@/components/ThemeSelector';
 
 function MfaSetupContent() {
   const router = useRouter();
@@ -85,6 +86,10 @@ function MfaSetupContent() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      {/* Theme selector in top-right corner */}
+      <div className="fixed top-4 right-4 z-50">
+        <ThemeSelector compact />
+      </div>
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}

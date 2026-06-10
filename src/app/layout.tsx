@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,18 +27,45 @@ export const metadata: Metadata = {
   },
 };
 
+/**
+ * Inline script to prevent theme flash on page load.
+ * Runs before React hydrates, reading from localStorage.
+ * Default theme is "dim" (midnight) for new users.
+ */
+const themeScript = `
+(function() {
+  try {
+    var theme = localStorage.getItem('actortrace-theme');
+    if (theme !== 'light' && theme !== 'dim' && theme !== 'dark') theme = 'dim';
+    var html = document.documentElement;
+    html.classList.remove('light', 'dim', 'dark');
+    html.classList.add(theme);
+    html.setAttribute('data-theme', theme);
+    var themeColor = theme === 'light' ? '#f8fafc' : theme === 'dim' ? '#15202b' : '#0a0a0a';
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', themeColor);
+  } catch(e) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className="dark" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <meta name="theme-color" content="#15202b" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        {children}
-        <Toaster richColors position="top-right" />
+        <ThemeProvider>
+          {children}
+          <Toaster richColors position="top-right" />
+        </ThemeProvider>
       </body>
     </html>
   );

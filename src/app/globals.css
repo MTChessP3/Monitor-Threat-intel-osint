@@ -1,7 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+/* Both .dim and .dark activate Tailwind's dark: variant */
+@custom-variant dark (&:is(.dark *, .dim *));
 
 @theme inline {
   --color-background: var(--background);
@@ -49,73 +50,145 @@
   --color-gold-dark: #d97706;
 }
 
+/* ============================================================
+   TEMA CLARO (Light Mode)
+   Fondo blanco/gris claro con texto oscuro.
+   Ideal para ambientes muy iluminados.
+   ============================================================ */
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #d97706;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #1e293b;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #1e293b;
+  --destructive: #ef4444;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #d97706;
+  --chart-1: #d97706;
+  --chart-2: #059669;
+  --chart-3: #2563eb;
+  --chart-4: #7c3aed;
+  --chart-5: #dc2626;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #d97706;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #1e293b;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #d97706;
+
+  /* Theme-specific scrollbar */
+  --scrollbar-track: #f1f5f9;
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
+
+  /* Gold glow intensity (less in light mode) */
+  --gold-glow: rgba(217, 119, 6, 0.06);
+  --gold-glow-hover: rgba(217, 119, 6, 0.12);
 }
 
-.dark {
-  --background: #0f172a;
-  --foreground: #e2e8f0;
-  --card: #1e293b;
-  --card-foreground: #e2e8f0;
-  --popover: #1e293b;
-  --popover-foreground: #e2e8f0;
+/* ============================================================
+   TEMA INTERMEDIO (Dim / Midnight Mode)
+   Fondo gris oscuro / azul noche desaturado.
+   Mitiga el impacto visual sin perder legibilidad.
+   ============================================================ */
+.dim {
+  --background: #15202b;
+  --foreground: #d1d9e6;
+  --card: #1e2d3d;
+  --card-foreground: #d1d9e6;
+  --popover: #1e2d3d;
+  --popover-foreground: #d1d9e6;
   --primary: #f59e0b;
-  --primary-foreground: #0f172a;
-  --secondary: #334155;
-  --secondary-foreground: #e2e8f0;
-  --muted: #334155;
-  --muted-foreground: #94a3b8;
-  --accent: #334155;
-  --accent-foreground: #e2e8f0;
+  --primary-foreground: #15202b;
+  --secondary: #2a3a4a;
+  --secondary-foreground: #d1d9e6;
+  --muted: #2a3a4a;
+  --muted-foreground: #8899aa;
+  --accent: #2a3a4a;
+  --accent-foreground: #d1d9e6;
   --destructive: #ef4444;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.15);
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
   --ring: #f59e0b;
   --chart-1: #f59e0b;
   --chart-2: #10b981;
   --chart-3: #3b82f6;
   --chart-4: #8b5cf6;
   --chart-5: #ef4444;
-  --sidebar: #0f172a;
-  --sidebar-foreground: #e2e8f0;
+  --sidebar: #111b27;
+  --sidebar-foreground: #d1d9e6;
   --sidebar-primary: #f59e0b;
-  --sidebar-primary-foreground: #0f172a;
-  --sidebar-accent: #1e293b;
-  --sidebar-accent-foreground: #e2e8f0;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-primary-foreground: #111b27;
+  --sidebar-accent: #1e2d3d;
+  --sidebar-accent-foreground: #d1d9e6;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #f59e0b;
+
+  --scrollbar-track: #1e2d3d;
+  --scrollbar-thumb: #3a4a5a;
+  --scrollbar-thumb-hover: #4a5a6a;
+
+  --gold-glow: rgba(245, 158, 11, 0.05);
+  --gold-glow-hover: rgba(245, 158, 11, 0.10);
+}
+
+/* ============================================================
+   TEMA OSCURO (Dark / High Contrast Mode)
+   Fondo negro casi absoluto con texto claro.
+   Ideal para pantallas OLED o entornos de nula iluminación.
+   ============================================================ */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #e5e7eb;
+  --card: #141414;
+  --card-foreground: #e5e7eb;
+  --popover: #141414;
+  --popover-foreground: #e5e7eb;
+  --primary: #fbbf24;
+  --primary-foreground: #0a0a0a;
+  --secondary: #1f1f1f;
+  --secondary-foreground: #e5e7eb;
+  --muted: #1f1f1f;
+  --muted-foreground: #9ca3af;
+  --accent: #1f1f1f;
+  --accent-foreground: #e5e7eb;
+  --destructive: #f87171;
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.10);
+  --ring: #fbbf24;
+  --chart-1: #fbbf24;
+  --chart-2: #34d399;
+  --chart-3: #60a5fa;
+  --chart-4: #a78bfa;
+  --chart-5: #f87171;
+  --sidebar: #0a0a0a;
+  --sidebar-foreground: #e5e7eb;
+  --sidebar-primary: #fbbf24;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #141414;
+  --sidebar-accent-foreground: #e5e7eb;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #fbbf24;
+
+  --scrollbar-track: #141414;
+  --scrollbar-thumb: #2a2a2a;
+  --scrollbar-thumb-hover: #3a3a3a;
+
+  --gold-glow: rgba(251, 191, 36, 0.08);
+  --gold-glow-hover: rgba(251, 191, 36, 0.16);
 }
 
 @layer base {
@@ -127,45 +200,45 @@
   }
 }
 
-/* Custom scrollbar */
+/* Theme-aware custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1e293b;
+  background: var(--scrollbar-track);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Executive gold gradient */
 .gold-gradient {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: linear-gradient(135deg, var(--primary), var(--gold-dark, #d97706));
 }
 
 .gold-text {
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  background: linear-gradient(135deg, var(--gold-light, #fbbf24), var(--primary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* Subtle card glow */
+/* Subtle card glow (theme-aware) */
 .card-glow {
-  box-shadow: 0 0 20px rgba(245, 158, 11, 0.05);
+  box-shadow: 0 0 20px var(--gold-glow);
 }
 
 .card-glow:hover {
-  box-shadow: 0 0 30px rgba(245, 158, 11, 0.1);
+  box-shadow: 0 0 30px var(--gold-glow-hover);
 }
 
 /* Pulse animation for threat indicators */
@@ -176,4 +249,17 @@
 
 .threat-pulse {
   animation: threat-pulse 2s ease-in-out infinite;
+}
+
+/* Theme transition — smooth color changes */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 0.3s ease,
+              color 0.3s ease,
+              border-color 0.3s ease,
+              box-shadow 0.3s ease,
+              fill 0.3s ease,
+              stroke 0.3s ease !important;
 }
