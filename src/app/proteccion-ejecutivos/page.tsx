@@ -133,7 +133,7 @@ interface MetasearchResponse {
 function RiskBadge({ level }: { level: string }) {
   const config: Record<string, { color: string; bg: string; label: string }> = {
     bajo: { color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', label: 'BAJO' },
-    medio: { color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20', label: 'MEDIO' },
+    medio: { color: 'text-yellow-500', bg: 'bg-yellow-600/15 border-yellow-600/20', label: 'MEDIO' },
     alto: { color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20', label: 'ALTO' },
     critico: { color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20', label: 'CRITICO' },
   };
@@ -154,7 +154,7 @@ function ClassificationIcon({ classification, size = 4 }: { classification: stri
     case 'validated':
       return <CheckCircle2 className={`${sizeClass} text-emerald-400`} />;
     case 'potential':
-      return <AlertTriangle className={`${sizeClass} text-amber-400`} />;
+      return <AlertTriangle className={`${sizeClass} text-primary`} />;
     case 'discarded':
       return <XCircle className={`${sizeClass} text-red-400`} />;
     default:
@@ -198,7 +198,7 @@ function exportResultAsJson(result: MetasearchResult, execName: string) {
     metadata: {
       exportedAt: new Date().toISOString(),
       executiveName: execName,
-      agent: 'ActorTrace OSINT v7.0',
+      agent: 'VIP-Intelligence OSINT v7.0',
     },
     result: {
       title: result.title,
@@ -231,7 +231,7 @@ function exportResultAsJson(result: MetasearchResult, execName: string) {
 function exportResultAsTxt(result: MetasearchResult, execName: string) {
   const lines = [
     `================================================================================`,
-    `  ACTORTRACE OSINT v7.0 - REPORTE DE RESULTADO INDIVIDUAL`,
+    `  VIP-INTELLIGENCE OSINT v7.0 - REPORTE DE RESULTADO INDIVIDUAL`,
     `================================================================================`,
     ``,
     `EJECUTIVO: ${execName}`,
@@ -276,7 +276,7 @@ function exportTabAsJson(results: MetasearchResult[], tabName: string, response:
   const payload = {
     metadata: {
       exportedAt: new Date().toISOString(),
-      agent: 'ActorTrace OSINT v7.0',
+      agent: 'VIP-Intelligence OSINT v7.0',
       tab: tabName,
       searchEngine: response.searchEngine,
       enginesUsed: response.enginesUsed,
@@ -298,7 +298,7 @@ function exportTabAsJson(results: MetasearchResult[], tabName: string, response:
 function exportTabAsTxt(results: MetasearchResult[], tabName: string, response: MetasearchResponse) {
   const lines = [
     `================================================================================`,
-    `  ACTORTRACE OSINT v7.0 - REPORTE DE RESULTADOS ${tabName.toUpperCase()}`,
+    `  VIP-INTELLIGENCE OSINT v7.0 - REPORTE DE RESULTADOS ${tabName.toUpperCase()}`,
     `================================================================================`,
     ``,
     `Fecha:           ${new Date().toISOString()}`,
@@ -356,7 +356,7 @@ function exportAllAsJson(
   const payload = {
     metadata: {
       exportedAt: new Date().toISOString(),
-      agent: 'ActorTrace OSINT v7.0',
+      agent: 'VIP-Intelligence OSINT v7.0',
       searchEngine: response.searchEngine,
       enginesUsed: response.enginesUsed,
       elapsedSeconds: response.elapsedSeconds,
@@ -397,7 +397,7 @@ function exportAllAsTxt(
   const allResults = [...localValidated, ...localPotential, ...localDiscarded];
   const lines = [
     `================================================================================`,
-    `  ACTORTRACE OSINT v7.0 - REPORTE COMPLETO DE METABUSQUEDA`,
+    `  VIP-INTELLIGENCE OSINT v7.0 - REPORTE COMPLETO DE METABUSQUEDA`,
     `================================================================================`,
     ``,
     `Fecha:           ${new Date().toISOString()}`,
@@ -741,7 +741,7 @@ export default function ProteccionEjecutivosPage() {
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -753,7 +753,7 @@ export default function ProteccionEjecutivosPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
                 <Shield className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -814,7 +814,7 @@ export default function ProteccionEjecutivosPage() {
             </Button>
             <Button
               onClick={() => { resetForm(); setShowCreateDialog(true); }}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-medium gap-2"
+              className="bg-primary hover:bg-primary/90 text-white font-medium gap-2"
             >
               <Plus className="w-4 h-4" /> Nuevo Ejecutivo
             </Button>
@@ -825,15 +825,15 @@ export default function ProteccionEjecutivosPage() {
         {selectedExecutive && !showDorkingPanel && (
           <motion.div
             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20"
+            className="flex items-center gap-3 p-3 rounded-lg bg-primary/8 border border-primary/12"
           >
-            <UserCheck className="w-4 h-4 text-amber-500" />
-            <span className="text-sm text-amber-400">
+            <UserCheck className="w-4 h-4 text-primary" />
+            <span className="text-sm text-primary">
               Seleccionado: <strong>{selectedExecutive.fullName}</strong>
               {selectedExecutive.position && ` - ${selectedExecutive.position}`}
               {selectedExecutive.organization && ` - ${selectedExecutive.organization}`}
             </span>
-            <button onClick={() => { setSelectedExecutive(null); setShowResults(false); }} className="ml-auto text-amber-400 hover:text-amber-300">
+            <button onClick={() => { setSelectedExecutive(null); setShowResults(false); }} className="ml-auto text-primary hover:text-primary/80">
               <X className="w-4 h-4" />
             </button>
           </motion.div>
@@ -865,7 +865,7 @@ export default function ProteccionEjecutivosPage() {
           <CardContent className="p-0">
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
                 <span className="ml-2 text-muted-foreground">Cargando ejecutivos...</span>
               </div>
             ) : executives.length === 0 ? (
@@ -893,13 +893,13 @@ export default function ProteccionEjecutivosPage() {
                       <TableRow
                         key={exec.id}
                         className={`border-border cursor-pointer transition-colors ${
-                          selectedExecutive?.id === exec.id ? 'bg-amber-500/10 border-amber-500/30' : 'hover:bg-muted/30'
+                          selectedExecutive?.id === exec.id ? 'bg-primary/8 border-primary/15' : 'hover:bg-muted/30'
                         }`}
                         onClick={() => handleSelectExecutive(exec)}
                       >
                         <TableCell className="py-3">
                           <div className={`w-3 h-3 rounded-full border-2 ${
-                            selectedExecutive?.id === exec.id ? 'bg-amber-500 border-amber-500' : 'border-muted-foreground/30'
+                            selectedExecutive?.id === exec.id ? 'bg-primary border-primary' : 'border-muted-foreground/30'
                           }`} />
                         </TableCell>
                         <TableCell className="py-3"><span className="text-xs font-mono text-muted-foreground">{exec.identificationNum}</span></TableCell>
@@ -920,7 +920,7 @@ export default function ProteccionEjecutivosPage() {
                         <TableCell className="py-3">
                           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setSelectedExecutive(exec); setShowDetailDialog(true); }}><Eye className="w-3.5 h-3.5" /></Button>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-amber-500" onClick={() => openEditDialog(exec)}><Edit3 className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" onClick={() => openEditDialog(exec)}><Edit3 className="w-3.5 h-3.5" /></Button>
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500" onClick={() => { setSelectedExecutive(exec); setShowDeleteDialog(true); }}><Trash2 className="w-3.5 h-3.5" /></Button>
                           </div>
                         </TableCell>
@@ -942,7 +942,7 @@ export default function ProteccionEjecutivosPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="text-base text-foreground flex items-center gap-2">
-                        <Globe className="w-4 h-4 text-amber-500" />
+                        <Globe className="w-4 h-4 text-primary" />
                         Resultados de Meta-Busqueda OSINT v7.0
                       </CardTitle>
                       {metasearchResults && (
@@ -982,14 +982,14 @@ export default function ProteccionEjecutivosPage() {
                 <CardContent>
                   {metasearchLoading ? (
                     <div className="flex flex-col items-center justify-center py-12">
-                      <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-3" />
+                      <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
                       <p className="text-sm text-muted-foreground">Ejecutando Meta-Busqueda OSINT v7.0...</p>
                       <p className="text-xs text-muted-foreground mt-1">
                         Consultando: &quot;{selectedExecutive?.fullName}&quot; en ZAI Web Search + Dorking OSINT (40+ extensiones)
                       </p>
-                      <p className="text-xs text-amber-400 mt-2">Clasificacion Inteligente de 3 niveles activada</p>
+                      <p className="text-xs text-primary mt-2">Clasificacion Inteligente de 3 niveles activada</p>
                       {searchProgress && (
-                        <p className="text-xs text-amber-400 mt-1">{searchProgress}</p>
+                        <p className="text-xs text-primary mt-1">{searchProgress}</p>
                       )}
                     </div>
                   ) : metasearchResults ? (
@@ -1027,7 +1027,7 @@ export default function ProteccionEjecutivosPage() {
                                   ) : engine.status === 'failed' ? (
                                     <XCircle className="w-3 h-3 text-red-400" />
                                   ) : (
-                                    <AlertTriangle className="w-3 h-3 text-amber-400" />
+                                    <AlertTriangle className="w-3 h-3 text-primary" />
                                   )}
                                   <span className="text-foreground/80">{engine.name}</span>
                                   <span className="text-muted-foreground">({engine.resultsFound})</span>
@@ -1057,7 +1057,7 @@ export default function ProteccionEjecutivosPage() {
                                           ) : engine.status === 'failed' ? (
                                             <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
                                           ) : (
-                                            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                                            <AlertTriangle className="w-4 h-4 text-primary flex-shrink-0" />
                                           )}
                                           <div className="flex-1 min-w-0">
                                             <p className="text-xs font-medium text-foreground">{engine.name}</p>
@@ -1083,7 +1083,7 @@ export default function ProteccionEjecutivosPage() {
                                           const blockColors: Record<string, string> = {
                                             name: 'border-blue-500/30 text-blue-400',
                                             email: 'border-purple-500/30 text-purple-400',
-                                            id: 'border-amber-500/30 text-amber-400',
+                                            id: 'border-primary/15 text-primary',
                                             extension: 'border-green-500/30 text-green-400',
                                             combined: 'border-red-500/30 text-red-400',
                                             custom: 'border-cyan-500/30 text-cyan-400',
@@ -1144,18 +1144,18 @@ export default function ProteccionEjecutivosPage() {
                         {/* ============================================
                             CLASIFICACION INTELIGENTE - EXPANDABLE v7.0
                             ============================================ */}
-                        <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 overflow-hidden">
+                        <div className="rounded-lg bg-primary/5 border border-primary/12 overflow-hidden">
                           <button
                             onClick={() => setClassificationExpanded(!classificationExpanded)}
-                            className="w-full p-3 flex items-center gap-2 hover:bg-amber-500/5 transition-colors"
+                            className="w-full p-3 flex items-center gap-2 hover:bg-primary/5 transition-colors"
                           >
-                            <Shield className="w-3.5 h-3.5 text-amber-400" />
-                            <p className="text-[10px] font-medium text-amber-400">Clasificacion Inteligente v7.0</p>
+                            <Shield className="w-3.5 h-3.5 text-primary" />
+                            <p className="text-[10px] font-medium text-primary">Clasificacion Inteligente v7.0</p>
                             <span className="ml-auto flex items-center gap-1">
-                              <span className="text-[9px] text-amber-400/60">
+                              <span className="text-[9px] text-primary/60">
                                 {localValidated.length + localPotential.length + localDiscarded.length} total
                               </span>
-                              {classificationExpanded ? <ChevronUp className="w-3.5 h-3.5 text-amber-400/60" /> : <ChevronDown className="w-3.5 h-3.5 text-amber-400/60" />}
+                              {classificationExpanded ? <ChevronUp className="w-3.5 h-3.5 text-primary/60" /> : <ChevronDown className="w-3.5 h-3.5 text-primary/60" />}
                             </span>
                           </button>
 
@@ -1179,12 +1179,12 @@ export default function ProteccionEjecutivosPage() {
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); setActiveResultTab('potential'); setResultFilter('all'); setClassificationExpanded(true); }}
-                                className={`rounded p-1.5 transition-all relative group ${activeResultTab === 'potential' ? 'bg-amber-500/15 ring-1 ring-amber-500/40' : 'hover:bg-amber-500/10'}`}
+                                className={`rounded p-1.5 transition-all relative group ${activeResultTab === 'potential' ? 'bg-primary/12 ring-1 ring-primary/30' : 'hover:bg-primary/8'}`}
                                 title={`${localPotential.length} resultados potenciales`}
                               >
                                 <div className="flex items-center justify-center gap-1">
-                                  <AlertTriangle className="w-3 h-3 text-amber-400" />
-                                  <p className="text-sm font-bold text-amber-400">{localPotential.length}</p>
+                                  <AlertTriangle className="w-3 h-3 text-primary" />
+                                  <p className="text-sm font-bold text-primary">{localPotential.length}</p>
                                 </div>
                                 <p className="text-[9px] text-muted-foreground">Potenciales</p>
                                 {/* Tooltip */}
@@ -1230,14 +1230,14 @@ export default function ProteccionEjecutivosPage() {
                                     const dPct = 100 - vPct - pPct;
                                     return (
                                       <div>
-                                        <p className="text-[10px] font-medium text-amber-400 mb-1.5">Desglose de Clasificacion</p>
+                                        <p className="text-[10px] font-medium text-primary mb-1.5">Desglose de Clasificacion</p>
                                         {/* Stacked bar */}
                                         <div className="flex h-3 rounded-full overflow-hidden bg-muted/30">
                                           {localValidated.length > 0 && (
                                             <div className="bg-emerald-500/70 transition-all" style={{ width: `${vPct}%` }} title={`${localValidated.length} validados (${vPct}%)`} />
                                           )}
                                           {localPotential.length > 0 && (
-                                            <div className="bg-amber-500/70 transition-all" style={{ width: `${pPct}%` }} title={`${localPotential.length} potenciales (${pPct}%)`} />
+                                            <div className="bg-primary/70 transition-all" style={{ width: `${pPct}%` }} title={`${localPotential.length} potenciales (${pPct}%)`} />
                                           )}
                                           {localDiscarded.length > 0 && (
                                             <div className="bg-red-500/70 transition-all" style={{ width: `${dPct}%` }} title={`${localDiscarded.length} descartados (${dPct}%)`} />
@@ -1250,8 +1250,8 @@ export default function ProteccionEjecutivosPage() {
                                             <span className="text-[9px] text-emerald-400">Validados: {localValidated.length} ({vPct}%)</span>
                                           </div>
                                           <div className="flex items-center gap-1">
-                                            <div className="w-2 h-2 rounded-full bg-amber-500/70" />
-                                            <span className="text-[9px] text-amber-400">Potenciales: {localPotential.length} ({pPct}%)</span>
+                                            <div className="w-2 h-2 rounded-full bg-primary/70" />
+                                            <span className="text-[9px] text-primary">Potenciales: {localPotential.length} ({pPct}%)</span>
                                           </div>
                                           <div className="flex items-center gap-1">
                                             <div className="w-2 h-2 rounded-full bg-red-500/70" />
@@ -1277,8 +1277,8 @@ export default function ProteccionEjecutivosPage() {
                                     return (
                                       <div className="p-2 rounded bg-card/50 border border-border">
                                         <div className="flex items-center gap-1.5 mb-1">
-                                          <Shield className="w-3 h-3 text-amber-400" />
-                                          <p className="text-[10px] font-medium text-amber-400">Resumen de Clasificacion</p>
+                                          <Shield className="w-3 h-3 text-primary" />
+                                          <p className="text-[10px] font-medium text-primary">Resumen de Clasificacion</p>
                                         </div>
                                         <p className="text-[9px] text-foreground/80 leading-relaxed">{summaryText}</p>
                                       </div>
@@ -1290,12 +1290,12 @@ export default function ProteccionEjecutivosPage() {
                                     const results = getResultsForClass(cls);
                                     const colorMap: Record<string, string> = {
                                       validated: 'text-emerald-400 border-emerald-500/20',
-                                      potential: 'text-amber-400 border-amber-500/20',
+                                      potential: 'text-primary border-primary/12',
                                       discarded: 'text-red-400 border-red-500/20',
                                     };
                                     const iconMap: Record<string, React.ReactNode> = {
                                       validated: <CheckCircle2 className="w-3 h-3 text-emerald-400" />,
-                                      potential: <AlertTriangle className="w-3 h-3 text-amber-400" />,
+                                      potential: <AlertTriangle className="w-3 h-3 text-primary" />,
                                       discarded: <XCircle className="w-3 h-3 text-red-400" />,
                                     };
                                     const labelMap: Record<string, string> = {
@@ -1326,7 +1326,7 @@ export default function ProteccionEjecutivosPage() {
                                                 <span className="text-muted-foreground font-mono flex-shrink-0">#{r.position}</span>
                                                 <span className="text-foreground/80 truncate">{r.title}</span>
                                                 {r.fileType && r.fileType !== 'html' && (
-                                                  <span className="text-amber-400 flex-shrink-0">.{r.fileType}</span>
+                                                  <span className="text-primary flex-shrink-0">.{r.fileType}</span>
                                                 )}
                                                 {r.sourceDomain && (
                                                   <span className="text-muted-foreground/60 flex-shrink-0 ml-auto">{r.sourceDomain}</span>
@@ -1336,7 +1336,7 @@ export default function ProteccionEjecutivosPage() {
                                             {results.length > 5 && (
                                               <button
                                                 onClick={() => setActiveResultTab(cls)}
-                                                className="text-[8px] text-amber-400/70 hover:text-amber-400 italic pl-1"
+                                                className="text-[8px] text-primary/70 hover:text-primary italic pl-1"
                                               >
                                                 +{results.length - 5} resultados mas...
                                               </button>
@@ -1419,10 +1419,10 @@ export default function ProteccionEjecutivosPage() {
                       )}
 
                       {/* AI Analysis - ALWAYS SHOW v7.0 */}
-                      <div className="mb-4 p-4 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                      <div className="mb-4 p-4 rounded-lg bg-primary/5 border border-primary/12">
                         <div className="flex items-center gap-2 mb-3">
-                          <Shield className="w-4 h-4 text-amber-400" />
-                          <p className="text-xs font-semibold text-amber-400">Analisis de Inteligencia OSINT - IA</p>
+                          <Shield className="w-4 h-4 text-primary" />
+                          <p className="text-xs font-semibold text-primary">Analisis de Inteligencia OSINT - IA</p>
                         </div>
                         <div className="text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed">
                           {metasearchResults.aiAnalysis || 'Sin resultados para analizar. Intente ampliar los criterios de busqueda.'}
@@ -1465,7 +1465,7 @@ export default function ProteccionEjecutivosPage() {
                             const isActive = activeResultTab === tab.key;
                             const colorMap: Record<string, string> = {
                               emerald: isActive ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10' : 'border-border text-muted-foreground hover:text-emerald-400',
-                              amber: isActive ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' : 'border-border text-muted-foreground hover:text-amber-400',
+                              amber: isActive ? 'border-primary/30 text-primary bg-primary/8' : 'border-border text-muted-foreground hover:text-primary',
                               red: isActive ? 'border-red-500/40 text-red-400 bg-red-500/10' : 'border-border text-muted-foreground hover:text-red-400',
                             };
                             return (
@@ -1524,7 +1524,7 @@ export default function ProteccionEjecutivosPage() {
                                 onClick={() => setResultFilter(tab.key)}
                                 className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
                                   resultFilter === tab.key
-                                    ? 'border-amber-500/40 text-amber-400 bg-amber-500/10'
+                                    ? 'border-primary/30 text-primary bg-primary/8'
                                     : 'border-border text-muted-foreground hover:text-foreground'
                                 }`}
                               >
@@ -1547,7 +1547,7 @@ export default function ProteccionEjecutivosPage() {
                             </p>
                             {/* Suggest other tabs with results */}
                             {activeResultTab === 'validated' && localPotential.length > 0 && (
-                              <button onClick={() => setActiveResultTab('potential')} className="mt-2 text-xs text-amber-400 hover:text-amber-300 underline">
+                              <button onClick={() => setActiveResultTab('potential')} className="mt-2 text-xs text-primary hover:text-primary/80 underline">
                                 Ver {localPotential.length} resultados potenciales
                               </button>
                             )}
@@ -1562,7 +1562,7 @@ export default function ProteccionEjecutivosPage() {
                               </button>
                             )}
                             {activeResultTab === 'discarded' && (localValidated.length + localPotential.length) > 0 && (
-                              <button onClick={() => setActiveResultTab(localValidated.length > 0 ? 'validated' : 'potential')} className="mt-2 text-xs text-amber-400 hover:text-amber-300 underline">
+                              <button onClick={() => setActiveResultTab(localValidated.length > 0 ? 'validated' : 'potential')} className="mt-2 text-xs text-primary hover:text-primary/80 underline">
                                 Ver {localValidated.length + localPotential.length} resultados activos
                               </button>
                             )}
@@ -1573,7 +1573,7 @@ export default function ProteccionEjecutivosPage() {
                               const isExpanded = expandedResult === result.url;
                               const classificationBorderMap: Record<string, string> = {
                                 validated: 'border-emerald-500/20 bg-emerald-500/5',
-                                potential: 'border-amber-500/20 bg-amber-500/5',
+                                potential: 'border-primary/12 bg-primary/5',
                                 discarded: 'border-red-500/20 bg-red-500/5',
                               };
                               const borderClass = classificationBorderMap[result.classification || 'validated'] || classificationBorderMap.validated;
@@ -1604,7 +1604,7 @@ export default function ProteccionEjecutivosPage() {
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             onClick={(e) => e.stopPropagation()}
-                                            className="text-sm font-medium text-amber-500 hover:text-amber-400 hover:underline truncate max-w-[75%]"
+                                            className="text-sm font-medium text-primary hover:text-primary hover:underline truncate max-w-[75%]"
                                           >
                                             {result.title}
                                           </a>
@@ -1634,7 +1634,7 @@ export default function ProteccionEjecutivosPage() {
 
                                           {/* File Type Badge */}
                                           {result.fileType && result.fileType !== 'html' && (
-                                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-amber-500/30 text-amber-400">
+                                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/15 text-primary">
                                               .{result.fileType}
                                             </Badge>
                                           )}
@@ -1694,7 +1694,7 @@ export default function ProteccionEjecutivosPage() {
                                               <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="text-[9px] h-5 px-2 gap-0.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                                                className="text-[9px] h-5 px-2 gap-0.5 border-primary/15 text-primary hover:bg-primary/8"
                                                 onClick={() => demoteToPotential(result)}
                                               >
                                                 <ArrowDownCircle className="w-3 h-3" /> Reclasificar Potencial
@@ -1740,8 +1740,8 @@ export default function ProteccionEjecutivosPage() {
                                             {/* Publication Date */}
                                             <div className="p-2 rounded bg-card/50 border border-border">
                                               <div className="flex items-center gap-1.5 mb-1">
-                                                <Calendar className="w-3 h-3 text-amber-400" />
-                                                <p className="text-[10px] font-medium text-amber-400">Fecha Publicacion</p>
+                                                <Calendar className="w-3 h-3 text-primary" />
+                                                <p className="text-[10px] font-medium text-primary">Fecha Publicacion</p>
                                               </div>
                                               <p className="text-xs text-foreground">{result.publicationDate || 'No disponible'}</p>
                                             </div>
@@ -1858,7 +1858,7 @@ export default function ProteccionEjecutivosPage() {
             {selectedExecutive && (
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center"><Shield className="w-6 h-6 text-amber-500" /></div>
+                  <div className="w-12 h-12 rounded-full bg-primary/8 flex items-center justify-center"><Shield className="w-6 h-6 text-primary" /></div>
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">{selectedExecutive.fullName}</h3>
                     <RiskBadge level={selectedExecutive.riskLevel} />
@@ -1911,7 +1911,7 @@ export default function ProteccionEjecutivosPage() {
             </div>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setShowCreateDialog(false)} className="text-muted-foreground">Cancelar</Button>
-              <Button onClick={handleCreate} disabled={!formData.fullName || !formData.identificationNum} className="bg-amber-600 hover:bg-amber-700 text-white gap-2">
+              <Button onClick={handleCreate} disabled={!formData.fullName || !formData.identificationNum} className="bg-primary hover:bg-primary/90 text-white gap-2">
                 <Save className="w-4 h-4" /> Crear Ejecutivo
               </Button>
             </DialogFooter>
@@ -1944,7 +1944,7 @@ export default function ProteccionEjecutivosPage() {
             </div>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setShowEditDialog(false)} className="text-muted-foreground">Cancelar</Button>
-              <Button onClick={handleUpdate} disabled={!formData.fullName || !formData.identificationNum} className="bg-amber-600 hover:bg-amber-700 text-white gap-2">
+              <Button onClick={handleUpdate} disabled={!formData.fullName || !formData.identificationNum} className="bg-primary hover:bg-primary/90 text-white gap-2">
                 <Save className="w-4 h-4" /> Guardar Cambios
               </Button>
             </DialogFooter>

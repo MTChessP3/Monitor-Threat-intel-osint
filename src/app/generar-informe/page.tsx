@@ -50,7 +50,7 @@ interface UploadedFile {
 const ABUSE_TYPES = [
   { id: 'phishing', label: 'Phishing', icon: '🎣', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
   { id: 'identity_theft', label: 'Suplantación de Identidad', icon: '🎭', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-  { id: 'financial_fraud', label: 'Fraude Financiero', icon: '💰', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  { id: 'financial_fraud', label: 'Fraude Financiero', icon: '💰', color: 'bg-primary/12 text-primary border-primary/15' },
   { id: 'social_media_scam', label: 'Estafas en Redes Sociales', icon: '📱', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
   { id: 'brand_abuse', label: 'Abuso de Marca', icon: '🏷️', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
   { id: 'malware', label: 'Malware', icon: '🦠', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
@@ -64,14 +64,14 @@ const ABUSE_TYPES = [
 
 const SEVERITY_LEVELS = [
   { id: 'bajo', label: 'Bajo', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', dot: 'bg-emerald-500' },
-  { id: 'medio', label: 'Medio', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', dot: 'bg-amber-500' },
+  { id: 'medio', label: 'Medio', color: 'bg-primary/12 text-primary border-primary/15', dot: 'bg-primary' },
   { id: 'alto', label: 'Alto', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', dot: 'bg-orange-500' },
   { id: 'critico', label: 'Crítico', color: 'bg-red-500/20 text-red-400 border-red-500/30', dot: 'bg-red-500' },
 ];
 
 const TLP_LEVELS = [
   { id: 'RED', label: 'TLP:RED', description: 'Solo destinatarios específicos. No redistribuir.', color: 'bg-red-600 text-white border-red-600', ring: 'ring-red-600' },
-  { id: 'AMBER', label: 'TLP:AMBER', description: 'Uso limitado dentro de la organización.', color: 'bg-amber-500 text-white border-amber-500', ring: 'ring-amber-500' },
+  { id: 'AMBER', label: 'TLP:AMBER', description: 'Uso limitado dentro de la organización.', color: 'bg-primary text-white border-primary', ring: 'ring-primary' },
   { id: 'GREEN', label: 'TLP:GREEN', description: 'Comunidad de interés. Compartir con pares.', color: 'bg-emerald-500 text-white border-emerald-500', ring: 'ring-emerald-500' },
   { id: 'CLEAR', label: 'TLP:CLEAR', description: 'Información pública. Sin restricciones.', color: 'bg-gray-200 text-gray-800 border-gray-300', ring: 'ring-gray-300' },
 ];
@@ -479,7 +479,7 @@ export default function GenerarInformePage() {
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -502,11 +502,11 @@ export default function GenerarInformePage() {
           <div className="flex items-center gap-4">
             <NextLink href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
               <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center">
-                <img src="/favicon-64x64.png" alt="ActorTrace" className="w-10 h-10" />
+                <img src="/favicon-64x64.png" alt="VIP-Intelligence" className="w-10 h-10" />
               </div>
               <div>
-                <h1 className="text-sm font-bold text-foreground tracking-wide">ActorTrace</h1>
-                <p className="text-xs text-amber-500 font-medium">Inteligencia VIP</p>
+                <h1 className="text-sm font-bold text-foreground tracking-wide">VIP-Intelligence</h1>
+                <p className="text-xs text-primary font-medium">Protección Digital de Ejecutivos</p>
               </div>
             </NextLink>
             <Separator orientation="vertical" className="h-8 hidden sm:block" />
@@ -516,13 +516,13 @@ export default function GenerarInformePage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20">
+            <Badge variant="outline" className="text-xs bg-primary/8 text-primary border-primary/12">
               <Shield className="w-3 h-3 mr-1" />
               Clasificado
             </Badge>
             <ThemeSelector compact />
             <NextLink href="/">
-              <Button variant="outline" size="sm" className="border-border hover:border-amber-500/30">
+              <Button variant="outline" size="sm" className="border-border hover:border-primary/15">
                 ← Volver al Panel
               </Button>
             </NextLink>
@@ -538,14 +538,14 @@ export default function GenerarInformePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.15 }}
               className="space-y-6"
             >
               {/* ====== SECTION 1: DATA INGESTION - FILES ====== */}
-              <Card className="border-border bg-card/80 border-amber-500/20">
+              <Card className="border-border bg-card/80 border-primary/12">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
-                    <FileUp className="w-5 h-5 text-amber-500" />
+                    <FileUp className="w-5 h-5 text-primary" />
                     Cargar Datos para el Agente de IA
                   </CardTitle>
                   <CardDescription>
@@ -560,7 +560,7 @@ export default function GenerarInformePage() {
                       placeholder="Ej: Informe de Inteligencia - Amenazas Q2 2026"
                       value={reportTitle}
                       onChange={(e) => setReportTitle(e.target.value)}
-                      className="bg-muted/30 border-border focus:border-amber-500/50"
+                      className="bg-muted/30 border-border focus:border-primary/50"
                     />
                   </div>
 
@@ -577,18 +577,18 @@ export default function GenerarInformePage() {
                       onClick={() => fileInputRef.current?.click()}
                       className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 ${
                         isDragOver
-                          ? 'border-amber-500 bg-amber-500/10 scale-[1.01]'
-                          : 'border-border bg-muted/10 hover:border-amber-500/50 hover:bg-amber-500/5'
+                          ? 'border-primary bg-primary/8 scale-[1.01]'
+                          : 'border-border bg-muted/10 hover:border-primary/50 hover:bg-primary/5'
                       }`}
                     >
                       <div className="flex flex-col items-center gap-3">
                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-colors ${
-                          isDragOver ? 'gold-gradient' : 'bg-muted/50'
+                          isDragOver ? 'primary-gradient' : 'bg-muted/50'
                         }`}>
-                          <Upload className={`w-7 h-7 ${isDragOver ? 'text-background' : 'text-muted-foreground'}`} />
+                          <Upload className={`w-7 h-7 ${isDragOver ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
                         </div>
                         <div>
-                          <p className={`font-semibold text-sm ${isDragOver ? 'text-amber-400' : 'text-foreground'}`}>
+                          <p className={`font-semibold text-sm ${isDragOver ? 'text-primary' : 'text-foreground'}`}>
                             {isDragOver ? 'Suelte los archivos aquí' : 'Arrastre archivos aquí o haga clic para seleccionar'}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
@@ -596,7 +596,7 @@ export default function GenerarInformePage() {
                           </p>
                         </div>
                         {isUploading && (
-                          <div className="flex items-center gap-2 text-amber-500">
+                          <div className="flex items-center gap-2 text-primary">
                             <Loader2 className="w-4 h-4 animate-spin" />
                             <span className="text-xs">Procesando archivo(s)...</span>
                           </div>
@@ -614,7 +614,7 @@ export default function GenerarInformePage() {
                           Archivos cargados ({uploadedFiles.length})
                         </Label>
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20">
+                          <Badge variant="outline" className="text-xs bg-primary/8 text-primary border-primary/12">
                             {formatFileSize(uploadedFiles.reduce((s, f) => s + f.size, 0))} total
                           </Badge>
                           <Button
@@ -632,7 +632,7 @@ export default function GenerarInformePage() {
                         {uploadedFiles.map((file) => (
                           <div
                             key={file.id}
-                            className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border hover:border-amber-500/30 transition-colors"
+                            className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border hover:border-primary/15 transition-colors"
                           >
                             <span className="text-xl">{getFileIcon(file.name)}</span>
                             <div className="flex-1 min-w-0">
@@ -668,7 +668,7 @@ export default function GenerarInformePage() {
                       placeholder="Pegue aquí cualquier información que desee que el agente de IA analice: logs de seguridad, transcripciones de comunicaciones, notas de campo, observaciones del analista, reportes previos, correos sospechosos, datos OSINT, etc..."
                       value={writtenData}
                       onChange={(e) => setWrittenData(e.target.value)}
-                      className="bg-muted/30 border-border focus:border-amber-500/50 min-h-[200px] font-mono text-sm"
+                      className="bg-muted/30 border-border focus:border-primary/50 min-h-[200px] font-mono text-sm"
                     />
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground">
@@ -699,7 +699,7 @@ export default function GenerarInformePage() {
                         variant="ghost"
                         size="sm"
                         onClick={addUrlField}
-                        className="text-amber-500 hover:text-amber-400 text-xs"
+                        className="text-primary hover:text-primary text-xs"
                       >
                         <Plus className="w-3 h-3 mr-1" />
                         Añadir URL
@@ -713,7 +713,7 @@ export default function GenerarInformePage() {
                             placeholder="https://ejemplo.com/fuente-de-inteligencia"
                             value={url}
                             onChange={(e) => updateUrl(index, e.target.value)}
-                            className={`pl-10 bg-muted/30 border-border focus:border-amber-500/50 ${
+                            className={`pl-10 bg-muted/30 border-border focus:border-primary/50 ${
                               url && !isValidUrl(url) ? 'border-red-500/50 focus:border-red-500' : ''
                             }`}
                           />
@@ -736,10 +736,10 @@ export default function GenerarInformePage() {
                   </div>
 
                   {/* Data Summary Panel */}
-                  <div className="p-4 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                  <div className="p-4 rounded-lg bg-primary/5 border border-primary/12">
                     <div className="flex items-center gap-2 mb-3">
-                      <Brain className="w-4 h-4 text-amber-500" />
-                      <p className="text-sm font-medium text-amber-400">Resumen de datos para el Agente de IA</p>
+                      <Brain className="w-4 h-4 text-primary" />
+                      <p className="text-sm font-medium text-primary">Resumen de datos para el Agente de IA</p>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div className="p-3 rounded-lg bg-muted/30 border border-border text-center">
@@ -757,7 +757,7 @@ export default function GenerarInformePage() {
                         <p className="text-xs text-muted-foreground">URLs válidas</p>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/30 border border-border text-center">
-                        <p className="text-lg font-bold text-amber-500">
+                        <p className="text-lg font-bold text-primary">
                           {totalDataChars > 0 ? `${(totalDataChars / 1000).toFixed(1)}K` : '0'}
                         </p>
                         <p className="text-xs text-muted-foreground">Caracteres totales</p>
@@ -777,7 +777,7 @@ export default function GenerarInformePage() {
               <Card className="border-border bg-card/80">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-amber-500" />
+                    <Zap className="w-4 h-4 text-primary" />
                     Flujo de Generación del Informe
                   </CardTitle>
                   <CardDescription>
@@ -791,18 +791,18 @@ export default function GenerarInformePage() {
                       onClick={() => setMode('automatic')}
                       className={`flex-1 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
                         mode === 'automatic'
-                          ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/5'
-                          : 'border-border bg-muted/20 hover:border-amber-500/30'
+                          ? 'border-primary bg-primary/8 shadow-lg shadow-primary/5'
+                          : 'border-border bg-muted/20 hover:border-primary/15'
                       }`}
                     >
                       <div className="flex items-center gap-3 mb-2">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          mode === 'automatic' ? 'gold-gradient' : 'bg-muted/50'
+                          mode === 'automatic' ? 'primary-gradient' : 'bg-muted/50'
                         }`}>
-                          <Brain className={`w-5 h-5 ${mode === 'automatic' ? 'text-background' : 'text-muted-foreground'}`} />
+                          <Brain className={`w-5 h-5 ${mode === 'automatic' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
                         </div>
                         <div>
-                          <h3 className={`font-semibold ${mode === 'automatic' ? 'text-amber-400' : 'text-foreground'}`}>
+                          <h3 className={`font-semibold ${mode === 'automatic' ? 'text-primary' : 'text-foreground'}`}>
                             Modo Automático
                           </h3>
                           <p className="text-xs text-muted-foreground">Procesamiento por Agente de IA</p>
@@ -818,18 +818,18 @@ export default function GenerarInformePage() {
                       onClick={() => setMode('manual')}
                       className={`flex-1 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
                         mode === 'manual'
-                          ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/5'
-                          : 'border-border bg-muted/20 hover:border-amber-500/30'
+                          ? 'border-primary bg-primary/8 shadow-lg shadow-primary/5'
+                          : 'border-border bg-muted/20 hover:border-primary/15'
                       }`}
                     >
                       <div className="flex items-center gap-3 mb-2">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          mode === 'manual' ? 'gold-gradient' : 'bg-muted/50'
+                          mode === 'manual' ? 'primary-gradient' : 'bg-muted/50'
                         }`}>
-                          <ListChecks className={`w-5 h-5 ${mode === 'manual' ? 'text-background' : 'text-muted-foreground'}`} />
+                          <ListChecks className={`w-5 h-5 ${mode === 'manual' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
                         </div>
                         <div>
-                          <h3 className={`font-semibold ${mode === 'manual' ? 'text-amber-400' : 'text-foreground'}`}>
+                          <h3 className={`font-semibold ${mode === 'manual' ? 'text-primary' : 'text-foreground'}`}>
                             Modo Manual
                           </h3>
                           <p className="text-xs text-muted-foreground">Clasificación Estructurada</p>
@@ -853,10 +853,10 @@ export default function GenerarInformePage() {
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
                   >
-                    <Card className="border-border bg-card/80 border-amber-500/20">
+                    <Card className="border-border bg-card/80 border-primary/12">
                       <CardHeader>
                         <CardTitle className="text-base flex items-center gap-2">
-                          <Brain className="w-4 h-4 text-amber-500" />
+                          <Brain className="w-4 h-4 text-primary" />
                           Procesamiento Automático por Agente de IA
                         </CardTitle>
                         <CardDescription>
@@ -864,11 +864,11 @@ export default function GenerarInformePage() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <div className="p-4 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                        <div className="p-4 rounded-lg bg-primary/5 border border-primary/12">
                           <div className="flex items-start gap-3">
-                            <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                            <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
                             <div className="text-xs text-muted-foreground space-y-2">
-                              <p className="text-amber-400 font-medium">Proceso de Análisis Multi-Fase del Agente de Inteligencia</p>
+                              <p className="text-primary font-medium">Proceso de Análisis Multi-Fase del Agente de Inteligencia</p>
                               <ol className="list-decimal list-inside space-y-1.5">
                                 <li><strong>Fase 1 - Lectura de URLs:</strong> Lee el contenido REAL de cada URL proporcionada (no solo busca snippets)</li>
                                 <li><strong>Fase 2 - Extracción de Entidades:</strong> Identifica al VIP, cargo, organización y tipos de datos expuestos</li>
@@ -896,7 +896,7 @@ export default function GenerarInformePage() {
                             <p className="text-xs text-muted-foreground">Texto crudo</p>
                           </div>
                           <div className="p-3 rounded-lg bg-muted/30 border border-border text-center">
-                            <p className="text-lg font-bold text-amber-500">IA</p>
+                            <p className="text-lg font-bold text-primary">IA</p>
                             <p className="text-xs text-muted-foreground">Motor de análisis</p>
                           </div>
                         </div>
@@ -913,19 +913,19 @@ export default function GenerarInformePage() {
                     className="space-y-6"
                   >
                     {/* ABUSE TYPES */}
-                    <Card className="border-border bg-card/80 border-amber-500/20">
+                    <Card className="border-border bg-card/80 border-primary/12">
                       <CardHeader>
                         <div className="flex items-center justify-between">
                           <div>
                             <CardTitle className="text-base flex items-center gap-2">
-                              <Filter className="w-4 h-4 text-amber-500" />
+                              <Filter className="w-4 h-4 text-primary" />
                               Modelos de Amenazas / Clasificación
                             </CardTitle>
                             <CardDescription>
                               Tipos de Abuso de Marca y clasificación de amenazas según taxonomías reconocidas
                             </CardDescription>
                           </div>
-                          <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
+                          <Badge className="bg-primary/12 text-primary border-primary/15">
                             {selectedAbuseTypes.size} seleccionada(s)
                           </Badge>
                         </div>
@@ -939,7 +939,7 @@ export default function GenerarInformePage() {
                               className={`p-3 rounded-xl border transition-all duration-200 text-left ${
                                 selectedAbuseTypes.has(type.id)
                                   ? `${type.color} border-current shadow-sm`
-                                  : 'bg-muted/20 border-border hover:border-amber-500/30'
+                                  : 'bg-muted/20 border-border hover:border-primary/15'
                               }`}
                             >
                               <div className="flex items-center gap-2">
@@ -956,7 +956,7 @@ export default function GenerarInformePage() {
                     <Card className="border-border bg-card/80">
                       <CardHeader>
                         <CardTitle className="text-base flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-500" />
+                          <AlertTriangle className="w-4 h-4 text-primary" />
                           Nivel de Criticidad / Severidad
                         </CardTitle>
                         <CardDescription>
@@ -972,11 +972,11 @@ export default function GenerarInformePage() {
                               className={`p-4 rounded-xl border-2 transition-all duration-200 text-center ${
                                 selectedSeverity === level.id
                                   ? `${level.color} border-current shadow-lg`
-                                  : 'bg-muted/20 border-border hover:border-amber-500/30'
+                                  : 'bg-muted/20 border-border hover:border-primary/15'
                               }`}
                             >
                               <div className={`w-4 h-4 rounded-full mx-auto mb-2 ${level.dot} ${
-                                selectedSeverity === level.id ? 'threat-pulse' : ''
+                                selectedSeverity === level.id ? 'status-pulse' : ''
                               }`} />
                               <p className="text-sm font-bold">{level.label}</p>
                             </button>
@@ -989,7 +989,7 @@ export default function GenerarInformePage() {
                     <Card className="border-border bg-card/80">
                       <CardHeader>
                         <CardTitle className="text-base flex items-center gap-2">
-                          <Lock className="w-4 h-4 text-amber-500" />
+                          <Lock className="w-4 h-4 text-primary" />
                           Protocolo de Compartición de Información (TLP)
                         </CardTitle>
                         <CardDescription>
@@ -1005,7 +1005,7 @@ export default function GenerarInformePage() {
                               className={`p-4 rounded-xl border-2 transition-all duration-200 text-center ${
                                 selectedTlp === level.id
                                   ? `${level.color} ring-2 ${level.ring} ring-offset-2 ring-offset-background`
-                                  : 'bg-muted/20 border-border hover:border-amber-500/30'
+                                  : 'bg-muted/20 border-border hover:border-primary/15'
                               }`}
                             >
                               <p className="text-sm font-bold mb-1">{level.label}</p>
@@ -1025,7 +1025,7 @@ export default function GenerarInformePage() {
                   {isGenerating ? (
                     <div className="space-y-4">
                       <div className="flex items-center justify-center gap-3">
-                        <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
+                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
                         <span className="text-sm text-muted-foreground">{generationStep}</span>
                       </div>
                       <Progress value={generationProgress} className="h-2" />
@@ -1034,7 +1034,7 @@ export default function GenerarInformePage() {
                     <Button
                       onClick={handleGenerate}
                       disabled={!hasDataForAgent && mode === 'automatic'}
-                      className="w-full gold-gradient text-background font-semibold hover:opacity-90 h-14 text-base disabled:opacity-50"
+                      className="w-full primary-gradient text-primary-foreground font-semibold hover:opacity-90 h-14 text-base disabled:opacity-50"
                     >
                       <Play className="w-5 h-5 mr-2" />
                       {mode === 'automatic'
@@ -1053,7 +1053,7 @@ export default function GenerarInformePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.15 }}
               className="space-y-6"
             >
               {/* Result Header */}
@@ -1073,18 +1073,18 @@ export default function GenerarInformePage() {
                     <Badge className={`${
                       generatedReport?.report?.threatLevel === 'critico' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
                       generatedReport?.report?.threatLevel === 'alto' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
-                      generatedReport?.report?.threatLevel === 'medio' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
+                      generatedReport?.report?.threatLevel === 'medio' ? 'bg-primary/12 text-primary border-primary/15' :
                       'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                     }`}>
                       Severidad: {(generatedReport?.report?.threatLevel || 'medio').toUpperCase()}
                     </Badge>
-                    <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
+                    <Badge className="bg-primary/12 text-primary border-primary/15">
                       {generatedReport?.report?.generationMode === 'automatic' ? 'IA Automático' : 'Manual'}
                     </Badge>
                     {generatedReport?.report?.tlpLevel && (
                       <Badge className={
                         generatedReport.report.tlpLevel === 'RED' ? 'bg-red-600 text-white' :
-                        generatedReport.report.tlpLevel === 'AMBER' ? 'bg-amber-500 text-white' :
+                        generatedReport.report.tlpLevel === 'AMBER' ? 'bg-primary text-white' :
                         generatedReport.report.tlpLevel === 'GREEN' ? 'bg-emerald-500 text-white' :
                         'bg-gray-300 text-gray-800'
                       }>
@@ -1097,7 +1097,7 @@ export default function GenerarInformePage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       onClick={handleDownloadPDF}
-                      className="gold-gradient text-background font-semibold hover:opacity-90"
+                      className="primary-gradient text-primary-foreground font-semibold hover:opacity-90"
                     >
                       <Download className="w-4 h-4 mr-2" />
                       Descargar PDF
@@ -1105,7 +1105,7 @@ export default function GenerarInformePage() {
                     <Button
                       onClick={handleDownloadDOCX}
                       variant="outline"
-                      className="border-amber-500/30 text-amber-500 hover:text-amber-400"
+                      className="border-primary/15 text-primary hover:text-primary"
                     >
                       <FileText className="w-4 h-4 mr-2" />
                       Descargar DOCX
@@ -1113,7 +1113,7 @@ export default function GenerarInformePage() {
                     <Button
                       onClick={handleDownloadMD}
                       variant="outline"
-                      className="border-border hover:border-amber-500/30"
+                      className="border-border hover:border-primary/15"
                     >
                       <Download className="w-4 h-4 mr-2" />
                       Markdown
@@ -1121,7 +1121,7 @@ export default function GenerarInformePage() {
                     <Button
                       onClick={() => { setShowResult(false); setGeneratedReport(null); }}
                       variant="outline"
-                      className="border-border hover:border-amber-500/30 ml-auto"
+                      className="border-border hover:border-primary/15 ml-auto"
                     >
                       Generar Otro Informe
                     </Button>
@@ -1133,7 +1133,7 @@ export default function GenerarInformePage() {
               <Card className="border-border bg-card/80">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Eye className="w-4 h-4 text-amber-500" />
+                    <Eye className="w-4 h-4 text-primary" />
                     Vista Previa del Informe
                   </CardTitle>
                 </CardHeader>
@@ -1156,12 +1156,12 @@ export default function GenerarInformePage() {
       <footer className="border-t border-border px-4 lg:px-8 py-3 mt-8">
         <div className="flex items-center justify-between text-xs text-muted-foreground max-w-5xl mx-auto">
           <div className="flex items-center gap-2">
-            <Shield className="w-3 h-3 text-amber-500" />
+            <Shield className="w-3 h-3 text-primary" />
             <span>VIP_Protection Report - Executive Intelligence System</span>
           </div>
           <div className="flex items-center gap-1">
             <span>Clasificado</span>
-            <span className="text-amber-500">*</span>
+            <span className="text-primary">*</span>
             <span>{new Date().getFullYear()}</span>
           </div>
         </div>

@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ActorTrace - Inteligencia VIP",
-  description: "Sistema de inteligencia y protección ejecutiva VIP. Análisis de amenazas, informes ejecutivos y gestión de fuentes de inteligencia.",
+  title: "VIP-Intelligence — Protección Digital de Ejecutivos",
+  description: "Plataforma corporativa de inteligencia y protección ejecutiva VIP. Análisis de amenazas, informes ejecutivos y gestión de fuentes de inteligencia.",
   icons: {
     icon: [
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
@@ -41,7 +41,7 @@ const themeScript = `
     html.classList.remove('light', 'dim', 'dark');
     html.classList.add(theme);
     html.setAttribute('data-theme', theme);
-    var themeColor = theme === 'light' ? '#f8fafc' : theme === 'dim' ? '#15202b' : '#0a0a0a';
+    var themeColor = theme === 'light' ? '#f7f8fa' : theme === 'dim' ? '#1a1f2e' : '#0d1117';
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', themeColor);
   } catch(e) {}
@@ -57,7 +57,7 @@ export default function RootLayout({
     <html lang="es" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <meta name="theme-color" content="#15202b" />
+        <meta name="theme-color" content="#1a1f2e" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}

@@ -60,7 +60,7 @@ function MfaVerifyContent() {
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.2 }}
         className="w-full max-w-md"
       >
         {/* Logo */}
@@ -71,13 +71,13 @@ function MfaVerifyContent() {
             transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
             className="w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center mx-auto mb-4"
           >
-            <img src="/favicon-128x128.png" alt="ActorTrace" className="w-16 h-16" />
+            <img src="/favicon-128x128.png" alt="VIP-Intelligence" className="w-16 h-16" />
           </motion.div>
-          <h1 className="text-2xl font-bold text-foreground tracking-wide">ActorTrace</h1>
+          <h1 className="text-2xl font-bold text-foreground tracking-wide">VIP-Intelligence</h1>
           <p className="text-sm text-muted-foreground mt-1">Verificación de Doble Factor</p>
         </div>
 
-        <Card className="border-border bg-card/80 backdrop-blur-sm card-glow">
+        <Card className="border-border bg-card/80 backdrop-blur-sm card-elevated">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-xl text-foreground">Código de Autenticación</CardTitle>
             <CardDescription className="text-muted-foreground">
@@ -97,7 +97,7 @@ function MfaVerifyContent() {
                   placeholder="000000"
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="text-center text-2xl tracking-[0.5em] bg-muted/30 border-border focus:border-amber-500/50 h-14 font-mono"
+                  className="text-center text-2xl tracking-[0.5em] bg-muted/30 border-border focus:border-primary/30 h-14 font-mono"
                   required
                   autoFocus
                 />
@@ -105,7 +105,7 @@ function MfaVerifyContent() {
               <Button
                 type="submit"
                 disabled={loading || code.length !== 6}
-                className="w-full gold-gradient text-background font-semibold hover:opacity-90"
+                className="w-full primary-gradient text-primary-foreground font-semibold hover:opacity-90"
               >
                 {loading ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -119,7 +119,7 @@ function MfaVerifyContent() {
             <div className="mt-6 text-center">
               <Link
                 href="/auth/login"
-                className="text-sm text-muted-foreground hover:text-amber-400 transition-colors"
+                className="text-sm text-muted-foreground hover:text-primary/80 transition-colors"
               >
                 ← Volver al inicio de sesión
               </Link>
@@ -128,7 +128,7 @@ function MfaVerifyContent() {
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          Sistema de Inteligencia Ejecutiva VIP — Seguridad de Acceso
+          VIP-Intelligence — Protección Digital de Ejecutivos
         </p>
       </motion.div>
     </div>
@@ -139,7 +139,7 @@ export default function MfaVerifyPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     }>
       <MfaVerifyContent />

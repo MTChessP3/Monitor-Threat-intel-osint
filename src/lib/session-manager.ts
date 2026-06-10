@@ -1,5 +1,5 @@
 /**
- * Shared Session Manager for ActorTrace VIP
+ * Shared Session Manager for VIP-Intelligence
  *
  * Provides resilient session checking with:
  * - sessionStorage caching to avoid redundant server calls

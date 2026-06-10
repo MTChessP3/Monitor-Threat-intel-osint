@@ -125,7 +125,7 @@ function LoginForm() {
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.2 }}
         className="w-full max-w-md"
       >
         {/* Logo */}
@@ -136,13 +136,13 @@ function LoginForm() {
             transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
             className="w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center mx-auto mb-4"
           >
-            <img src="/favicon-128x128.png" alt="ActorTrace" className="w-16 h-16" />
+            <img src="/favicon-128x128.png" alt="VIP-Intelligence" className="w-16 h-16" />
           </motion.div>
-          <h1 className="text-2xl font-bold text-foreground tracking-wide">ActorTrace</h1>
-          <p className="text-sm text-muted-foreground mt-1">Inteligencia VIP</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-wide">VIP-Intelligence</h1>
+          <p className="text-sm text-muted-foreground mt-1">Protección Digital de Ejecutivos</p>
         </div>
 
-        <Card className="border-border bg-card/80 backdrop-blur-sm card-glow">
+        <Card className="border-border bg-card/80 backdrop-blur-sm card-elevated">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-xl text-foreground">
               {showMfa ? 'Autenticación de Doble Factor' : 'Iniciar Sesión'}
@@ -166,7 +166,7 @@ function LoginForm() {
                       placeholder="correo@ejemplo.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 bg-muted/30 border-border focus:border-amber-500/50"
+                      className="pl-10 bg-muted/30 border-border focus:border-primary/30"
                       required
                     />
                   </div>
@@ -181,7 +181,7 @@ function LoginForm() {
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 bg-muted/30 border-border focus:border-amber-500/50"
+                      className="pl-10 bg-muted/30 border-border focus:border-primary/30"
                       required
                     />
                   </div>
@@ -189,7 +189,7 @@ function LoginForm() {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full gold-gradient text-background font-semibold hover:opacity-90"
+                  className="w-full primary-gradient text-primary-foreground font-semibold hover:opacity-90"
                 >
                   {loading ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -212,7 +212,7 @@ function LoginForm() {
                     placeholder="000000"
                     value={mfaCode}
                     onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="text-center text-2xl tracking-[0.5em] bg-muted/30 border-border focus:border-amber-500/50 h-14 font-mono"
+                    className="text-center text-2xl tracking-[0.5em] bg-muted/30 border-border focus:border-primary/30 h-14 font-mono"
                     required
                     autoFocus
                   />
@@ -220,7 +220,7 @@ function LoginForm() {
                 <Button
                   type="submit"
                   disabled={loading || mfaCode.length !== 6}
-                  className="w-full gold-gradient text-background font-semibold hover:opacity-90"
+                  className="w-full primary-gradient text-primary-foreground font-semibold hover:opacity-90"
                 >
                   {loading ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -243,7 +243,7 @@ function LoginForm() {
               <div className="mt-6 text-center">
                 <p className="text-sm text-muted-foreground">
                   ¿No tiene una cuenta?{' '}
-                  <Link href="/auth/signup" className="text-amber-500 hover:text-amber-400 font-medium transition-colors">
+                  <Link href="/auth/signup" className="text-primary hover:text-primary/80 font-medium transition-colors">
                     Registrarse
                   </Link>
                 </p>
@@ -253,7 +253,7 @@ function LoginForm() {
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          Sistema de Inteligencia Ejecutiva VIP — Acceso Restringido
+          VIP-Intelligence — Protección Digital de Ejecutivos
         </p>
       </motion.div>
     </div>
@@ -264,7 +264,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     }>
       <LoginForm />

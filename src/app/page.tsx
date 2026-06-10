@@ -84,14 +84,14 @@ type ActiveTab = 'panel' | 'plantillas' | 'fuentes' | 'analisis' | 'informes';
 
 const threatLevelColors: Record<string, string> = {
   bajo: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  medio: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  medio: 'bg-yellow-600/15 text-yellow-500 border-yellow-600/20',
   alto: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
   critico: 'bg-red-500/20 text-red-400 border-red-500/30',
 };
 
 const threatLevelDots: Record<string, string> = {
   bajo: 'bg-emerald-500',
-  medio: 'bg-amber-500',
+  medio: 'bg-yellow-600',
   alto: 'bg-orange-500',
   critico: 'bg-red-500',
 };
@@ -867,7 +867,7 @@ export default function Home() {
     { id: 'ciberseguridad', label: 'Ciberseguridad', icon: Globe, color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
     { id: 'crimen-organizado', label: 'Crimen Organizado', icon: Target, color: 'bg-rose-500/20 text-rose-400 border-rose-500/30' },
     { id: 'secuestro-extorsion', label: 'Secuestro y Extorsión', icon: AlertTriangle, color: 'bg-red-600/20 text-red-500 border-red-600/30' },
-    { id: 'fraude-corporativo', label: 'Fraude Corporativo', icon: FileText, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    { id: 'fraude-corporativo', label: 'Fraude Corporativo', icon: FileText, color: 'bg-yellow-600/15 text-yellow-500 border-yellow-600/20' },
     { id: 'seguridad-fisica', label: 'Seguridad Física', icon: Shield, color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
     { id: 'inteligencia-competitiva', label: 'Inteligencia Competitiva', icon: Brain, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
     { id: 'seguridad-informacion', label: 'Seguridad de la Información', icon: Globe, color: 'bg-sky-500/20 text-sky-400 border-sky-500/30' },
@@ -991,11 +991,11 @@ export default function Home() {
         <div className="p-6 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center">
-              <img src="/favicon-64x64.png" alt="ActorTrace" className="w-10 h-10" />
+              <img src="/favicon-64x64.png" alt="VIP-Intelligence" className="w-10 h-10" />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-foreground tracking-wide">ActorTrace</h1>
-              <p className="text-xs text-amber-500 font-medium">Inteligencia VIP</p>
+              <h1 className="text-sm font-bold text-foreground tracking-wide">VIP-Intelligence</h1>
+              <p className="text-xs text-primary font-medium">Protección Digital de Ejecutivos</p>
             </div>
           </div>
         </div>
@@ -1004,7 +1004,7 @@ export default function Home() {
           {/* Quick Upload Button in Sidebar */}
           <button
             onClick={() => { setActiveTab('plantillas'); setTimeout(() => fileInputRef.current?.click(), 300); }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold gold-gradient text-background mb-3 hover:opacity-90 transition-all"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold primary-gradient text-primary-foreground mb-3 hover:opacity-95 transition-all"
           >
             <Upload className="w-4 h-4" />
             Subir Plantilla
@@ -1015,7 +1015,7 @@ export default function Home() {
               onClick={() => setActiveTab(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeTab === item.id
-                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                  ? 'bg-primary/8 text-primary border border-primary/15'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
             >
@@ -1027,7 +1027,7 @@ export default function Home() {
           <Separator className="my-2" />
           <NextLink
             href="/proteccion-ejecutivos"
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-blue-400 bg-blue-500/8 border border-blue-500/15 hover:bg-blue-500/10"
           >
             <Shield className="w-4 h-4" />
             Protección Ejecutivos
@@ -1035,7 +1035,7 @@ export default function Home() {
           </NextLink>
           <NextLink
             href="/generar-informe"
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-primary bg-primary/8 border border-primary/15 hover:bg-primary/10"
           >
             <Zap className="w-4 h-4" />
             Generar Informe
@@ -1050,21 +1050,21 @@ export default function Home() {
         <div className="p-4 border-t border-border space-y-3">
           {authUser && (
             <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
-              <div className="w-8 h-8 rounded-full gold-gradient flex items-center justify-center shrink-0">
-                <UserIcon className="w-4 h-4 text-background" />
+              <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                <UserIcon className="w-4 h-4 text-primary" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-foreground truncate">{authUser.name}</p>
                 <p className="text-xs text-muted-foreground truncate">{authUser.email}</p>
               </div>
               {authUser.mfaEnabled && (
-                <Lock className="w-3 h-3 text-amber-500 shrink-0" />
+                <Lock className="w-3 h-3 text-primary shrink-0" />
               )}
             </div>
           )}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Activity className="w-3 h-3 text-amber-500" />
+              <Activity className="w-3 h-3 text-primary" />
               Sistema activo
             </div>
             <button
@@ -1099,11 +1099,11 @@ export default function Home() {
               <div className="p-6 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center">
-                    <img src="/favicon-64x64.png" alt="ActorTrace" className="w-10 h-10" />
+                    <img src="/favicon-64x64.png" alt="VIP-Intelligence" className="w-10 h-10" />
                   </div>
                   <div>
-                    <h1 className="text-sm font-bold text-foreground tracking-wide">ActorTrace</h1>
-                    <p className="text-xs text-amber-500 font-medium">Inteligencia VIP</p>
+                    <h1 className="text-sm font-bold text-foreground tracking-wide">VIP-Intelligence</h1>
+                    <p className="text-xs text-primary font-medium">Protección Digital de Ejecutivos</p>
                   </div>
                 </div>
                 <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground">
@@ -1114,7 +1114,7 @@ export default function Home() {
                 {/* Quick Upload Button in Mobile Sidebar */}
                 <button
                   onClick={() => { setActiveTab('plantillas'); setSidebarOpen(false); setTimeout(() => fileInputRef.current?.click(), 300); }}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold gold-gradient text-background mb-3 hover:opacity-90 transition-all"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold primary-gradient text-primary-foreground mb-3 hover:opacity-95 transition-all"
                 >
                   <Upload className="w-4 h-4" />
                   Subir Plantilla
@@ -1125,7 +1125,7 @@ export default function Home() {
                     onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                       activeTab === item.id
-                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        ? 'bg-primary/8 text-primary border border-primary/15'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                     }`}
                   >
@@ -1137,7 +1137,7 @@ export default function Home() {
                 <NextLink
                   href="/proteccion-ejecutivos"
                   onClick={() => setSidebarOpen(false)}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-blue-400 bg-blue-500/8 border border-blue-500/15 hover:bg-blue-500/10"
                 >
                   <Shield className="w-4 h-4" />
                   Protección Ejecutivos
@@ -1145,7 +1145,7 @@ export default function Home() {
                 <NextLink
                   href="/generar-informe"
                   onClick={() => setSidebarOpen(false)}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-primary bg-primary/8 border border-primary/15 hover:bg-primary/10"
                 >
                   <Zap className="w-4 h-4" />
                   Generar Informe
@@ -1157,14 +1157,14 @@ export default function Home() {
               {authUser && (
                 <div className="p-4 border-t border-border mt-auto space-y-3">
                   <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
-                    <div className="w-8 h-8 rounded-full gold-gradient flex items-center justify-center shrink-0">
-                      <UserIcon className="w-4 h-4 text-background" />
+                    <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                      <UserIcon className="w-4 h-4 text-primary" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium text-foreground truncate">{authUser.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{authUser.email}</p>
                     </div>
-                    {authUser.mfaEnabled && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
+                    {authUser.mfaEnabled && <Lock className="w-3 h-3 text-primary shrink-0" />}
                   </div>
                   <button
                     onClick={() => { handleLogout(); setSidebarOpen(false); }}
@@ -1203,11 +1203,11 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-3">
               <Badge variant="outline" className={`${threatLevelColors[currentRiskLevel]} text-xs`}>
-                <span className={`w-2 h-2 rounded-full ${threatLevelDots[currentRiskLevel]} mr-1.5 ${currentRiskLevel === 'critico' ? 'threat-pulse' : ''}`} />
+                <span className={`w-2 h-2 rounded-full ${threatLevelDots[currentRiskLevel]} mr-1.5 ${currentRiskLevel === 'critico' ? 'status-pulse' : ''}`} />
                 Riesgo: {currentRiskLevel.charAt(0).toUpperCase() + currentRiskLevel.slice(1)}
               </Badge>
               <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-                <Shield className="w-3 h-3 text-amber-500" />
+                <Shield className="w-3 h-3 text-primary" />
                 Clasificado
               </div>
               {authUser && (
@@ -1228,7 +1228,7 @@ export default function Home() {
         <div className="flex-1 p-4 lg:p-8 overflow-auto">
           {authLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : (
           <AnimatePresence mode="wait">
@@ -1239,17 +1239,17 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.15 }}
                 className="space-y-6"
               >
                 {/* Stats Cards */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-                    <Card className="card-glow border-border bg-card/80 hover:border-amber-500/30 transition-all duration-300">
+                    <Card className="card-elevated border-border bg-card/80 hover:border-primary/15 transition-all duration-300">
                       <CardContent className="p-4 lg:p-6">
                         <div className="flex items-center justify-between mb-3">
-                          <FileText className="w-5 h-5 text-amber-500" />
-                          <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20">
+                          <FileText className="w-5 h-5 text-primary" />
+                          <Badge variant="outline" className="text-xs bg-primary/8 text-primary border-primary/12">
                             Total
                           </Badge>
                         </div>
@@ -1260,7 +1260,7 @@ export default function Home() {
                   </motion.div>
 
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                    <Card className="card-glow border-border bg-card/80 hover:border-emerald-500/30 transition-all duration-300">
+                    <Card className="card-elevated border-border bg-card/80 hover:border-emerald-500/30 transition-all duration-300">
                       <CardContent className="p-4 lg:p-6">
                         <div className="flex items-center justify-between mb-3">
                           <Globe className="w-5 h-5 text-emerald-500" />
@@ -1275,7 +1275,7 @@ export default function Home() {
                   </motion.div>
 
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-                    <Card className="card-glow border-border bg-card/80 hover:border-orange-500/30 transition-all duration-300">
+                    <Card className="card-elevated border-border bg-card/80 hover:border-orange-500/30 transition-all duration-300">
                       <CardContent className="p-4 lg:p-6">
                         <div className="flex items-center justify-between mb-3">
                           <AlertTriangle className="w-5 h-5 text-orange-500" />
@@ -1290,7 +1290,7 @@ export default function Home() {
                   </motion.div>
 
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                    <Card className="card-glow border-border bg-card/80 hover:border-red-500/30 transition-all duration-300">
+                    <Card className="card-elevated border-border bg-card/80 hover:border-red-500/30 transition-all duration-300">
                       <CardContent className="p-4 lg:p-6">
                         <div className="flex items-center justify-between mb-3">
                           <Target className="w-5 h-5 text-red-500" />
@@ -1311,14 +1311,14 @@ export default function Home() {
                   <Card className="border-border bg-card/80">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-amber-500" />
+                        <Zap className="w-4 h-4 text-primary" />
                         Acciones Rápidas
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
                       <Button
                         onClick={() => setActiveTab('analisis')}
-                        className="w-full justify-start gap-2 gold-gradient text-background font-semibold hover:opacity-90"
+                        className="w-full justify-start gap-2 primary-gradient text-primary-foreground font-semibold hover:opacity-95"
                       >
                         <Brain className="w-4 h-4" />
                         Nuevo Análisis
@@ -1326,7 +1326,7 @@ export default function Home() {
                       <Button
                         onClick={() => setActiveTab('fuentes')}
                         variant="outline"
-                        className="w-full justify-start gap-2 border-border hover:border-amber-500/30"
+                        className="w-full justify-start gap-2 border-border hover:border-primary/15"
                       >
                         <Globe className="w-4 h-4" />
                         Añadir Fuente
@@ -1334,7 +1334,7 @@ export default function Home() {
                       <Button
                         onClick={() => setActiveTab('plantillas')}
                         variant="outline"
-                        className="w-full justify-start gap-2 border-border hover:border-amber-500/30"
+                        className="w-full justify-start gap-2 border-border hover:border-primary/15"
                       >
                         <BookOpen className="w-4 h-4" />
                         Documento Oficial
@@ -1347,10 +1347,10 @@ export default function Home() {
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-amber-500" />
+                          <FileText className="w-4 h-4 text-primary" />
                           Informes Recientes
                         </CardTitle>
-                        <Button variant="ghost" size="sm" className="text-xs text-amber-500 hover:text-amber-400" onClick={() => setActiveTab('informes')}>
+                        <Button variant="ghost" size="sm" className="text-xs text-primary hover:text-primary/80" onClick={() => setActiveTab('informes')}>
                           Ver todos <ChevronRight className="w-3 h-3 ml-1" />
                         </Button>
                       </div>
@@ -1358,7 +1358,7 @@ export default function Home() {
                     <CardContent>
                       {loadingReports ? (
                         <div className="flex items-center justify-center py-8">
-                          <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
                         </div>
                       ) : reports.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
@@ -1427,7 +1427,7 @@ export default function Home() {
                   <Card className="border-border bg-card/80">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                        <Lock className="w-4 h-4 text-amber-500" />
+                        <Lock className="w-4 h-4 text-primary" />
                         Seguridad de la Cuenta
                       </CardTitle>
                       <CardDescription>Configuración de seguridad y autenticación</CardDescription>
@@ -1459,7 +1459,7 @@ export default function Home() {
                             size="sm"
                             onClick={handleMfaSetup}
                             disabled={mfaLoading}
-                            className="gold-gradient text-background font-semibold hover:opacity-90"
+                            className="primary-gradient text-primary-foreground font-semibold hover:opacity-95"
                           >
                             {mfaLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Activar MFA'}
                           </Button>
@@ -1467,15 +1467,15 @@ export default function Home() {
                       </div>
                       <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                            <Shield className="w-5 h-5 text-amber-400" />
+                          <div className="w-10 h-10 rounded-lg bg-primary/12 flex items-center justify-center">
+                            <Shield className="w-5 h-5 text-primary" />
                           </div>
                           <div>
                             <p className="text-sm font-medium text-foreground">Rol de Usuario</p>
                             <p className="text-xs text-muted-foreground capitalize">{authUser.role}</p>
                           </div>
                         </div>
-                        <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20 capitalize">
+                        <Badge variant="outline" className="text-xs bg-primary/8 text-primary border-primary/12 capitalize">
                           {authUser.role}
                         </Badge>
                       </div>
@@ -1492,14 +1492,14 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.15 }}
                 className="space-y-6"
               >
                 {/* PROMINENT FILE UPLOAD SECTION */}
-                <Card className="border-2 border-amber-500/40 bg-card/80 shadow-lg shadow-amber-500/10">
+                <Card className="border-2 border-primary/20 bg-card/80 shadow-lg shadow-primary/5">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Upload className="w-5 h-5 text-amber-500" />
+                      <Upload className="w-5 h-5 text-primary" />
                       Subir Documento Oficial (Plantilla)
                     </CardTitle>
                     <CardDescription className="text-sm">
@@ -1518,17 +1518,17 @@ export default function Home() {
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploadingFile}
-                      className="w-full flex flex-col items-center justify-center gap-4 p-10 rounded-xl border-3 border-dashed border-amber-500/60 hover:border-amber-500 bg-amber-500/5 hover:bg-amber-500/10 transition-all duration-300 cursor-pointer group"
+                      className="w-full flex flex-col items-center justify-center gap-4 p-10 rounded-xl border-3 border-dashed border-primary/30 hover:border-primary bg-primary/5 hover:bg-primary/8 transition-all duration-300 cursor-pointer group"
                     >
                       {isUploadingFile ? (
                         <>
-                          <Loader2 className="w-12 h-12 text-amber-500 animate-spin" />
+                          <Loader2 className="w-12 h-12 text-primary animate-spin" />
                           <span className="text-base text-muted-foreground font-medium">Procesando archivo...</span>
                         </>
                       ) : (
                         <>
-                          <div className="w-16 h-16 rounded-full bg-amber-500/15 flex items-center justify-center group-hover:bg-amber-500/25 transition-colors">
-                            <Upload className="w-8 h-8 text-amber-500" />
+                          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors">
+                            <Upload className="w-8 h-8 text-primary" />
                           </div>
                           <div className="text-center">
                             <p className="text-lg font-bold text-foreground">HAGA CLIC AQUI PARA SUBIR SU PLANTILLA</p>
@@ -1554,7 +1554,7 @@ export default function Home() {
                   <Card className="border-border bg-card/80">
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
-                        <Plus className="w-4 h-4 text-amber-500" />
+                        <Plus className="w-4 h-4 text-primary" />
                         Configurar y Guardar Plantilla
                       </CardTitle>
                       <CardDescription>Si subio un archivo, el contenido ya esta cargado. Ajuste el nombre y guarde la plantilla.</CardDescription>
@@ -1566,7 +1566,7 @@ export default function Home() {
                           value={templateName}
                           onChange={(e) => setTemplateName(e.target.value)}
                           placeholder="Ej: Informe Ejecutivo Semanal"
-                          className="bg-muted/30 border-border focus:border-amber-500/50"
+                          className="bg-muted/30 border-border focus:border-primary/30"
                         />
                       </div>
                       <div className="space-y-2">
@@ -1575,7 +1575,7 @@ export default function Home() {
                           value={templateContent}
                           onChange={(e) => setTemplateContent(e.target.value)}
                           placeholder={`Suba su archivo arriba o pegue aqui su documento oficial. El sistema lo llenara automaticamente con la informacion de inteligencia recopilada.\n\n# INFORME EJECUTIVO DE PROTECCION VIP\n\n## Resumen Ejecutivo\n...\n\n## Amenazas Detectadas\n...`}
-                          className="min-h-48 bg-muted/30 border-border focus:border-amber-500/50 font-mono text-xs"
+                          className="min-h-48 bg-muted/30 border-border focus:border-primary/30 font-mono text-xs"
                         />
                       </div>
                       <div className="flex items-center gap-3">
@@ -1585,7 +1585,7 @@ export default function Home() {
                         />
                         <Label className="text-sm">Plantilla predeterminada</Label>
                       </div>
-                      <Button onClick={handleSaveTemplate} className="w-full gold-gradient text-background font-semibold hover:opacity-90">
+                      <Button onClick={handleSaveTemplate} className="w-full primary-gradient text-primary-foreground font-semibold hover:opacity-95">
                         <Plus className="w-4 h-4 mr-2" />
                         Guardar Plantilla
                       </Button>
@@ -1596,7 +1596,7 @@ export default function Home() {
                   <Card className="border-border bg-card/80">
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
-                        <BookOpen className="w-4 h-4 text-amber-500" />
+                        <BookOpen className="w-4 h-4 text-primary" />
                         Documentos Guardados
                       </CardTitle>
                       <CardDescription>{templates.length} documento(s) disponible(s)</CardDescription>
@@ -1604,7 +1604,7 @@ export default function Home() {
                     <CardContent>
                       {loadingTemplates ? (
                         <div className="flex items-center justify-center py-8">
-                          <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
                         </div>
                       ) : templates.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
@@ -1619,18 +1619,18 @@ export default function Home() {
                                 key={template.id}
                                 className={`p-4 rounded-lg border transition-all cursor-pointer ${
                                   selectedTemplateId === template.id
-                                    ? 'border-amber-500/40 bg-amber-500/5'
-                                    : 'border-border bg-muted/20 hover:border-amber-500/20'
+                                    ? 'border-primary/20 bg-primary/5'
+                                    : 'border-border bg-muted/20 hover:border-primary/12'
                                 }`}
                                 onClick={() => setSelectedTemplateId(template.id)}
                               >
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="flex items-center gap-2">
-                                    <FileText className="w-4 h-4 text-amber-500" />
+                                    <FileText className="w-4 h-4 text-primary" />
                                     <span className="text-sm font-medium">{template.name}</span>
                                   </div>
                                   {template.isDefault && (
-                                    <Badge className="text-xs gold-gradient text-background border-0">Predeterminada</Badge>
+                                    <Badge className="text-xs primary-gradient text-primary-foreground border-0">Predeterminada</Badge>
                                   )}
                                 </div>
                                 <p className="text-xs text-muted-foreground line-clamp-2">
@@ -1653,7 +1653,7 @@ export default function Home() {
                   <Card className="border-border bg-card/80">
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
-                        <Eye className="w-4 h-4 text-amber-500" />
+                        <Eye className="w-4 h-4 text-primary" />
                         Vista Previa: {templates.find(t => t.id === selectedTemplateId)?.name}
                       </CardTitle>
                     </CardHeader>
@@ -1676,14 +1676,14 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.15 }}
                 className="space-y-6"
               >
                 {/* Add Source Form */}
                 <Card className="border-border bg-card/80">
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-amber-500" />
+                      <Plus className="w-4 h-4 text-primary" />
                       Añadir Fuente de Información
                     </CardTitle>
                     <CardDescription>Agregue URLs y feeds RSS como fuentes de inteligencia</CardDescription>
@@ -1696,7 +1696,7 @@ export default function Home() {
                           value={sourceName}
                           onChange={(e) => setSourceName(e.target.value)}
                           placeholder="Ej: Reuters - Seguridad"
-                          className="bg-muted/30 border-border focus:border-amber-500/50"
+                          className="bg-muted/30 border-border focus:border-primary/30"
                         />
                       </div>
                       <div className="space-y-2">
@@ -1705,7 +1705,7 @@ export default function Home() {
                           value={sourceUrl}
                           onChange={(e) => setSourceUrl(e.target.value)}
                           placeholder="https://ejemplo.com/noticias"
-                          className="bg-muted/30 border-border focus:border-amber-500/50"
+                          className="bg-muted/30 border-border focus:border-primary/30"
                         />
                       </div>
                       <div className="space-y-2">
@@ -1735,7 +1735,7 @@ export default function Home() {
                         </Select>
                       </div>
                     </div>
-                    <Button onClick={handleAddSource} className="mt-4 gold-gradient text-background font-semibold hover:opacity-90">
+                    <Button onClick={handleAddSource} className="mt-4 primary-gradient text-primary-foreground font-semibold hover:opacity-95">
                       <Plus className="w-4 h-4 mr-2" />
                       Añadir Fuente
                     </Button>
@@ -1747,12 +1747,12 @@ export default function Home() {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base flex items-center gap-2">
-                        <Newspaper className="w-4 h-4 text-amber-500" />
+                        <Newspaper className="w-4 h-4 text-primary" />
                         Fuentes Registradas
                       </CardTitle>
                       <div className="flex items-center gap-2">
                         {selectedSourceIds.size > 0 && (
-                          <Badge className="text-xs gold-gradient text-background font-semibold">
+                          <Badge className="text-xs primary-gradient text-primary-foreground font-semibold">
                             {selectedSourceIds.size} seleccionada(s)
                           </Badge>
                         )}
@@ -1768,7 +1768,7 @@ export default function Home() {
                   <CardContent>
                     {loadingSources ? (
                       <div className="flex items-center justify-center py-8">
-                        <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
                       </div>
                     ) : sources.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
@@ -1779,10 +1779,10 @@ export default function Home() {
                     ) : (
                       <>
                         {/* Select All Bar */}
-                        <div className="flex items-center justify-between mb-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                        <div className="flex items-center justify-between mb-3 p-3 rounded-lg bg-primary/5 border border-primary/12">
                           <button
                             onClick={toggleSelectAllSources}
-                            className="flex items-center gap-2 text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors"
+                            className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
                           >
                             {selectedSourceIds.size === sources.length ? (
                               <CheckSquare className="w-4 h-4" />
@@ -1804,7 +1804,7 @@ export default function Home() {
                                   key={source.id}
                                   className={`flex items-center justify-between p-4 rounded-lg border transition-all cursor-pointer ${
                                     isSelected
-                                      ? 'border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/15'
+                                      ? 'border-primary/30 bg-primary/8 hover:bg-primary/10'
                                       : 'border-border bg-muted/20 hover:bg-muted/30'
                                   }`}
                                   onClick={() => toggleSourceSelection(source.id)}
@@ -1813,7 +1813,7 @@ export default function Home() {
                                     {/* Checkbox */}
                                     <div className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
                                       isSelected
-                                        ? 'border-amber-500 bg-amber-500'
+                                        ? 'border-primary bg-primary'
                                         : 'border-muted-foreground/40'
                                     }`}>
                                       {isSelected && <CheckCircle className="w-3.5 h-3.5 text-background" />}
@@ -1869,14 +1869,14 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.15 }}
                 className="space-y-6"
               >
                 {/* Analysis Configuration */}
                 <Card className="border-border bg-card/80">
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Brain className="w-4 h-4 text-amber-500" />
+                      <Brain className="w-4 h-4 text-primary" />
                       Análisis de Inteligencia con IA
                     </CardTitle>
                     <CardDescription>
@@ -1888,12 +1888,12 @@ export default function Home() {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <Label className="text-sm font-semibold flex items-center gap-2">
-                          <Filter className="w-4 h-4 text-amber-500" />
+                          <Filter className="w-4 h-4 text-primary" />
                           Clasificaciones de la Industria
                         </Label>
                         <button
                           onClick={toggleSelectAllCategories}
-                          className="flex items-center gap-1.5 text-xs font-medium text-amber-400 hover:text-amber-300 transition-colors"
+                          className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
                         >
                           {selectedCategories.size === industryCategories.length ? (
                             <>
@@ -1921,11 +1921,11 @@ export default function Home() {
                               onClick={() => toggleCategory(cat.id)}
                               className={`flex items-center gap-2.5 p-3 rounded-lg border text-left transition-all duration-200 ${
                                 isSelected
-                                  ? `border-amber-500/50 bg-amber-500/10 shadow-sm shadow-amber-500/10`
+                                  ? `border-primary/30 bg-primary/8 shadow-sm shadow-primary/5`
                                   : 'border-border bg-muted/20 hover:bg-muted/30'
                               }`}
                             >
-                              <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-amber-500/20 text-amber-400' : cat.color}`}>
+                              <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-primary/12 text-primary' : cat.color}`}>
                                 <IconComp className="w-4 h-4" />
                               </div>
                               <div className="min-w-0 flex-1">
@@ -1935,7 +1935,7 @@ export default function Home() {
                               </div>
                               <div className={`shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
                                 isSelected
-                                  ? 'border-amber-500 bg-amber-500'
+                                  ? 'border-primary bg-primary'
                                   : 'border-muted-foreground/30'
                               }`}>
                                 {isSelected && <CheckCircle className="w-2.5 h-2.5 text-background" />}
@@ -1946,7 +1946,7 @@ export default function Home() {
                       </div>
                       {selectedCategories.size > 0 && (
                         <div className="flex items-center gap-2 mt-2">
-                          <Badge className="text-xs gold-gradient text-background font-semibold">
+                          <Badge className="text-xs primary-gradient text-primary-foreground font-semibold">
                             {selectedCategories.size} categoría(s) seleccionada(s)
                           </Badge>
                           <span className="text-xs text-muted-foreground">
@@ -1961,13 +1961,13 @@ export default function Home() {
                     {/* Selected Sources Summary */}
                     <div className="space-y-3">
                       <Label className="text-sm font-semibold flex items-center gap-2">
-                        <ListChecks className="w-4 h-4 text-amber-500" />
+                        <ListChecks className="w-4 h-4 text-primary" />
                         Fuentes Seleccionadas para el Análisis
                       </Label>
                       {selectedSourceIds.size > 0 ? (
-                        <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                        <div className="p-3 rounded-lg bg-primary/5 border border-primary/12">
                           <div className="flex items-center gap-2 mb-2">
-                            <Badge className="text-xs gold-gradient text-background font-semibold">
+                            <Badge className="text-xs primary-gradient text-primary-foreground font-semibold">
                               {selectedSourceIds.size} fuente(s)
                             </Badge>
                             <span className="text-xs text-muted-foreground">serán consultadas en el análisis</span>
@@ -1976,7 +1976,7 @@ export default function Home() {
                             {sources
                               .filter(s => selectedSourceIds.has(s.id))
                               .map(s => (
-                                <Badge key={s.id} variant="outline" className="text-xs border-amber-500/30 text-amber-400">
+                                <Badge key={s.id} variant="outline" className="text-xs border-primary/15 text-primary">
                                   {s.name}
                                 </Badge>
                               ))}
@@ -1987,7 +1987,7 @@ export default function Home() {
                           <p className="text-xs text-muted-foreground">
                             No ha seleccionado fuentes específicas. Se usarán todas las fuentes activas ({sources.filter(s => s.active).length} disponible(s)).
                           </p>
-                          <Button variant="link" size="sm" className="text-amber-500 p-0 h-auto text-xs mt-1" onClick={() => setActiveTab('fuentes')}>
+                          <Button variant="link" size="sm" className="text-primary p-0 h-auto text-xs mt-1" onClick={() => setActiveTab('fuentes')}>
                             Ir a seleccionar fuentes →
                           </Button>
                         </div>
@@ -2017,7 +2017,7 @@ export default function Home() {
                     <Button
                       onClick={handleAnalyze}
                       disabled={isAnalyzing}
-                      className="w-full gold-gradient text-background font-semibold hover:opacity-90"
+                      className="w-full primary-gradient text-primary-foreground font-semibold hover:opacity-95"
                       size="lg"
                     >
                       {isAnalyzing ? (
@@ -2030,9 +2030,9 @@ export default function Home() {
 
                     {/* Progress */}
                     {isAnalyzing && (
-                      <div className="space-y-3 p-4 rounded-lg bg-muted/20 border border-amber-500/20">
+                      <div className="space-y-3 p-4 rounded-lg bg-muted/20 border border-primary/12">
                         <div className="flex items-center gap-2 text-sm">
-                          <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                          <Loader2 className="w-4 h-4 animate-spin text-primary" />
                           <span>{analysisStep}</span>
                         </div>
                         <Progress value={analysisProgress} className="h-2" />
@@ -2049,7 +2049,7 @@ export default function Home() {
                       <Card className="lg:col-span-2 border-border bg-card/80">
                         <CardHeader className="pb-3">
                           <CardTitle className="text-base flex items-center gap-2">
-                            <Activity className="w-4 h-4 text-amber-500" />
+                            <Activity className="w-4 h-4 text-primary" />
                             Resumen del Análisis
                           </CardTitle>
                         </CardHeader>
@@ -2071,7 +2071,7 @@ export default function Home() {
                       <Card className="border-border bg-card/80">
                         <CardHeader className="pb-3">
                           <CardTitle className="text-base flex items-center gap-2">
-                            <Shield className="w-4 h-4 text-amber-500" />
+                            <Shield className="w-4 h-4 text-primary" />
                             Generar Informe
                           </CardTitle>
                         </CardHeader>
@@ -2082,7 +2082,7 @@ export default function Home() {
                           <Button
                             onClick={handleGenerateReport}
                             disabled={isGenerating}
-                            className="w-full gold-gradient text-background font-semibold hover:opacity-90"
+                            className="w-full primary-gradient text-primary-foreground font-semibold hover:opacity-95"
                           >
                             {isGenerating ? (
                               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -2116,7 +2116,7 @@ export default function Home() {
                               transition={{ delay: i * 0.1 }}
                               className="flex items-start gap-3 p-4 rounded-lg border border-border bg-muted/20"
                             >
-                              <span className={`w-3 h-3 rounded-full mt-1 shrink-0 ${threatLevelDots[threat.severity]} ${threat.severity === 'critico' ? 'threat-pulse' : ''}`} />
+                              <span className={`w-3 h-3 rounded-full mt-1 shrink-0 ${threatLevelDots[threat.severity]} ${threat.severity === 'critico' ? 'status-pulse' : ''}`} />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                                   <span className="text-sm font-semibold">{threat.title}</span>
@@ -2140,7 +2140,7 @@ export default function Home() {
                       <Card className="border-border bg-card/80">
                         <CardHeader className="pb-3">
                           <CardTitle className="text-base flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4 text-amber-500" />
+                            <TrendingUp className="w-4 h-4 text-primary" />
                             Recomendaciones
                           </CardTitle>
                         </CardHeader>
@@ -2161,7 +2161,7 @@ export default function Home() {
                       <Card className="border-border bg-card/80">
                         <CardHeader className="pb-3">
                           <CardTitle className="text-base flex items-center gap-2">
-                            <Search className="w-4 h-4 text-amber-500" />
+                            <Search className="w-4 h-4 text-primary" />
                             Fuentes Consultadas
                           </CardTitle>
                           <CardDescription className="text-xs">
@@ -2175,8 +2175,8 @@ export default function Home() {
                             <div className="space-y-2">
                               {/* Show user-selected sources first */}
                               {selectedSourceIds.size > 0 && sources.filter(s => selectedSourceIds.has(s.id)).map((source) => (
-                                <div key={`sel-${source.id}`} className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                                  <CheckCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                                <div key={`sel-${source.id}`} className="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/12">
+                                  <CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                                   <div className="min-w-0">
                                     <p className="text-sm font-medium truncate">{source.name}</p>
                                     <p className="text-xs text-muted-foreground truncate">{source.url}</p>
@@ -2193,7 +2193,7 @@ export default function Home() {
                                   <div className="min-w-0">
                                     <p className="text-sm font-medium truncate">{source.title}</p>
                                     <p className="text-xs text-muted-foreground truncate">{source.url}</p>
-                                    <p className="text-xs text-amber-500/70 mt-0.5">{source.relevance}</p>
+                                    <p className="text-xs text-primary/50 mt-0.5">{source.relevance}</p>
                                   </div>
                                 </div>
                               ))}
@@ -2214,7 +2214,7 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.15 }}
                 className="space-y-6"
               >
                 <Card className="border-border bg-card/80">
@@ -2222,7 +2222,7 @@ export default function Home() {
                     <div className="flex items-center justify-between">
                       <div>
                         <CardTitle className="text-base flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-amber-500" />
+                          <FileText className="w-4 h-4 text-primary" />
                           Informes Generados
                         </CardTitle>
                         <CardDescription>{totalReports} informe(s) en total</CardDescription>
@@ -2236,7 +2236,7 @@ export default function Home() {
                   <CardContent>
                     {loadingReports ? (
                       <div className="flex items-center justify-center py-8">
-                        <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
                       </div>
                     ) : reports.length === 0 ? (
                       <div className="text-center py-12 text-muted-foreground">
@@ -2245,7 +2245,7 @@ export default function Home() {
                         <p className="text-xs mt-1">Vaya a Análisis para generar su primer informe</p>
                         <Button
                           variant="outline"
-                          className="mt-4 border-amber-500/30 text-amber-500 hover:text-amber-400"
+                          className="mt-4 border-primary/15 text-primary hover:text-primary/80"
                           onClick={() => setActiveTab('analisis')}
                         >
                           Ir a Análisis
@@ -2264,7 +2264,7 @@ export default function Home() {
                             >
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex items-start gap-3 min-w-0">
-                                  <span className={`w-3 h-3 rounded-full mt-1.5 shrink-0 ${threatLevelDots[report.threatLevel] || 'bg-gray-500'} ${report.threatLevel === 'critico' ? 'threat-pulse' : ''}`} />
+                                  <span className={`w-3 h-3 rounded-full mt-1.5 shrink-0 ${threatLevelDots[report.threatLevel] || 'bg-gray-500'} ${report.threatLevel === 'critico' ? 'status-pulse' : ''}`} />
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <h3 className="text-sm font-semibold">{report.title}</h3>
@@ -2291,7 +2291,7 @@ export default function Home() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => { setPreviewReport(report); setPreviewOpen(true); }}
-                                    className="text-amber-500 hover:text-amber-400"
+                                    className="text-primary hover:text-primary/80"
                                     title="Ver informe"
                                   >
                                     <Eye className="w-4 h-4" />
@@ -2318,7 +2318,7 @@ export default function Home() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleOpenEdit(report)}
-                                    className="text-amber-500 hover:text-amber-400"
+                                    className="text-primary hover:text-primary/80"
                                     title="Mejorar informe"
                                   >
                                     <Pencil className="w-4 h-4" />
@@ -2351,12 +2351,12 @@ export default function Home() {
         <footer className="border-t border-border px-4 lg:px-8 py-3 mt-auto">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
-              <Shield className="w-3 h-3 text-amber-500" />
+              <Shield className="w-3 h-3 text-primary" />
               <span>VIP_Protection Report - Executive Intelligence System</span>
             </div>
             <div className="flex items-center gap-1">
               <span>Clasificado</span>
-              <span className="text-amber-500">•</span>
+              <span className="text-primary">•</span>
               <span>{new Date().getFullYear()}</span>
             </div>
           </div>
@@ -2368,7 +2368,7 @@ export default function Home() {
         <DialogContent className="max-w-4xl max-h-[85vh] bg-card border-border">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-amber-500" />
+              <FileText className="w-5 h-5 text-primary" />
               {previewReport?.title || 'Vista Previa'}
             </DialogTitle>
             <DialogDescription className="flex items-center gap-3">
@@ -2392,19 +2392,19 @@ export default function Home() {
           <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-border">
             {previewReport && (
               <>
-                <Button onClick={() => handleDownloadPDF(previewReport)} className="gold-gradient text-background font-semibold hover:opacity-90">
+                <Button onClick={() => handleDownloadPDF(previewReport)} className="primary-gradient text-primary-foreground font-semibold hover:opacity-95">
                   <FileDown className="w-4 h-4 mr-2" />
                   Descargar PDF
                 </Button>
-                <Button onClick={() => handleDownloadDOCX(previewReport)} variant="outline" className="border-amber-500/30 text-amber-500 hover:text-amber-400 hover:border-amber-500/50">
+                <Button onClick={() => handleDownloadDOCX(previewReport)} variant="outline" className="border-primary/15 text-primary hover:text-primary/80 hover:border-primary/30">
                   <FileText className="w-4 h-4 mr-2" />
                   Descargar DOCX
                 </Button>
-                <Button onClick={() => handleDownloadReport(previewReport)} variant="outline" className="border-border hover:border-amber-500/30">
+                <Button onClick={() => handleDownloadReport(previewReport)} variant="outline" className="border-border hover:border-primary/15">
                   <Download className="w-4 h-4 mr-2" />
                   Descargar MD
                 </Button>
-                <Button onClick={() => { setPreviewOpen(false); handleOpenEdit(previewReport); }} variant="outline" className="border-border text-amber-500 hover:text-amber-400 hover:border-amber-500/30">
+                <Button onClick={() => { setPreviewOpen(false); handleOpenEdit(previewReport); }} variant="outline" className="border-border text-primary hover:text-primary/80 hover:border-primary/15">
                   <Pencil className="w-4 h-4 mr-2" />
                   Mejorar
                 </Button>
@@ -2422,7 +2422,7 @@ export default function Home() {
         <DialogContent className="max-w-2xl bg-card border-border">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Pencil className="w-5 h-5 text-amber-500" />
+              <Pencil className="w-5 h-5 text-primary" />
               Mejorar Informe
             </DialogTitle>
             <DialogDescription>
@@ -2436,7 +2436,7 @@ export default function Home() {
                 value={editAdditionalUrls}
                 onChange={(e) => setEditAdditionalUrls(e.target.value)}
                 placeholder="https://ejemplo.com/noticia1, https://ejemplo.com/noticia2"
-                className="bg-muted/30 border-border focus:border-amber-500/50"
+                className="bg-muted/30 border-border focus:border-primary/30"
               />
             </div>
             <div className="space-y-2">
@@ -2445,7 +2445,7 @@ export default function Home() {
                 value={editAdditionalNews}
                 onChange={(e) => setEditAdditionalNews(e.target.value)}
                 placeholder="Pegue aquí texto adicional de noticias o información relevante..."
-                className="min-h-32 bg-muted/30 border-border focus:border-amber-500/50"
+                className="min-h-32 bg-muted/30 border-border focus:border-primary/30"
               />
             </div>
             <div className="space-y-2">
@@ -2454,7 +2454,7 @@ export default function Home() {
                 value={editAdditionalContext}
                 onChange={(e) => setEditAdditionalContext(e.target.value)}
                 placeholder="Instrucciones o contexto adicional para el análisis..."
-                className="min-h-24 bg-muted/30 border-border focus:border-amber-500/50"
+                className="min-h-24 bg-muted/30 border-border focus:border-primary/30"
               />
             </div>
           </div>
@@ -2462,7 +2462,7 @@ export default function Home() {
             <Button
               onClick={handleUpdateReport}
               disabled={isUpdating}
-              className="gold-gradient text-background font-semibold hover:opacity-90"
+              className="primary-gradient text-primary-foreground font-semibold hover:opacity-95"
             >
               {isUpdating ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -2483,7 +2483,7 @@ export default function Home() {
         <DialogContent className="max-w-md bg-card border-border">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Smartphone className="w-5 h-5 text-amber-500" />
+              <Smartphone className="w-5 h-5 text-primary" />
               Configurar Autenticación de Doble Factor
             </DialogTitle>
             <DialogDescription>
@@ -2514,14 +2514,14 @@ export default function Home() {
                 placeholder="000000"
                 value={mfaVerifyCode}
                 onChange={(e) => setMfaVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                className="text-center text-xl tracking-[0.5em] bg-muted/30 border-border focus:border-amber-500/50 h-12 font-mono"
+                className="text-center text-xl tracking-[0.5em] bg-muted/30 border-border focus:border-primary/30 h-12 font-mono"
               />
             </div>
             <div className="flex items-center gap-2">
               <Button
                 onClick={handleMfaEnable}
                 disabled={mfaLoading || mfaVerifyCode.length !== 6}
-                className="gold-gradient text-background font-semibold hover:opacity-90 flex-1"
+                className="primary-gradient text-primary-foreground font-semibold hover:opacity-95 flex-1"
               >
                 {mfaLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
                 {mfaLoading ? 'Verificando...' : 'Verificar y Activar'}
@@ -2554,7 +2554,7 @@ export default function Home() {
                 placeholder="••••••••"
                 value={disableMfaPassword}
                 onChange={(e) => setDisableMfaPassword(e.target.value)}
-                className="bg-muted/30 border-border focus:border-amber-500/50"
+                className="bg-muted/30 border-border focus:border-primary/30"
               />
             </div>
             <div className="flex items-center gap-2">

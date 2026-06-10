@@ -85,7 +85,7 @@ function TemplateChip({
       onClick={onToggle}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border cursor-pointer ${
         selected
-          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+          ? 'bg-primary/8 border-primary/30 text-primary'
           : 'bg-card/50 border-border text-muted-foreground hover:bg-muted/30 hover:text-foreground'
       }`}
     >
@@ -507,7 +507,7 @@ export default function GoogleDorkingPanel({ executiveTarget, onClose }: GoogleD
               <div>
                 <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
                   <span className="text-white">Google</span>
-                  <span className="text-emerald-400">Dorking</span>
+                  <span className="text-primary">Dorking</span>
                 </h2>
                 <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
                   Automated advanced Google Dork searches to discover sensitive information, exposed files, login pages, databases, and security misconfigurations indexed by search engines.
@@ -542,14 +542,14 @@ export default function GoogleDorkingPanel({ executiveTarget, onClose }: GoogleD
                       onClick={() => setActiveCategory(cat)}
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all border cursor-pointer ${
                         isActive
-                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                          ? 'bg-primary/8 border-primary/30 text-primary'
                           : 'bg-card/50 border-border text-muted-foreground hover:bg-muted/30 hover:text-foreground'
                       }`}
                     >
                       <CategoryIcon category={cat} className="w-3.5 h-3.5" />
                       {meta.label}
                       {selectedInCat > 0 && (
-                        <span className="bg-emerald-500/30 text-emerald-300 text-[10px] px-1 rounded-full">
+                        <span className="bg-primary/12 text-primary text-[10px] px-1 rounded-full">
                           {selectedInCat}
                         </span>
                       )}
@@ -747,7 +747,7 @@ export default function GoogleDorkingPanel({ executiveTarget, onClose }: GoogleD
         <Card className="border-border bg-card/60">
           <CardHeader className="pb-3">
             <CardTitle className="text-base text-foreground flex items-center gap-2">
-              <Globe className="w-4 h-4 text-emerald-500" />
+              <Globe className="w-4 h-4 text-primary" />
               Dashboard de Resultados
             </CardTitle>
           </CardHeader>
@@ -796,16 +796,16 @@ export default function GoogleDorkingPanel({ executiveTarget, onClose }: GoogleD
 
             {/* Live progress indicator */}
             {isSearching && searchProgress && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                <span className="text-sm text-emerald-300">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/8">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <span className="text-sm text-primary">
                   Procesando dork {searchProgress.completedQueries} de {searchProgress.totalQueries}...
                   {searchProgress.totalResults > 0 && ` | ${searchProgress.totalResults} resultados hasta ahora`}
                 </span>
                 <div className="ml-auto flex-1 max-w-xs">
                   <div className="h-1.5 rounded-full bg-muted/20 overflow-hidden">
                     <div
-                      className="h-full bg-emerald-500 transition-all duration-500"
+                      className="h-full bg-primary transition-all duration-500"
                       style={{ width: `${(searchProgress.completedQueries / searchProgress.totalQueries) * 100}%` }}
                     />
                   </div>
@@ -821,7 +821,7 @@ export default function GoogleDorkingPanel({ executiveTarget, onClose }: GoogleD
                     key={result.templateId}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.15 }}
                   >
                     <DorkResultCard
                       result={result}
