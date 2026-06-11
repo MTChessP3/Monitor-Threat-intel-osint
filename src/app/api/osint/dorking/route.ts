@@ -4,14 +4,16 @@
  * POST /api/osint/dorking
  *
  * Accepts target info, filters, and template IDs.
- * Returns Server-Sent Events (SSE) with progressive results
- * as each dork query is executed against multiple search engines.
+ * Returns Server-Sent Events (SSE) with progressive results.
  *
- * Flow:
- * 1. Frontend sends POST with search parameters
- * 2. Backend responds with SSE stream
- * 3. Each dork result is sent as an SSE event
- * 4. Final "complete" event signals end of search
+ * KEY DESIGN DECISIONS:
+ * 1. Templates use Google Dork syntax (intitle:, inurl:, filetype:, site:)
+ *    but the backend uses ZAI Web Search which does NOT understand those operators.
+ * 2. We convert dork queries to natural-language queries for ZAI execution,
+ *    while preserving the original dork query for display / "Open in Google" link.
+ * 3. For each template, we generate ONE query per target field (name, email,
+ *    alias, phone, domain), so all provided fields are searched.
+ * 4. Results from all field-specific queries are merged and deduplicated.
  */
 
 import { NextRequest } from 'next/server';
@@ -19,18 +21,19 @@ import { verifyToken, AUTH_COOKIE_NAME } from '@/lib/auth';
 import { zaiWebSearch } from '@/lib/zai';
 import {
   DORK_TEMPLATES,
-  SEVERITY_COLORS,
   type SeverityLevel,
   type DorkCategory,
 } from '@/lib/osint/dork-templates';
 import {
   buildQueryFromTemplate,
   buildSearchUrl,
-  getRandomUserAgent,
+  buildMultiFieldZAIQueries,
+  deduplicateResults,
   type TargetInput,
   type SearchFilters,
   type DorkSearchResult,
   type DorkSearchResultItem,
+  type MultiFieldQuery,
 } from '@/lib/osint/query-builder';
 
 export const maxDuration = 300;
@@ -55,48 +58,59 @@ function sseEvent(event: string, data: unknown): string {
 }
 
 // ============================================================================
-// Search Engine Adapters
+// ZAI Search Executor
 // ============================================================================
-interface EngineAdapter {
-  name: string;
-  search: (query: string) => Promise<DorkSearchResultItem[]>;
+/**
+ * Execute a single natural-language query against ZAI Web Search.
+ * Returns an array of search result items.
+ */
+async function executeZAIQuery(query: string): Promise<DorkSearchResultItem[]> {
+  try {
+    const searchResult = await zaiWebSearch(query, { num: 15, maxRetries: 2 });
+
+    if (searchResult && searchResult.length > 0) {
+      return searchResult
+        .filter((item: any) => item.url && item.url.startsWith('http'))
+        .map((item: any, index: number) => ({
+          title: (item.name || 'Sin titulo').substring(0, 300),
+          url: item.url,
+          snippet: (item.snippet || '').substring(0, 500),
+          source: 'Investigation Search',
+          position: index + 1,
+        }));
+    }
+    return [];
+  } catch (e: unknown) {
+    console.error(`[DORKING] ZAI search error for "${query.substring(0, 60)}": ${e instanceof Error ? e.message.substring(0, 150) : String(e).substring(0, 150)}`);
+    return [];
+  }
 }
 
-function createZAIEngineAdapter(engineName: string): EngineAdapter {
-  return {
-    name: engineName,
-    search: async (query: string): Promise<DorkSearchResultItem[]> => {
-      try {
-        const searchResult = await zaiWebSearch(query, { num: 15, maxRetries: 2 });
+/**
+ * Execute all field-specific queries for a single template,
+ * merge and deduplicate the results.
+ */
+async function executeTemplateQueries(
+  multiQueries: MultiFieldQuery[],
+): Promise<{ results: DorkSearchResultItem[]; error?: string }> {
+  const allItems: DorkSearchResultItem[] = [];
+  let lastError: string | undefined;
 
-        if (searchResult && searchResult.length > 0) {
-          return searchResult
-            .filter((item: any) => item.url && item.url.startsWith('http'))
-            .map((item: any, index: number) => ({
-              title: (item.name || 'Sin titulo').substring(0, 300),
-              url: item.url,
-              snippet: (item.snippet || '').substring(0, 500),
-              source: engineName,
-              position: index + 1,
-            }));
-        }
-        return [];
-      } catch (e: unknown) {
-        console.error(`[DORKING] ${engineName} search error: ${e instanceof Error ? e.message.substring(0, 150) : String(e).substring(0, 150)}`);
-        return [];
-      }
-    },
-  };
+  for (const mq of multiQueries) {
+    const items = await executeZAIQuery(mq.zaiQuery);
+    allItems.push(...items);
+
+    // Small delay between field queries to avoid rate limiting
+    if (multiQueries.indexOf(mq) < multiQueries.length - 1) {
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  // Deduplicate by URL
+  const deduped = deduplicateResults(allItems);
+
+  return { results: deduped, error: lastError };
 }
-
-// We use ZAI Web Search as the unified search backend
-// It aggregates results from multiple search engines
-const ENGINES: EngineAdapter[] = [
-  createZAIEngineAdapter('Google (via ZAI)'),
-  createZAIEngineAdapter('Bing (via ZAI)'),
-  createZAIEngineAdapter('DuckDuckGo (via ZAI)'),
-  createZAIEngineAdapter('Yandex (via ZAI)'),
-];
 
 // ============================================================================
 // POST Handler - SSE Stream
@@ -152,6 +166,16 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // Build multi-field ZAI queries for all templates
+  const allMultiQueries: MultiFieldQuery[] = [];
+  for (const template of selectedTemplates) {
+    const queries = buildMultiFieldZAIQueries(template, target, filters);
+    allMultiQueries.push(...queries);
+  }
+
+  // Total queries = number of unique template+field combinations
+  const totalQueryCount = selectedTemplates.length; // Report progress per template, not per field query
+
   const taskId = `dork-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
   const startedAt = new Date().toISOString();
 
@@ -166,61 +190,41 @@ export async function POST(request: NextRequest) {
       // Send initial event
       await writer.write(encoder.encode(sseEvent('start', {
         taskId,
-        totalQueries: selectedTemplates.length,
+        totalQueries: totalQueryCount,
         startedAt,
+        targetFields: [...new Set(allMultiQueries.map(q => q.targetField))],
+        totalSubQueries: allMultiQueries.length,
       })));
 
       let completedQueries = 0;
       let totalResults = 0;
       const allResults: DorkSearchResult[] = [];
 
-      // Execute each dork template
+      // Execute each dork template (with multi-field queries)
       for (const template of selectedTemplates) {
-        const query = buildQueryFromTemplate(template, target, filters);
-        const searchUrl = buildSearchUrl(query, 'google');
+        // Get the multi-field queries for this template
+        const templateMultiQueries = allMultiQueries.filter(q => q.templateId === template.id);
 
-        // Try multiple engines (use ZAI as primary, which aggregates)
-        let bestResults: DorkSearchResultItem[] = [];
-        let usedEngine = 'Investigation Search';
-        let searchError: string | undefined;
+        // Build the dork query (for display) using primary target
+        const dorkQuery = buildQueryFromTemplate(template, target, filters);
+        const searchUrl = buildSearchUrl(dorkQuery, 'google');
 
-        try {
-          // Use the first engine adapter (ZAI aggregates multiple engines)
-          const results = await ENGINES[0].search(query);
-          if (results.length > 0) {
-            bestResults = results;
-            usedEngine = 'Investigation Search';
-          }
-        } catch (e: unknown) {
-          searchError = e instanceof Error ? e.message.substring(0, 200) : String(e).substring(0, 200);
-        }
-
-        // If no results from primary, try secondary
-        if (bestResults.length === 0 && !searchError) {
-          try {
-            const results = await ENGINES[1].search(query);
-            if (results.length > 0) {
-              bestResults = results;
-              usedEngine = 'Investigation Search';
-            }
-          } catch (e: unknown) {
-            searchError = e instanceof Error ? e.message.substring(0, 200) : String(e).substring(0, 200);
-          }
-        }
+        // Execute all field-specific queries and merge results
+        const { results: mergedResults, error: searchError } = await executeTemplateQueries(templateMultiQueries);
 
         completedQueries++;
-        totalResults += bestResults.length;
+        totalResults += mergedResults.length;
 
         const dorkResult: DorkSearchResult = {
           templateId: template.id,
           templateName: template.name,
-          query,
+          query: dorkQuery,
           severity: template.severity,
           category: template.category,
-          engine: usedEngine,
+          engine: 'Investigation Search',
           searchUrl,
-          resultCount: bestResults.length,
-          results: bestResults,
+          resultCount: mergedResults.length,
+          results: mergedResults,
           completedAt: new Date().toISOString(),
           error: searchError,
         };
@@ -232,21 +236,21 @@ export async function POST(request: NextRequest) {
           dork: dorkResult,
           progress: {
             taskId,
-            totalQueries: selectedTemplates.length,
+            totalQueries: totalQueryCount,
             completedQueries,
             totalResults,
           },
         })));
 
-        // Rate limiting delay between queries (anti-bot)
-        const delay = 300 + Math.random() * 500;
+        // Rate limiting delay between templates (anti-bot)
+        const delay = 400 + Math.random() * 600;
         await new Promise(r => setTimeout(r, delay));
       }
 
       // Send completion event
       await writer.write(encoder.encode(sseEvent('complete', {
         taskId,
-        totalQueries: selectedTemplates.length,
+        totalQueries: totalQueryCount,
         completedQueries,
         totalResults,
         allResults: allResults.map(r => ({
@@ -260,6 +264,8 @@ export async function POST(request: NextRequest) {
         })),
         elapsedSeconds: ((Date.now() - new Date(startedAt).getTime()) / 1000).toFixed(1),
         target,
+        targetFields: [...new Set(allMultiQueries.map(q => q.targetField))],
+        totalSubQueries: allMultiQueries.length,
       })));
 
     } catch (e: unknown) {

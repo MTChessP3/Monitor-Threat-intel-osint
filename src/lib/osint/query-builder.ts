@@ -169,6 +169,70 @@ export function getTargetDomain(target: TargetInput): string {
 }
 
 // ============================================================================
+// Dork-to-Natural Query Converter
+// ============================================================================
+/**
+ * Convert a Google Dork query into a natural-language query that
+ * generic search engines (ZAI Web Search, etc.) can process.
+ *
+ * Google dork operators (intitle:, inurl:, filetype:, site:, etc.)
+ * are NOT understood by ZAI Web Search. This function strips those
+ * operators and converts them to plain keyword terms that produce
+ * meaningful results on generic search APIs.
+ *
+ * Examples:
+ *   intitle:"login" "Juan Perez"       → "Juan Perez" login
+ *   filetype:sql "correo@empresa.com"   → "correo@empresa.com" sql file
+ *   site:linkedin.com "Juan Perez"      → "Juan Perez" linkedin.com
+ *   inurl:admin "empresa.com"           → "empresa.com" admin
+ */
+export function dorkToNaturalQuery(dorkQuery: string): string {
+  let q = dorkQuery;
+
+  // Convert intitle:"X" → X
+  q = q.replace(/intitle:"([^"]+)"/g, '$1');
+  // Convert intitle:X → X
+  q = q.replace(/intitle:([^\s"]+)/g, '$1');
+
+  // Convert inurl:X → X
+  q = q.replace(/inurl:"([^"]+)"/g, '$1');
+  q = q.replace(/inurl:([^\s"]+)/g, '$1');
+
+  // Convert filetype:X → X file
+  q = q.replace(/filetype:(\w+)/g, '$1');
+
+  // Convert site:X → X (keep domain as keyword)
+  q = q.replace(/site:"([^"]+)"/g, '$1');
+  q = q.replace(/site:([^\s"]+)/g, '$1');
+
+  // Remove OR (keep surrounding terms)
+  q = q.replace(/\bOR\b/g, '');
+
+  // Remove after: filters (not supported)
+  q = q.replace(/after:\w+/g, '');
+
+  // Remove remaining unsupported operators
+  q = q.replace(/cache:[^\s]+/g, '');
+  q = q.replace(/related:[^\s]+/g, '');
+  q = q.replace(/link:[^\s]+/g, '');
+  q = q.replace(/info:[^\s]+/g, '');
+  q = q.replace(/define:[^\s]+/g, '');
+  q = q.replace(/allintitle:[^\s]+/g, '');
+  q = q.replace(/allinurl:[^\s]+/g, '');
+  q = q.replace(/allintext:[^\s]+/g, '');
+
+  // Clean up leftover colons from partially-converted operators
+  // e.g. ".git" → .git  (remove wrapping quotes around simple terms)
+  // But keep quoted phrases that are meaningful
+  q = q.replace(/\s{2,}/g, ' ').trim();
+
+  // Remove leading/trailing stray operators or punctuation
+  q = q.replace(/^[\s:]+/, '').replace(/[\s:]+$/, '');
+
+  return q;
+}
+
+// ============================================================================
 // Query Building
 // ============================================================================
 /**
@@ -228,6 +292,117 @@ export function buildQueryFromTemplate(
   }
 
   return query;
+}
+
+// ============================================================================
+// Multi-Field ZAI Query Builder
+// ============================================================================
+/**
+ * For each template, generate ONE natural-language query per target field.
+ * This ensures all provided fields (name, email, alias, phone, domain)
+ * are searched — not just the primary one.
+ *
+ * Returns both the original dork query (for display / "Open in Google")
+ * and a ZAI-compatible natural query (for actual search execution).
+ */
+export interface MultiFieldQuery {
+  /** The dork-formatted query (for display in UI) */
+  dorkQuery: string;
+  /** The natural-language query (for ZAI search execution) */
+  zaiQuery: string;
+  /** Which target field this query targets */
+  targetField: string;
+  /** The template this query was built from */
+  templateId: string;
+  templateName: string;
+  severity: SeverityLevel;
+  category: string;
+}
+
+export function buildMultiFieldZAIQueries(
+  template: DorkTemplate,
+  target: TargetInput,
+  filters: SearchFilters
+): MultiFieldQuery[] {
+  const results: MultiFieldQuery[] = [];
+
+  // Collect all available target fields
+  const fields: Array<{ key: string; value: string }> = [];
+  if (target.name) fields.push({ key: 'name', value: target.name });
+  if (target.email) fields.push({ key: 'email', value: target.email });
+  if (target.alias) fields.push({ key: 'alias', value: target.alias });
+  if (target.phone) fields.push({ key: 'phone', value: target.phone });
+  if (target.domain) fields.push({ key: 'domain', value: target.domain });
+
+  // If no fields at all, use a single fallback
+  if (fields.length === 0) {
+    fields.push({ key: 'unknown', value: '' });
+  }
+
+  for (const field of fields) {
+    // Build the raw query with this field as {{TARGET}}
+    let rawQuery = template.query;
+
+    // Replace field-specific placeholders first (they reference specific fields)
+    rawQuery = rawQuery.replace(/\{\{TARGET_DOMAIN\}\}/g, getTargetDomain(target));
+    rawQuery = rawQuery.replace(/\{\{TARGET_EMAIL\}\}/g, target.email || field.value);
+    rawQuery = rawQuery.replace(/\{\{TARGET_NAME\}\}/g, target.name || field.value);
+    rawQuery = rawQuery.replace(/\{\{TARGET_ALIAS\}\}/g, target.alias || field.value);
+    rawQuery = rawQuery.replace(/\{\{TARGET_PHONE\}\}/g, target.phone || field.value);
+
+    // Replace generic {{TARGET}} with this specific field value
+    rawQuery = rawQuery.replace(/\{\{TARGET\}\}/g, field.value);
+
+    // Apply optional filters to the dork query
+    if (filters.site && !rawQuery.toLowerCase().includes('site:')) {
+      rawQuery += ` site:${filters.site}`;
+    }
+    if (filters.filetype && !rawQuery.toLowerCase().includes('filetype:')) {
+      rawQuery += ` filetype:${filters.filetype}`;
+    }
+    if (filters.dateRange) {
+      const dateMapping: Record<string, string> = {
+        'last_day': ' after:yesterday',
+        'last_week': ' after:week',
+        'last_month': ' after:month',
+        'last_year': ' after:year',
+      };
+      const dateClause = dateMapping[filters.dateRange];
+      if (dateClause) rawQuery += dateClause;
+    }
+
+    // Convert to natural language for ZAI
+    const zaiQuery = dorkToNaturalQuery(rawQuery);
+
+    // Only add if the ZAI query has meaningful content
+    if (zaiQuery.trim().length > 2) {
+      results.push({
+        dorkQuery: rawQuery,
+        zaiQuery,
+        targetField: field.key,
+        templateId: template.id,
+        templateName: template.name,
+        severity: template.severity,
+        category: template.category,
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Deduplicate search results by URL.
+ * Keeps the first occurrence of each URL.
+ */
+export function deduplicateResults(items: DorkSearchResultItem[]): DorkSearchResultItem[] {
+  const seen = new Set<string>();
+  return items.filter(item => {
+    const normalizedUrl = item.url.toLowerCase().replace(/\/+$/, '');
+    if (seen.has(normalizedUrl)) return false;
+    seen.add(normalizedUrl);
+    return true;
+  });
 }
 
 /**
