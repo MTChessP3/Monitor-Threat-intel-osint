@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
 
         // Try multiple engines (use ZAI as primary, which aggregates)
         let bestResults: DorkSearchResultItem[] = [];
-        let usedEngine = 'ZAI Web Search';
+        let usedEngine = 'Investigation Search';
         let searchError: string | undefined;
 
         try {
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
           const results = await ENGINES[0].search(query);
           if (results.length > 0) {
             bestResults = results;
-            usedEngine = ENGINES[0].name;
+            usedEngine = 'Investigation Search';
           }
         } catch (e: unknown) {
           searchError = e instanceof Error ? e.message.substring(0, 200) : String(e).substring(0, 200);
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
             const results = await ENGINES[1].search(query);
             if (results.length > 0) {
               bestResults = results;
-              usedEngine = ENGINES[1].name;
+              usedEngine = 'Investigation Search';
             }
           } catch (e: unknown) {
             searchError = e instanceof Error ? e.message.substring(0, 200) : String(e).substring(0, 200);

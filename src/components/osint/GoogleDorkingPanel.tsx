@@ -158,7 +158,7 @@ function DorkResultCard({
 
               {/* Engine info */}
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>Motor: {result.engine}</span>
+                <span>Motor: Investigation Search</span>
                 <span className="text-border">|</span>
                 <span>Completado: {new Date(result.completedAt).toLocaleTimeString()}</span>
                 <span className="text-border">|</span>
@@ -624,7 +624,7 @@ export default function GoogleDorkingPanel({ executiveTarget, onClose }: GoogleD
                   <Label className="text-xs text-muted-foreground">Nombre completo</Label>
                   <div className="relative mt-1">
                     <Input
-                      placeholder="Ej: Ronald Enrique Sanchez Fuentes"
+                      placeholder="Digite el nombre completo"
                       value={targetName}
                       onChange={e => setTargetName(e.target.value)}
                       className="bg-muted/20 border-border text-sm pr-16"
@@ -647,7 +647,7 @@ export default function GoogleDorkingPanel({ executiveTarget, onClose }: GoogleD
                 <div>
                   <Label className="text-xs text-muted-foreground">Email</Label>
                   <Input
-                    placeholder="Ej: rsanchez@empresa.com"
+                    placeholder="correo@dominio.com"
                     value={targetEmail}
                     onChange={e => setTargetEmail(e.target.value)}
                     className="mt-1 bg-muted/20 border-border text-sm"
@@ -656,7 +656,7 @@ export default function GoogleDorkingPanel({ executiveTarget, onClose }: GoogleD
                 <div>
                   <Label className="text-xs text-muted-foreground">Alias / Username</Label>
                   <Input
-                    placeholder="Ej: rsanchez_dev"
+                    placeholder="Ingrese el username"
                     value={targetAlias}
                     onChange={e => setTargetAlias(e.target.value)}
                     className="mt-1 bg-muted/20 border-border text-sm"
