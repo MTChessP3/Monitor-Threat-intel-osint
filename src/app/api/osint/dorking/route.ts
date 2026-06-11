@@ -3,17 +3,17 @@
  *
  * POST /api/osint/dorking
  *
- * Accepts target info, filters, and template IDs.
- * Returns Server-Sent Events (SSE) with progressive results.
+ * Uses a Smart Search Strategy:
+ * - For each target field (name, email, alias, phone, domain), generates
+ *   2-5 targeted natural-language queries
+ * - Queries are designed for generic web search engines (ZAI), NOT Google Dork syntax
+ * - Total queries: ~10-25 (not 100+ like template×field approach)
+ * - Results are grouped by target field for clear presentation
  *
- * KEY DESIGN DECISIONS:
- * 1. Templates use Google Dork syntax (intitle:, inurl:, filetype:, site:)
- *    but the backend uses ZAI Web Search which does NOT understand those operators.
- * 2. We convert dork queries to natural-language queries for ZAI execution,
- *    while preserving the original dork query for display / "Open in Google" link.
- * 3. For each template, we generate ONE query per target field (name, email,
- *    alias, phone, domain), so all provided fields are searched.
- * 4. Results from all field-specific queries are merged and deduplicated.
+ * The old approach (Google Dork templates) failed because:
+ * 1. ZAI doesn't support Google operators (intitle:, filetype:, site:)
+ * 2. Multiplying 27 templates × 4 fields = 108 API calls was excessive
+ * 3. Many resulting queries were nonsensical for a generic search engine
  */
 
 import { NextRequest } from 'next/server';
@@ -21,20 +21,20 @@ import { verifyToken, AUTH_COOKIE_NAME } from '@/lib/auth';
 import { zaiWebSearch } from '@/lib/zai';
 import {
   DORK_TEMPLATES,
-  type SeverityLevel,
   type DorkCategory,
 } from '@/lib/osint/dork-templates';
 import {
-  buildQueryFromTemplate,
-  buildSearchUrl,
-  buildMultiFieldZAIQueries,
-  deduplicateResults,
   type TargetInput,
   type SearchFilters,
   type DorkSearchResult,
   type DorkSearchResultItem,
-  type MultiFieldQuery,
 } from '@/lib/osint/query-builder';
+import {
+  buildSmartQueries,
+  buildGoogleUrl,
+  deduplicateResults,
+  type SmartQuery,
+} from '@/lib/osint/smart-search-queries';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -60,10 +60,6 @@ function sseEvent(event: string, data: unknown): string {
 // ============================================================================
 // ZAI Search Executor
 // ============================================================================
-/**
- * Execute a single natural-language query against ZAI Web Search.
- * Returns an array of search result items.
- */
 async function executeZAIQuery(query: string): Promise<DorkSearchResultItem[]> {
   try {
     const searchResult = await zaiWebSearch(query, { num: 15, maxRetries: 2 });
@@ -84,32 +80,6 @@ async function executeZAIQuery(query: string): Promise<DorkSearchResultItem[]> {
     console.error(`[DORKING] ZAI search error for "${query.substring(0, 60)}": ${e instanceof Error ? e.message.substring(0, 150) : String(e).substring(0, 150)}`);
     return [];
   }
-}
-
-/**
- * Execute all field-specific queries for a single template,
- * merge and deduplicate the results.
- */
-async function executeTemplateQueries(
-  multiQueries: MultiFieldQuery[],
-): Promise<{ results: DorkSearchResultItem[]; error?: string }> {
-  const allItems: DorkSearchResultItem[] = [];
-  let lastError: string | undefined;
-
-  for (const mq of multiQueries) {
-    const items = await executeZAIQuery(mq.zaiQuery);
-    allItems.push(...items);
-
-    // Small delay between field queries to avoid rate limiting
-    if (multiQueries.indexOf(mq) < multiQueries.length - 1) {
-      await new Promise(r => setTimeout(r, 200));
-    }
-  }
-
-  // Deduplicate by URL
-  const deduped = deduplicateResults(allItems);
-
-  return { results: deduped, error: lastError };
 }
 
 // ============================================================================
@@ -150,41 +120,35 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (!templateIds || templateIds.length === 0) {
-    return new Response(JSON.stringify({ error: 'Se debe seleccionar al menos una plantilla de dork' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  // Get selected templates
+  // Determine which categories the user selected (from template IDs)
+  const selectedCategories: DorkCategory[] = [];
   const selectedTemplates = DORK_TEMPLATES.filter(t => templateIds.includes(t.id));
-  if (selectedTemplates.length === 0) {
-    return new Response(JSON.stringify({ error: 'Plantillas seleccionadas no encontradas' }), {
+  for (const t of selectedTemplates) {
+    if (!selectedCategories.includes(t.category)) {
+      selectedCategories.push(t.category);
+    }
+  }
+
+  // Build smart queries — one per field + context combination
+  const smartQueries = buildSmartQueries(target, selectedCategories, filters);
+
+  if (smartQueries.length === 0) {
+    return new Response(JSON.stringify({ error: 'No se pudieron generar consultas de búsqueda con los datos proporcionados' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
   }
-
-  // Build multi-field ZAI queries for all templates
-  const allMultiQueries: MultiFieldQuery[] = [];
-  for (const template of selectedTemplates) {
-    const queries = buildMultiFieldZAIQueries(template, target, filters);
-    allMultiQueries.push(...queries);
-  }
-
-  // Total queries = number of unique template+field combinations
-  const totalQueryCount = selectedTemplates.length; // Report progress per template, not per field query
 
   const taskId = `dork-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
   const startedAt = new Date().toISOString();
+  const totalQueryCount = smartQueries.length;
 
   // Create SSE stream
   const encoder = new TextEncoder();
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
 
-  // Process dorks asynchronously and stream results
+  // Process queries asynchronously and stream results
   (async () => {
     try {
       // Send initial event
@@ -192,41 +156,42 @@ export async function POST(request: NextRequest) {
         taskId,
         totalQueries: totalQueryCount,
         startedAt,
-        targetFields: [...new Set(allMultiQueries.map(q => q.targetField))],
-        totalSubQueries: allMultiQueries.length,
+        targetFields: [...new Set(smartQueries.map(q => q.targetField))],
+        queryPlan: smartQueries.map(q => ({
+          id: q.id,
+          label: q.label,
+          field: q.targetField,
+          category: q.category,
+        })),
       })));
 
       let completedQueries = 0;
       let totalResults = 0;
       const allResults: DorkSearchResult[] = [];
 
-      // Execute each dork template (with multi-field queries)
-      for (const template of selectedTemplates) {
-        // Get the multi-field queries for this template
-        const templateMultiQueries = allMultiQueries.filter(q => q.templateId === template.id);
+      // Execute each smart query
+      for (const sq of smartQueries) {
+        // Execute the natural-language query on ZAI
+        const searchItems = await executeZAIQuery(sq.query);
 
-        // Build the dork query (for display) using primary target
-        const dorkQuery = buildQueryFromTemplate(template, target, filters);
-        const searchUrl = buildSearchUrl(dorkQuery, 'google');
-
-        // Execute all field-specific queries and merge results
-        const { results: mergedResults, error: searchError } = await executeTemplateQueries(templateMultiQueries);
+        // Build Google URL from dork equivalent for "Open in Google" link
+        const searchUrl = buildGoogleUrl(sq.dorkEquivalent);
 
         completedQueries++;
-        totalResults += mergedResults.length;
+        totalResults += searchItems.length;
 
         const dorkResult: DorkSearchResult = {
-          templateId: template.id,
-          templateName: template.name,
-          query: dorkQuery,
-          severity: template.severity,
-          category: template.category,
+          templateId: sq.id,
+          templateName: sq.label,
+          query: sq.dorkEquivalent, // Show the dork-style query in UI
+          severity: sq.severity,
+          category: sq.category,
           engine: 'Investigation Search',
           searchUrl,
-          resultCount: mergedResults.length,
-          results: mergedResults,
+          resultCount: searchItems.length,
+          results: searchItems,
           completedAt: new Date().toISOString(),
-          error: searchError,
+          error: undefined,
         };
 
         allResults.push(dorkResult);
@@ -240,9 +205,16 @@ export async function POST(request: NextRequest) {
             completedQueries,
             totalResults,
           },
+          smartQuery: {
+            id: sq.id,
+            targetField: sq.targetField,
+            targetValue: sq.targetValue,
+            naturalQuery: sq.query, // The actual query sent to ZAI
+            dorkQuery: sq.dorkEquivalent, // The dork-style query for display
+          },
         })));
 
-        // Rate limiting delay between templates (anti-bot)
+        // Rate limiting delay between queries
         const delay = 400 + Math.random() * 600;
         await new Promise(r => setTimeout(r, delay));
       }
@@ -264,8 +236,7 @@ export async function POST(request: NextRequest) {
         })),
         elapsedSeconds: ((Date.now() - new Date(startedAt).getTime()) / 1000).toFixed(1),
         target,
-        targetFields: [...new Set(allMultiQueries.map(q => q.targetField))],
-        totalSubQueries: allMultiQueries.length,
+        targetFields: [...new Set(smartQueries.map(q => q.targetField))],
       })));
 
     } catch (e: unknown) {

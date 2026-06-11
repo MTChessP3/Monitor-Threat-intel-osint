@@ -132,7 +132,7 @@ function DorkResultCard({
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Badge variant="secondary" className="text-xs">
-              {result.resultCount > 0 ? `Found ${result.resultCount} results` : 'No results'}
+              {result.resultCount > 0 ? `${result.resultCount} resultados` : 'Sin resultados'}
             </Badge>
             {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
           </div>
@@ -152,7 +152,7 @@ function DorkResultCard({
             <div className="px-3 pb-3 space-y-2">
               {/* Query details */}
               <div className="bg-muted/20 rounded-md p-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Query ejecutada</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Consulta ejecutada</p>
                 <p className="text-xs font-mono text-foreground break-all">{result.query}</p>
               </div>
 
@@ -168,7 +168,7 @@ function DorkResultCard({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300"
                 >
-                  Abrir en motor <ExternalLink className="w-3 h-3" />
+                  Abrir en Google <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
 
@@ -799,7 +799,7 @@ export default function GoogleDorkingPanel({ executiveTarget, onClose }: GoogleD
               <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/8">
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
                 <span className="text-sm text-primary">
-                  Procesando dork {searchProgress.completedQueries} de {searchProgress.totalQueries}...
+                  Buscando consulta {searchProgress.completedQueries} de {searchProgress.totalQueries}...
                   {searchProgress.totalResults > 0 && ` | ${searchProgress.totalResults} resultados hasta ahora`}
                 </span>
                 <div className="ml-auto flex-1 max-w-xs">
@@ -839,7 +839,7 @@ export default function GoogleDorkingPanel({ executiveTarget, onClose }: GoogleD
             {isSearching && dorkResults.length === 0 && (
               <div className="flex items-center justify-center py-8 text-muted-foreground">
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                <span className="text-sm">Iniciando busquedas de dork...</span>
+                <span className="text-sm">Preparando búsquedas por campo...</span>
               </div>
             )}
           </CardContent>
