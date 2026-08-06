@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, ensureDatabaseInitialized } from '@/lib/db';
 import { verifyToken, AUTH_COOKIE_NAME } from '@/lib/auth';
-import { getZAI, zaiChatCompletion, zaiWebSearch } from '@/lib/zai';
+import { isZAIConfigured, zaiChatCompletion, zaiWebSearch } from '@/lib/zai';
+import type { ZAIWebSearchDiagnostics } from '@/lib/zai';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -187,9 +188,14 @@ function buildOsintQueryMatrix(executive: {
 // ============================================================================
 // ZAI SDK SEARCH ENGINE (using unified lib/zai.ts)
 // ============================================================================
-async function searchZAI(query: string): Promise<MetasearchResult[]> {
+async function searchZAI(query: string, diagnostics: ZAIWebSearchDiagnostics[]): Promise<MetasearchResult[]> {
   try {
-    const searchResult = await zaiWebSearch(query, { num: 15, maxRetries: 2, timeoutMs: 8000 });
+    const searchResult = await zaiWebSearch(query, {
+      num: 15,
+      maxRetries: 2,
+      timeoutMs: 12000,
+      onDiagnostics: (d) => diagnostics.push(d),
+    });
 
     if (searchResult && searchResult.length > 0) {
       const mapped = searchResult
@@ -531,6 +537,7 @@ export async function POST(request: NextRequest) {
     const SEARCH_CONCURRENCY = 4;
     const searchStart = Date.now();
     const groupFound = queryGroups.map(() => 0);
+    const searchDiagnostics: ZAIWebSearchDiagnostics[] = [];
 
     let nextTask = 0;
     async function searchWorker() {
@@ -541,7 +548,7 @@ export async function POST(request: NextRequest) {
         const task = tasks[idx];
         try {
           totalQueriesRun++;
-          const results = await searchZAI(task.query);
+          const results = await searchZAI(task.query, searchDiagnostics);
           const added = addResults(results, allResults, seenUrls);
           groupFound[task.groupIndex] += added;
         } catch (e: unknown) {
@@ -634,6 +641,17 @@ export async function POST(request: NextRequest) {
       searchEngine: `OSINT v8.0 [ZAI Web Search]`,
       enginesUsed: ['ZAI Web Search'],
       engineDetails,
+      zaiDebug: {
+        configured: isZAIConfigured(),
+        baseUrl: (process.env.ZAI_BASE_URL || '').split('/').slice(0, 3).join('/') || '',
+        env: {
+          apiKey: !!process.env.ZAI_API_KEY,
+          chatId: !!process.env.ZAI_CHAT_ID,
+          token: !!process.env.ZAI_TOKEN,
+          userId: !!process.env.ZAI_USER_ID,
+        },
+      },
+      zaiDiagnostics: searchDiagnostics.slice(0, 60),
       queryGroups: queryGroups.map(g => ({
         label: g.label,
         queryCount: g.queries.length,

@@ -158,15 +158,32 @@ export async function zaiChatCompletion(
 }
 
 /**
- * Execute a ZAI web search with automatic retry logic
- * Never throws - returns empty array on failure
+ * Execute a ZAI web search with automatic retry logic.
+ * Never throws - returns empty array on failure.
+ *
+ * An optional onDiagnostics callback receives the outcome of the whole call
+ * (final status, attempts, elapsed time, error body) so callers can surface
+ * the real ZAI behavior in their API response. This is the only way to debug
+ * ZAI calls on serverless platforms without runtime-log access.
  */
+export type ZAIWebSearchStatus = 'ok' | 'empty' | 'timeout' | 'error' | 'bad_shape';
+
+export interface ZAIWebSearchDiagnostics {
+  query: string;
+  status: ZAIWebSearchStatus;
+  attempts: number;
+  elapsedMs: number;
+  error?: string;
+  raw?: string;
+}
+
 export async function zaiWebSearch(
   query: string,
   options: {
     num?: number;
     maxRetries?: number;
     timeoutMs?: number;
+    onDiagnostics?: (diagnostics: ZAIWebSearchDiagnostics) => void;
   } = {}
 ): Promise<Array<{
   url: string;
@@ -177,15 +194,36 @@ export async function zaiWebSearch(
   date: string;
   favicon: string;
 }>> {
-  const { num = 10, maxRetries = 2, timeoutMs } = options;
+  const { num = 10, maxRetries = 2, timeoutMs, onDiagnostics } = options;
+  const startedAt = Date.now();
 
   const zai = await getZAISafe();
   if (!zai) {
     console.error('[ZAI] Cannot execute web search - SDK not available');
+    onDiagnostics?.({ query, status: 'error', attempts: 0, elapsedMs: Date.now() - startedAt, error: 'SDK not available' });
     return [];
   }
 
+  let status: ZAIWebSearchStatus = 'empty';
+  let lastError = '';
+  let rawShape = '';
+  let attempts = 0;
+
+  const finish = (finalStatus: ZAIWebSearchStatus, results: Array<any>): Array<any> => {
+    const diagnostics: ZAIWebSearchDiagnostics = {
+      query,
+      status: finalStatus,
+      attempts,
+      elapsedMs: Date.now() - startedAt,
+    };
+    if (lastError) diagnostics.error = lastError;
+    if (rawShape) diagnostics.raw = rawShape;
+    onDiagnostics?.(diagnostics);
+    return results;
+  };
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    attempts++;
     try {
       const invoke = zai.functions.invoke('web_search', { query, num });
       let result: any;
@@ -200,27 +238,49 @@ export async function zaiWebSearch(
             return [];
           }
         );
-        result = await Promise.race([
-          guarded,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('ZAI_WEB_SEARCH_TIMEOUT')), timeoutMs)),
-        ]);
+        try {
+          result = await Promise.race([
+            guarded,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('ZAI_WEB_SEARCH_TIMEOUT')), timeoutMs)),
+          ]);
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.includes('ZAI_WEB_SEARCH_TIMEOUT')) {
+            status = 'timeout';
+            continue;
+          }
+          throw e;
+        }
       } else {
         result = await invoke;
       }
-      if (result && Array.isArray(result)) {
-        console.log(`[ZAI] Web search succeeded: "${query.substring(0, 60)}" -> ${result.length} results`);
-        return result;
+
+      if (Array.isArray(result)) {
+        if (result.length > 0) {
+          console.log(`[ZAI] Web search succeeded: "${query.substring(0, 60)}" -> ${result.length} results`);
+          return finish('ok', result);
+        }
+        status = 'empty';
+        console.log(`[ZAI] Web search returned empty array: "${query.substring(0, 60)}"`);
+        continue;
       }
+
+      // ZAI responded but the shape is not the documented array -> record it.
+      status = 'bad_shape';
+      try { rawShape = JSON.stringify(result).substring(0, 300); } catch { rawShape = String(result).substring(0, 300); }
+      console.log(`[ZAI] Web search unexpected shape: "${query.substring(0, 50)}" -> ${rawShape}`);
+      continue;
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
-      console.error(`[ZAI] Web search error (attempt ${attempt + 1}/${maxRetries}): "${query.substring(0, 50)}" - ${msg.substring(0, 100)}`);
+      lastError = msg;
+      status = 'error';
+      console.error(`[ZAI] Web search error (attempt ${attempt + 1}/${maxRetries}): "${query.substring(0, 50)}" - ${msg.substring(0, 150)}`);
 
       if (msg.includes('429') && attempt < maxRetries - 1) {
         await new Promise(r => setTimeout(r, 3000));
-        continue;
       }
     }
   }
 
-  return [];
+  return finish(status, []);
 }
