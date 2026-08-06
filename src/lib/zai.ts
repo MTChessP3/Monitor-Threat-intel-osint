@@ -1,15 +1,15 @@
 /**
  * Web Search + AI Analysis Integration
  *
- * WEB SEARCH (free): DuckDuckGo HTML scraping (primary) with Bing HTML as
- * fallback. No API key required.
+ * WEB SEARCH (free): DuckDuckGo HTML + DuckDuckGo Lite scraping (primary)
+ * with Bing HTML and Bing RSS as fallbacks. No API key required.
  *   - The old Z.AI public /web_search endpoint is paid (error 1113
  *     "Insufficient balance") and the original internal-api.z.ai endpoint is
  *     an Alibaba Cloud internal ALB with RFC1918 private IPs that is NOT
  *     reachable from public serverless environments (Vercel).
  *   - DuckDuckGo honours OSINT operators like `filetype:` and `site:`, but it
  *     rate-limits aggressively from server IPs (anti-bot challenge), so we
- *     fall back to Bing's HTML results when it gets blocked.
+ *     fall back to Bing's HTML/RSS results when it gets blocked.
  *
  * AI CHAT (free tier): Z.AI public developer API (https://api.z.ai/api/paas/v4/).
  *   - Uses glm-4.5-flash, which is genuinely free (no balance needed).
@@ -145,6 +145,7 @@ export interface ZAIWebSearchDiagnostics {
   error?: string;
   raw?: string;
   engine?: string;
+  engineAttempts?: Array<{ engine: string; status: string; note: string }>;
 }
 
 interface WebSearchResult {
@@ -257,6 +258,40 @@ async function fetchDdgHtml(query: string, timeoutMs: number): Promise<string> {
   const html = await res.text();
   if (/anomaly|challenge|captcha/i.test(html)) {
     throw new Error(`DuckDuckGo bot challenge (blocked) [len=${html.length}, title='${pageTitle(html)}']`);
+  }
+  return html;
+}
+
+// --- DuckDuckGo Lite (lighter page, often honours operators like filetype:) ---
+function parseDdgLiteHtml(html: string): WebSearchResult[] {
+  const results: WebSearchResult[] = [];
+  const linkRe = /<a[^>]*class="[^"]*link-text[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(html)) !== null) {
+    const url = ddgRealUrl(m[1]);
+    if (url.includes('duckduckgo.com/y.js') || url.includes('duckduckgo.com/l/') || url.includes('duckduckgo.com/j.js')) continue;
+    const after = html.slice(m.index + m[0].length, m.index + m[0].length + 1200);
+    const snip = after.match(/class="result-snippet"[^>]*>([\s\S]*?)<\/td>/);
+    const item = makeItem(url, m[2], snip ? snip[1] : '');
+    if (item) results.push(item);
+  }
+  return results;
+}
+
+async function fetchDdgLiteHtml(query: string, timeoutMs: number): Promise<string> {
+  const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': BROWSER_UA,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    },
+    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  if (!res.ok) throw new Error(`DuckDuckGo Lite HTTP ${res.status}`);
+  const html = await res.text();
+  if (/anomaly|challenge|captcha/i.test(html)) {
+    throw new Error(`DuckDuckGo Lite bot challenge (blocked) [len=${html.length}, title='${pageTitle(html)}']`);
   }
   return html;
 }
@@ -377,8 +412,8 @@ async function fetchBingRss(query: string, timeoutMs: number): Promise<string> {
 // WEB SEARCH (free)
 // ============================================================================
 /**
- * Execute a web search via free HTML/RSS scraping: DuckDuckGo primary, then
- * Bing HTML, then Bing RSS as last-resort fallback (DDG and Bing both
+ * Execute a web search via free HTML/RSS scraping: DuckDuckGo HTML, DuckDuckGo
+ * Lite, then Bing HTML, then Bing RSS as last-resort fallback (all of them
  * rate-limit server IPs aggressively, so we try several endpoints).
  * Never throws - returns empty array on failure.
  *
@@ -399,6 +434,7 @@ export async function zaiWebSearch(
   let status: ZAIWebSearchStatus = 'empty';
   let lastError = '';
   let attempts = 0;
+  const engineAttempts: Array<{ engine: string; status: string; note: string }> = [];
 
   const finish = (finalStatus: ZAIWebSearchStatus, results: WebSearchResult[]): WebSearchResult[] => {
     const diagnostics: ZAIWebSearchDiagnostics = {
@@ -409,12 +445,14 @@ export async function zaiWebSearch(
     };
     if (lastError) diagnostics.error = lastError;
     if (lastEngine) diagnostics.engine = lastEngine;
+    if (engineAttempts.length > 0) diagnostics.engineAttempts = engineAttempts;
     onDiagnostics?.(diagnostics);
     return results;
   };
 
   const engines: Array<{ name: string; fetch: () => Promise<string>; parse: (html: string) => WebSearchResult[] }> = [
     { name: 'DuckDuckGo', fetch: () => fetchDdgHtml(query, timeoutMs), parse: parseDdgHtml },
+    { name: 'DuckDuckGo Lite', fetch: () => fetchDdgLiteHtml(query, timeoutMs), parse: parseDdgLiteHtml },
     { name: 'Bing', fetch: () => fetchBingHtml(query, timeoutMs), parse: parseBingHtml },
     { name: 'Bing RSS', fetch: () => fetchBingRss(query, timeoutMs), parse: parseBingRss },
   ];
@@ -432,15 +470,19 @@ export async function zaiWebSearch(
           mapped.forEach((r, i) => { r.rank = i + 1; });
           lastEngine = engine.name;
           lastError = '';
+          engineAttempts.push({ engine: engine.name, status: 'ok', note: `${mapped.length} results` });
           console.log(`[SEARCH] ${engine.name} succeeded: "${query.substring(0, 60)}" -> ${mapped.length} results`);
           return finish('ok', mapped);
         }
-        lastError = `${engine.name}: no results [len=${html.length}, title='${pageTitle(html)}', b_algo=${(html.match(/class="b_algo/g) || []).length}]`;
+        const emptyNote = `no results [len=${html.length}, title='${pageTitle(html)}', b_algo=${(html.match(/class="b_algo/g) || []).length}]`;
+        lastError = `${engine.name}: ${emptyNote}`;
+        engineAttempts.push({ engine: engine.name, status: 'empty', note: emptyNote });
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
         lastError = `${engine.name}: ${msg}`;
         const isAbort = error instanceof Error && (error.name === 'AbortError' || msg.includes('abort'));
         attemptStatus = isAbort ? 'timeout' : 'error';
+        engineAttempts.push({ engine: engine.name, status: isAbort ? 'timeout' : 'error', note: msg });
         console.error(`[SEARCH] ${engine.name} ${attemptStatus} (attempt ${attempt + 1}/${maxRetries}): "${query.substring(0, 50)}" - ${msg.substring(0, 150)}`);
       }
     }
