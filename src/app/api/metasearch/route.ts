@@ -189,7 +189,7 @@ function buildOsintQueryMatrix(executive: {
 // ============================================================================
 async function searchZAI(query: string): Promise<MetasearchResult[]> {
   try {
-    const searchResult = await zaiWebSearch(query, { num: 15, maxRetries: 2 });
+    const searchResult = await zaiWebSearch(query, { num: 15, maxRetries: 2, timeoutMs: 8000 });
 
     if (searchResult && searchResult.length > 0) {
       const mapped = searchResult
@@ -516,26 +516,41 @@ export async function POST(request: NextRequest) {
 
     // ============================================================================
     // PHASE 1: Execute ALL queries via ZAI Web Search
+    // Bounded: limited concurrency + global deadline + per-query timeout so the
+    // whole request completes well under the serverless/proxy limits.
     // ============================================================================
     console.log(`[METASEARCH v8] Phase 1: Executing ZAI Web Search queries...`);
 
-    for (const group of queryGroups) {
-      let groupResults = 0;
-      for (const query of group.queries) {
+    interface QueryTask { query: string; groupIndex: number; }
+    const tasks: QueryTask[] = [];
+    queryGroups.forEach((g, gi) => {
+      for (const query of g.queries) tasks.push({ query, groupIndex: gi });
+    });
+
+    const SEARCH_DEADLINE_MS = 25000;
+    const SEARCH_CONCURRENCY = 4;
+    const searchStart = Date.now();
+    const groupFound = queryGroups.map(() => 0);
+
+    let nextTask = 0;
+    async function searchWorker() {
+      while (nextTask < tasks.length) {
+        const remaining = SEARCH_DEADLINE_MS - (Date.now() - searchStart);
+        if (remaining <= 0) break;
+        const idx = nextTask++;
+        const task = tasks[idx];
         try {
           totalQueriesRun++;
-          const results = await searchZAI(query);
+          const results = await searchZAI(task.query);
           const added = addResults(results, allResults, seenUrls);
-          groupResults += added;
-
-          // Small delay between queries
-          await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
+          groupFound[task.groupIndex] += added;
         } catch (e: unknown) {
           console.log(`[METASEARCH v8] Query error: ${e instanceof Error ? e.message.substring(0, 60) : String(e).substring(0, 60)}`);
         }
       }
-      group.resultsFound = groupResults;
     }
+    await Promise.all(Array.from({ length: SEARCH_CONCURRENCY }, () => searchWorker()));
+    queryGroups.forEach((g, i) => { g.resultsFound = groupFound[i]; });
 
     engineDetails.push({
       name: 'ZAI Web Search',

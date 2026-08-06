@@ -166,6 +166,7 @@ export async function zaiWebSearch(
   options: {
     num?: number;
     maxRetries?: number;
+    timeoutMs?: number;
   } = {}
 ): Promise<Array<{
   url: string;
@@ -176,7 +177,7 @@ export async function zaiWebSearch(
   date: string;
   favicon: string;
 }>> {
-  const { num = 10, maxRetries = 2 } = options;
+  const { num = 10, maxRetries = 2, timeoutMs } = options;
 
   const zai = await getZAISafe();
   if (!zai) {
@@ -186,7 +187,26 @@ export async function zaiWebSearch(
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const result = await zai.functions.invoke('web_search', { query, num });
+      const invoke = zai.functions.invoke('web_search', { query, num });
+      let result: any;
+      if (timeoutMs && timeoutMs > 0) {
+        // Guard against the underlying fetch never settling: race with a timer.
+        // The abandoned promise is guarded so it cannot become an unhandled rejection.
+        const guarded = invoke.then(
+          (v: any) => v,
+          (e: unknown) => {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error(`[ZAI] Web search late error (${msg.substring(0, 100)})`);
+            return [];
+          }
+        );
+        result = await Promise.race([
+          guarded,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('ZAI_WEB_SEARCH_TIMEOUT')), timeoutMs)),
+        ]);
+      } else {
+        result = await invoke;
+      }
       if (result && Array.isArray(result)) {
         console.log(`[ZAI] Web search succeeded: "${query.substring(0, 60)}" -> ${result.length} results`);
         return result;
