@@ -15,7 +15,7 @@ Sistema de Inteligencia Ejecutiva para la generacion de informes de proteccion V
 
 - **Frontend**: Next.js 16, React 19, TailwindCSS 4, shadcn/ui
 - **Backend**: Next.js API Routes (serverless)
-- **Base de Datos**: PostgreSQL (Vercel Postgres / Neon)
+- **Base de Datos**: SQLite (local) / Turso libSQL (Vercel) via Prisma
 - **ORM**: Prisma
 - **IA**: z-ai-web-dev-sdk (busqueda web + chat completions)
 - **Export**: pdf-lib (PDF), docx (DOCX)
@@ -28,11 +28,23 @@ Sistema de Inteligencia Ejecutiva para la generacion de informes de proteccion V
 2. Cuenta en [Vercel](https://vercel.com)
 3. Clonar este repositorio
 
-### Paso 1: Configurar Base de Datos
+### Paso 1: Configurar Base de Datos (Turso/libSQL)
 
-1. En el Dashboard de Vercel, ve a **Storage** > **Create Database** > **Postgres (Neon)**
-2. Selecciona la region y crea la base de datos
-3. Vercel generara las variables de entorno `POSTGRES_PRISMA_URL` y `POSTGRES_URL_NON_POOLING`
+> **IMPORTANTE**: En Vercel, sin una base de datos externa, la app usa SQLite en `/tmp` (efimero por instancia). Los datos se pierden entre requests e instancias, y cada redeploy borra todo. Para que los datos persistan, configura Turso (libSQL) o cualquier base SQLite remota.
+
+1. Crea una base de datos gratis en [Turso](https://turso.tech):
+   ```bash
+   # Con Turso CLI
+   npm i -g @libsql/client @libsql/turso 2>/dev/null || true
+   npx @libsql/turso db create vip-intelligence
+   npx @libsql/turso db show vip-intelligence --url
+   npx @libsql/turso db create-token vip-intelligence
+   ```
+2. Anota la **URL** (ej: `libsql://vip-intelligence-xxx.turso.io`) y el **token** generado.
+3. En el Dashboard de Vercel, ve a **Storage** > **Create Database** > elige **Turso** (o configura manualmente las variables) y crea la base.
+4. Vercel generara las variables de entorno `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN`.
+
+> **Nota**: El codigo (`src/lib/db.ts`) usa Turso solo si `TURSO_DATABASE_URL` esta definido. Sin esa variable, cae a SQLite `/tmp` en Vercel (no persistente) o a SQLite local en desarrollo.
 
 ### Paso 2: Configurar Variables de Entorno
 
@@ -40,8 +52,8 @@ En **Settings** > **Environment Variables**, agrega:
 
 | Variable | Descripcion | Ejemplo |
 |----------|-------------|---------|
-| `POSTGRES_PRISMA_URL` | URL de conexion Postgres (pooling) | Auto de Vercel |
-| `POSTGRES_URL_NON_POOLING` | URL de conexion Postgres (directa) | Auto de Vercel |
+| `TURSO_DATABASE_URL` | URL de conexion Turso/libSQL (persistente) | `libsql://vip-intelligence-xxx.turso.io` |
+| `TURSO_AUTH_TOKEN` | Token de autenticacion de Turso | Tu token |
 | `ZAI_BASE_URL` | URL base del SDK de IA | `https://internal-api.z.ai/v1` |
 | `ZAI_API_KEY` | API Key del SDK de IA | Tu API key |
 | `ZAI_CHAT_ID` | Chat ID del SDK de IA | Tu chat ID |
@@ -67,7 +79,39 @@ npx prisma generate
 npx prisma db seed
 ```
 
-O manualmente desde el dashboard de Neon/Postgres.
+O manualmente desde el dashboard de Turso (consola SQL).
+
+## Solucion de Problemas
+
+### 1. Los datos desaparecen / errores "table does not exist" en produccion
+
+**Sintoma**: Usuarios, ejecutivos o informes se crean pero luego no aparecen; ocasionalmente errores 500 `The table "main.Executive" does not exist`.
+
+**Causa**: Sin `TURSO_DATABASE_URL`, Vercel usa SQLite en `/tmp`, que es efimero y unico por instancia serverless. Cada request puede caer en una instancia distinta con una base vacia.
+
+**Solucion**: Configurar `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` (ver Paso 1) y luego aplicar el schema a la base persistente:
+```bash
+DATABASE_URL=libsql://vip-intelligence-xxx.turso.io TURSO_DATABASE_URL=libsql://vip-intelligence-xxx.turso.io npx prisma db push
+```
+
+### 2. La busqueda web (OSINT/metasearch) no devuelve resultados en produccion
+
+**Sintoma**: `/api/metasearch` responde 200 pero con `resultCount: 0`, `status: "failed"` ("No se obtuvieron resultados"). El chat con IA funciona, pero `web_search` devuelve vacio.
+
+**Causa**: El SDK invoca `zai.functions.invoke('web_search', ...)`, que requiere (a) las variables `ZAI_BASE_URL` y `ZAI_API_KEY` definidas en Vercel y (b) la funcion `web_search` habilitada/asignada en la plataforma Z AI.
+
+**Verificacion**:
+1. En Vercel > Settings > Environment Variables, confirma que `ZAI_BASE_URL` y `ZAI_API_KEY` esten definidas en todos los environments (Production, Preview, Development).
+2. En el dashboard/panel de Z AI, verifica que la cuenta tenga acceso a la funcion `web_search` (no solo chat completions).
+3. Si faltan, agrega las variables y redeplea; luego vuelve a probar `/api/metasearch` con una query libre.
+
+### 3. Los favicons/logos redirigen a /auth/login
+
+**Sintoma**: En el navegador no carga el favicon ni los logos; las peticiones a `/favicon-32x32.png`, `/logo.png`, etc. devuelven 307 a `/auth/login`.
+
+**Causa**: El middleware de autenticacion (src/middleware.ts) interceptaba todos los paths salvo una lista blanca corta.
+
+**Solucion**: Ya corregido en `main` — el middleware ahora permite los assets publicos de `/public`. Si agregas nuevos archivos estaticos, agregalos a esa lista blanca.
 
 ## Desarrollo Local
 
