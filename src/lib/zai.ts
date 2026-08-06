@@ -435,7 +435,6 @@ export async function zaiWebSearch(
   let status: ZAIWebSearchStatus = 'empty';
   let lastError = '';
   let attempts = 0;
-  let lastRawHtml = '';
   const engineAttempts: Array<{ engine: string; status: string; note: string }> = [];
 
   const finish = (finalStatus: ZAIWebSearchStatus, results: WebSearchResult[]): WebSearchResult[] => {
@@ -447,7 +446,6 @@ export async function zaiWebSearch(
     };
     if (lastError) diagnostics.error = lastError;
     if (lastEngine) diagnostics.engine = lastEngine;
-    if (lastRawHtml) diagnostics.raw = lastRawHtml.slice(0, 80000);
     if (engineAttempts.length > 0) diagnostics.engineAttempts = engineAttempts;
     onDiagnostics?.(diagnostics);
     return results;
@@ -480,8 +478,7 @@ export async function zaiWebSearch(
           console.log(`[SEARCH] ${engine.name} succeeded: "${query.substring(0, 60)}" -> ${mapped.length} results`);
           return finish('ok', mapped);
         }
-        const emptyNote = `no results [len=${html.length}, title='${pageTitle(html)}', b_algo=${(html.match(/class="b_algo/g) || []).length}]`;
-        lastRawHtml = html;
+        const emptyNote = `no results [len=${html.length}, title='${pageTitle(html)}']`;
         lastError = `${engine.name}: ${emptyNote}`;
         engineAttempts.push({ engine: engine.name, status: 'empty', note: emptyNote });
       } catch (error: unknown) {

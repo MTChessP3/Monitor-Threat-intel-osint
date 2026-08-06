@@ -648,10 +648,17 @@ export async function POST(request: NextRequest) {
     // ============================================================================
     // RETURN
     // ============================================================================
+    const winnerCounts: Record<string, number> = {};
+    for (const d of searchDiagnostics) {
+      if (d.engine) winnerCounts[d.engine] = (winnerCounts[d.engine] || 0) + 1;
+    }
+    const winningEngines = Object.entries(winnerCounts).sort((a, b) => b[1] - a[1]);
+    const primaryEngine = winningEngines[0]?.[0] || 'Bing RSS';
+
     return NextResponse.json({
       success: true,
-      searchEngine: `OSINT v8.1 [SearXNG + Mojeek + Ecosia + DDG + Bing]`,
-      enginesUsed: ['SearXNG', 'Mojeek', 'Ecosia', 'DuckDuckGo', 'Bing'],
+      searchEngine: `OSINT v8.1 [${primaryEngine}]`,
+      enginesUsed: winningEngines.map(([name]) => name),
       engineDetails,
       zaiDebug: {
         configured: isZAIConfigured(),
