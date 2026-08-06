@@ -246,6 +246,32 @@ function parseDdgHtml(html: string): WebSearchResult[] {
 }
 
 async function fetchDdgHtmlPost(query: string, timeoutMs: number): Promise<string> {
+  const headers = {
+    'User-Agent': BROWSER_UA,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+  };
+  const warm = await fetch('https://html.duckduckgo.com/html/', {
+    headers,
+    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  let cookie = '';
+  try { cookie = (warm.headers.getSetCookie() || []).map(c => c.split(';')[0]).join('; '); } catch { /* ignore */ }
+  const body = new URLSearchParams({ q: query }).toString();
+  const res = await fetch('https://html.duckduckgo.com/html/', {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded', ...(cookie ? { 'Cookie': cookie } : {}) },
+    body,
+    redirect: 'follow',
+    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  if (!res.ok) throw new Error(`DuckDuckGo POST HTTP ${res.status}`);
+  const html = await res.text();
+  if (/anomaly|challenge|captcha/i.test(html)) {
+    throw new Error(`DuckDuckGo POST bot challenge (blocked) [len=${html.length}, title='${pageTitle(html)}']`);
+  }
+  return html;
+}
 
 // --- SearXNG (public instances, aggregate engines that honour operators) ---
 function parseSearxHtml(html: string): WebSearchResult[] {
@@ -346,35 +372,6 @@ async function fetchEcosiaHtml(query: string, timeoutMs: number): Promise<string
   const html = await res.text();
   if (/firewall|captcha|challenge/i.test(html)) {
     throw new Error(`Ecosia blocked [len=${html.length}, title='${pageTitle(html)}']`);
-  }
-  return html;
-}
-
-// --- DuckDuckGo with cookie warm-up (GET cookies, then POST the query) ---
-async function fetchDdgHtmlPost(query: string, timeoutMs: number): Promise<string> {
-  const headers = {
-    'User-Agent': BROWSER_UA,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-  };
-  const warm = await fetch('https://html.duckduckgo.com/html/', {
-    headers,
-    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
-  });
-  let cookie = '';
-  try { cookie = (warm.headers.getSetCookie() || []).map(c => c.split(';')[0]).join('; '); } catch { /* ignore */ }
-  const body = new URLSearchParams({ q: query }).toString();
-  const res = await fetch('https://html.duckduckgo.com/html/', {
-    method: 'POST',
-    headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded', ...(cookie ? { 'Cookie': cookie } : {}) },
-    body,
-    redirect: 'follow',
-    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
-  });
-  if (!res.ok) throw new Error(`DuckDuckGo POST HTTP ${res.status}`);
-  const html = await res.text();
-  if (/anomaly|challenge|captcha/i.test(html)) {
-    throw new Error(`DuckDuckGo POST bot challenge (blocked) [len=${html.length}, title='${pageTitle(html)}']`);
   }
   return html;
 }
