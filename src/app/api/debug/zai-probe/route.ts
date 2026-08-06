@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, AUTH_COOKIE_NAME } from '@/lib/auth';
-import { getZAI, getZAISafe } from '@/lib/zai';
+import { getZAI } from '@/lib/zai';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -14,38 +14,17 @@ async function getAuthenticatedUser(request: NextRequest) {
 }
 
 interface ProbeResult {
-  name: string;
   ok: boolean;
   elapsedMs: number;
   note?: string;
   body?: string;
 }
 
-async function timed(name: string, fn: () => Promise<any>): Promise<ProbeResult> {
-  const t0 = Date.now();
-  try {
-    const res = await fn();
-    return {
-      name,
-      ok: true,
-      elapsedMs: Date.now() - t0,
-      body: safeJson(res),
-    };
-  } catch (e: unknown) {
-    return {
-      name,
-      ok: false,
-      elapsedMs: Date.now() - t0,
-      note: e instanceof Error ? e.message : String(e),
-    };
-  }
-}
-
 function safeJson(v: any): string {
   try {
-    return JSON.stringify(v).substring(0, 1200);
+    return JSON.stringify(v).substring(0, 2000);
   } catch {
-    return String(v).substring(0, 1200);
+    return String(v).substring(0, 2000);
   }
 }
 
@@ -54,37 +33,72 @@ export async function POST(request: NextRequest) {
     const user = await getAuthenticatedUser(request);
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-    const zai = await getZAI();
-    const results: ProbeResult[] = [];
-
     const body = await request.json().catch(() => ({}));
-    const tests: string[] = Array.isArray(body.tests) ? body.tests : ['all'];
+    const test: string = body.test || 'raw_ws';
+    const t0 = Date.now();
 
-    const want = (t: string) => tests.includes('all') || tests.includes(t);
+    if (test === 'raw_ws' || test === 'raw_ws_nonum' || test === 'raw_ws_recency') {
+      const args: any = test === 'raw_ws_nonum' ? { query: 'OpenAI' } : test === 'raw_ws_recency'
+        ? { query: 'OpenAI', num: 10, recency_days: 30 }
+        : { query: 'OpenAI', num: 5 };
+      const baseUrl = process.env.ZAI_BASE_URL || '';
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.ZAI_API_KEY || ''}`,
+        'X-Z-AI-From': 'Z',
+      };
+      if (process.env.ZAI_CHAT_ID) headers['X-Chat-Id'] = process.env.ZAI_CHAT_ID;
+      if (process.env.ZAI_USER_ID) headers['X-User-Id'] = process.env.ZAI_USER_ID;
+      if (process.env.ZAI_TOKEN) headers['X-Token'] = process.env.ZAI_TOKEN;
 
-    if (want('web_search_basic')) {
-      results.push(await timed('web_search {query, num:5}', async () => zai.functions.invoke('web_search', { query: 'OpenAI', num: 5 } as any)));
-    }
-    if (want('web_search_no_num')) {
-      results.push(await timed('web_search {query} (no num)', async () => zai.functions.invoke('web_search', { query: 'OpenAI' } as any)));
-    }
-    if (want('web_search_recency')) {
-      results.push(await timed('web_search {query, num:10, recency_days:30}', async () => zai.functions.invoke('web_search', { query: 'OpenAI', num: 10, recency_days: 30 } as any)));
-    }
-    if (want('chat')) {
-      results.push(await timed('chat.completions.create (control)', async () => zai.chat.completions.create({
-        messages: [{ role: 'user', content: 'Responde solo: OK' }],
-        max_tokens: 50,
-      } as any)));
-    }
-    if (want('page_reader')) {
-      results.push(await timed('page_reader example.com (control)', async () => zai.functions.invoke('page_reader', { url: 'https://example.com' } as any)));
-    }
-    if (want('image_search')) {
-      results.push(await timed('images.search.create (control)', async () => zai.images.search.create({ query: 'OpenAI', count: 3 } as any)));
+      const res = await fetch(`${baseUrl}/functions/invoke`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ function_name: 'web_search', arguments: args }),
+      });
+      const text = await res.text();
+      return NextResponse.json({
+        success: true,
+        test,
+        httpStatus: res.status,
+        headers: { 'content-type': res.headers.get('content-type') },
+        rawBody: text.substring(0, 2000),
+        elapsedMs: Date.now() - t0,
+      });
     }
 
-    return NextResponse.json({ success: true, zaiConfigured: !!(process.env.ZAI_BASE_URL && process.env.ZAI_API_KEY), results });
+    const zai = await getZAI();
+    let result: ProbeResult;
+
+    if (test === 'chat') {
+      try {
+        const r = await zai.chat.completions.create({
+          messages: [{ role: 'user', content: 'Responde solo: OK' }],
+          max_tokens: 50,
+        } as any);
+        result = { ok: true, elapsedMs: Date.now() - t0, body: safeJson(r) };
+      } catch (e: unknown) {
+        result = { ok: false, elapsedMs: Date.now() - t0, note: e instanceof Error ? e.message : String(e) };
+      }
+    } else if (test === 'page') {
+      try {
+        const r = await zai.functions.invoke('page_reader', { url: 'https://example.com' } as any);
+        result = { ok: true, elapsedMs: Date.now() - t0, body: safeJson(r) };
+      } catch (e: unknown) {
+        result = { ok: false, elapsedMs: Date.now() - t0, note: e instanceof Error ? e.message : String(e) };
+      }
+    } else if (test === 'image') {
+      try {
+        const r = await zai.images.search.create({ query: 'OpenAI', count: 3 } as any);
+        result = { ok: true, elapsedMs: Date.now() - t0, body: safeJson(r) };
+      } catch (e: unknown) {
+        result = { ok: false, elapsedMs: Date.now() - t0, note: e instanceof Error ? e.message : String(e) };
+      }
+    } else {
+      return NextResponse.json({ success: false, error: 'unknown test' }, { status: 400 });
+    }
+
+    return NextResponse.json({ success: true, test, result });
   } catch (e: unknown) {
     return NextResponse.json({ success: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
