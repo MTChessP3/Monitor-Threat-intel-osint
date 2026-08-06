@@ -54,11 +54,9 @@ En **Settings** > **Environment Variables**, agrega:
 |----------|-------------|---------|
 | `TURSO_DATABASE_URL` | URL de conexion Turso/libSQL (persistente) | `libsql://vip-intelligence-xxx.turso.io` |
 | `TURSO_AUTH_TOKEN` | Token de autenticacion de Turso | Tu token |
-| `ZAI_BASE_URL` | URL base del SDK de IA | `https://internal-api.z.ai/v1` |
-| `ZAI_API_KEY` | API Key del SDK de IA | Tu API key |
-| `ZAI_CHAT_ID` | Chat ID del SDK de IA | Tu chat ID |
-| `ZAI_TOKEN` | Token del SDK de IA | Tu token |
-| `ZAI_USER_ID` | User ID del SDK de IA | Tu user ID |
+| `ZAI_BASE_URL` | URL base de la API publica de Z.AI | `https://api.z.ai/api/paas/v4` |
+| `ZAI_API_KEY` | API Key de Z.AI (https://z.ai/manage-apikey/apikey-list) | Tu API key |
+| `ZAI_MODEL` | (Opcional) Modelo para chat/analisis | `glm-5.2` |
 
 ### Paso 3: Deploy
 
@@ -93,14 +91,16 @@ O manualmente desde el dashboard de Turso (consola SQL).
 
 ### 2. La busqueda web (OSINT/metasearch) no devuelve resultados en produccion
 
-**Sintoma**: `/api/metasearch` responde 200 pero con `resultCount: 0`, `status: "failed"` ("No se obtuvieron resultados"). El chat con IA funciona, pero `web_search` devuelve vacio.
+**Sintoma**: `/api/metasearch` responde 200 pero con `resultCount: 0`, `status: "failed"` ("No se obtuvieron resultados").
 
-**Causa**: El SDK invoca `zai.functions.invoke('web_search', ...)`, que requiere (a) las variables `ZAI_BASE_URL` y `ZAI_API_KEY` definidas en Vercel y (b) la funcion `web_search` habilitada/asignada en la plataforma Z AI.
+**Causa raiz**: La integracion original apuntaba a `https://internal-api.z.ai/v1`. Ese host es un balanceador INTERNO de Alibaba Cloud (cn-hongkong) con IPs privadas RFC1918 (`172.25.x.x`); NO es alcanzable desde Vercel ni desde internet publico. Cada llamada desde Vercel se colgaba ~10s y terminaba con `fetch failed` (o vacio, por el wrapper de timeouts). Ninguna configuracion de credenciales puede arreglarlo: el endpoint no es publico.
 
-**Verificacion**:
-1. En Vercel > Settings > Environment Variables, confirma que `ZAI_BASE_URL` y `ZAI_API_KEY` esten definidas en todos los environments (Production, Preview, Development).
-2. En el dashboard/panel de Z AI, verifica que la cuenta tenga acceso a la funcion `web_search` (no solo chat completions).
-3. Si faltan, agrega las variables y redeplea; luego vuelve a probar `/api/metasearch` con una query libre.
+**Solucion**: Usar la API publica de Z.AI:
+1. Crea una API key en https://z.ai/manage-apikey/apikey-list.
+2. En Vercel > Settings > Environment Variables, establece `ZAI_BASE_URL=https://api.z.ai/api/paas/v4` y `ZAI_API_KEY=<tu key>` en Production, Preview y Development. Las variables antiguas (`ZAI_CHAT_ID`, `ZAI_TOKEN`, `ZAI_USER_ID`) ya no se usan y pueden eliminarse.
+3. Redeplea y prueba `/api/metasearch`.
+
+**Verificacion**: La respuesta de `/api/metasearch` incluye `zaiDebug` (si la config esta activa) y `zaiDiagnostics` por query (estado `ok`/`empty`/`timeout`/`error` con el mensaje HTTP exacto).
 
 ### 3. Los favicons/logos redirigen a /auth/login
 

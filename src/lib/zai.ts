@@ -1,106 +1,63 @@
 /**
- * ZAI SDK Unified Initialization Module
+ * ZAI Public Platform Integration
  *
- * This module provides a single, robust way to initialize the ZAI SDK
- * that works in ALL environments:
- * - Local development (reads from /etc/.z-ai-config)
- * - Vercel serverless (reads from environment variables)
- * - Any other cloud provider (reads from environment variables)
+ * Talks to Z.AI's PUBLIC developer API (https://api.z.ai/api/paas/v4/).
+ * The original integration pointed at internal-api.z.ai, an Alibaba Cloud
+ * internal load balancer with RFC1918 private IPs that is NOT reachable from
+ * public serverless environments (Vercel) - every call hung ~10s and then
+ * failed with "fetch failed".
  *
- * CRITICAL: The .z-ai-config file only exists on the local dev machine.
- * On Vercel/cloud, we MUST use environment variables.
+ * Endpoints used:
+ *  - POST {baseUrl}/web_search        -> dedicated web search engine
+ *  - POST {baseUrl}/chat/completions  -> OpenAI-compatible chat (GLM models)
+ *
+ * Requires only a Z.AI API key (https://z.ai/manage-apikey/apikey-list).
  */
-
-import ZAI from 'z-ai-web-dev-sdk';
 
 // ============================================================================
 // ZAI Configuration from environment variables
 // ============================================================================
-const ZAI_BASE_URL = process.env.ZAI_BASE_URL || '';
+const ZAI_BASE_URL = process.env.ZAI_BASE_URL || 'https://api.z.ai/api/paas/v4';
 const ZAI_API_KEY = process.env.ZAI_API_KEY || '';
-const ZAI_CHAT_ID = process.env.ZAI_CHAT_ID || '';
-const ZAI_TOKEN = process.env.ZAI_TOKEN || '';
-const ZAI_USER_ID = process.env.ZAI_USER_ID || '';
+const ZAI_MODEL = process.env.ZAI_MODEL || 'glm-5.2';
 
-// ============================================================================
-// Singleton instance - reuse across invocations in same cold start
-// ============================================================================
-let zaiInstance: InstanceType<typeof ZAI> | null = null;
-let zaiInitPromise: Promise<InstanceType<typeof ZAI>> | null = null;
-
-/**
- * Get a ZAI SDK instance. Uses singleton pattern with double-checked locking.
- *
- * Priority:
- * 1. Environment variables (ZAI_BASE_URL + ZAI_API_KEY) - for Vercel/cloud
- * 2. ZAI.create() which reads .z-ai-config file - for local dev
- *
- * If both fail, throws an error with clear instructions.
- */
-export async function getZAI(): Promise<InstanceType<typeof ZAI>> {
-  if (zaiInstance) return zaiInstance;
-
-  // Prevent concurrent initialization
-  if (zaiInitPromise) return zaiInitPromise;
-
-  zaiInitPromise = (async () => {
-    try {
-      // METHOD 1: Environment variables (for Vercel/cloud deployment)
-      if (ZAI_BASE_URL && ZAI_API_KEY) {
-        console.log('[ZAI] Initializing from environment variables...');
-        const instance = new ZAI({
-          baseUrl: ZAI_BASE_URL,
-          apiKey: ZAI_API_KEY,
-          chatId: ZAI_CHAT_ID,
-          token: ZAI_TOKEN,
-          userId: ZAI_USER_ID,
-        });
-
-        // Verify the instance works by doing a quick test
-        zaiInstance = instance;
-        console.log('[ZAI] Initialized from env vars successfully');
-        return instance;
-      }
-
-      // METHOD 2: ZAI.create() reads .z-ai-config file (local dev)
-      console.log('[ZAI] No env vars found, trying ZAI.create() (reads .z-ai-config)...');
-      const instance = await ZAI.create();
-      zaiInstance = instance;
-      console.log('[ZAI] Initialized from .z-ai-config successfully');
-      return instance;
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      console.error(`[ZAI] ALL initialization methods failed: ${msg.substring(0, 200)}`);
-      zaiInitPromise = null; // Allow retry on next call
-      throw new Error(`ZAI SDK initialization failed: ${msg.substring(0, 100)}`);
-    }
-  })();
-
-  return zaiInitPromise;
+export interface ZAIConfig {
+  baseUrl: string;
+  apiKey: string;
 }
 
 /**
- * Safe ZAI instance getter - never throws, returns null if unavailable
+ * Returns the ZAI config. Throws if the API key is not configured.
  */
-export async function getZAISafe(): Promise<InstanceType<typeof ZAI> | null> {
+export function getZAI(): ZAIConfig {
+  if (!ZAI_API_KEY) {
+    throw new Error('ZAI_API_KEY is not configured. Create one at https://z.ai/manage-apikey/apikey-list and set ZAI_API_KEY (and ZAI_BASE_URL) in the environment.');
+  }
+  return { baseUrl: ZAI_BASE_URL, apiKey: ZAI_API_KEY };
+}
+
+/**
+ * Safe config getter - never throws, returns null if unavailable.
+ */
+export function getZAISafe(): ZAIConfig | null {
   try {
-    return await getZAI();
+    return getZAI();
   } catch {
-    console.error('[ZAI] SDK unavailable - all initialization methods failed');
+    console.error('[ZAI] SDK unavailable - ZAI_API_KEY is not configured');
     return null;
   }
 }
 
 /**
- * Check if ZAI is available without initializing it
+ * Check if ZAI is available without throwing.
  */
 export function isZAIConfigured(): boolean {
-  return !!(ZAI_BASE_URL && ZAI_API_KEY);
+  return !!ZAI_API_KEY;
 }
 
 /**
- * Execute a ZAI chat completion with automatic retry logic
- * Never throws - returns null on failure after all retries
+ * Execute a ZAI chat completion with automatic retry logic.
+ * Never throws - returns null on failure after all retries.
  */
 export async function zaiChatCompletion(
   messages: Array<{ role: string; content: string }>,
@@ -113,32 +70,48 @@ export async function zaiChatCompletion(
 ): Promise<string | null> {
   const { temperature = 0.2, max_tokens = 8000, maxRetries = 3, retryDelay = 2000 } = options;
 
-  const zai = await getZAISafe();
-  if (!zai) {
-    console.error('[ZAI] Cannot execute chat completion - SDK not available');
+  const config = getZAISafe();
+  if (!config) {
+    console.error('[ZAI] Cannot execute chat completion - not configured');
     return null;
   }
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const completion = await zai.chat.completions.create({
-        messages,
-        temperature,
-        max_tokens,
-      } as any);
+      const res = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US,en',
+          'Authorization': `Bearer ${config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: ZAI_MODEL,
+          messages,
+          temperature,
+          max_tokens,
+          stream: false,
+          thinking: { type: 'disabled' },
+        }),
+        signal: AbortSignal.timeout(90000),
+      });
 
-      const content = completion.choices?.[0]?.message?.content || '';
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`ZAI chat HTTP ${res.status}: ${body.substring(0, 300)}`);
+      }
+
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content || '';
       if (content.length > 0) {
         console.log(`[ZAI] Chat completion succeeded on attempt ${attempt + 1}: ${content.length} chars`);
         return content;
       }
-
       console.log(`[ZAI] Chat completion returned empty on attempt ${attempt + 1}`);
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error(`[ZAI] Chat completion error (attempt ${attempt + 1}/${maxRetries}): ${msg.substring(0, 150)}`);
 
-      // If rate limited, wait longer
       if (msg.includes('429')) {
         const waitTime = retryDelay * Math.pow(2, attempt);
         console.log(`[ZAI] Rate limited, waiting ${waitTime / 1000}s before retry...`);
@@ -146,7 +119,6 @@ export async function zaiChatCompletion(
         continue;
       }
 
-      // For other errors, shorter wait
       if (attempt < maxRetries - 1) {
         await new Promise(r => setTimeout(r, retryDelay));
       }
@@ -158,13 +130,7 @@ export async function zaiChatCompletion(
 }
 
 /**
- * Execute a ZAI web search with automatic retry logic.
- * Never throws - returns empty array on failure.
- *
- * An optional onDiagnostics callback receives the outcome of the whole call
- * (final status, attempts, elapsed time, error body) so callers can surface
- * the real ZAI behavior in their API response. This is the only way to debug
- * ZAI calls on serverless platforms without runtime-log access.
+ * Diagnostic outcome for a single zaiWebSearch call.
  */
 export type ZAIWebSearchStatus = 'ok' | 'empty' | 'timeout' | 'error' | 'bad_shape';
 
@@ -177,6 +143,21 @@ export interface ZAIWebSearchDiagnostics {
   raw?: string;
 }
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Execute a Z.AI web search via the public /web_search endpoint.
+ * Never throws - returns empty array on failure.
+ *
+ * Maps the platform's search_result items to the same shape the app's callers
+ * expect ({url, name, snippet, host_name, rank, date, favicon}).
+ */
 export async function zaiWebSearch(
   query: string,
   options: {
@@ -197,10 +178,10 @@ export async function zaiWebSearch(
   const { num = 10, maxRetries = 2, timeoutMs, onDiagnostics } = options;
   const startedAt = Date.now();
 
-  const zai = await getZAISafe();
-  if (!zai) {
-    console.error('[ZAI] Cannot execute web search - SDK not available');
-    onDiagnostics?.({ query, status: 'error', attempts: 0, elapsedMs: Date.now() - startedAt, error: 'SDK not available' });
+  const config = getZAISafe();
+  if (!config) {
+    console.error('[ZAI] Cannot execute web search - not configured');
+    onDiagnostics?.({ query, status: 'error', attempts: 0, elapsedMs: Date.now() - startedAt, error: 'ZAI_API_KEY not configured' });
     return [];
   }
 
@@ -225,56 +206,62 @@ export async function zaiWebSearch(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     attempts++;
     try {
-      const invoke = zai.functions.invoke('web_search', { query, num });
-      let result: any;
-      if (timeoutMs && timeoutMs > 0) {
-        // Guard against the underlying fetch never settling: race with a timer.
-        // The abandoned promise is guarded so it cannot become an unhandled rejection.
-        const guarded = invoke.then(
-          (v: any) => v,
-          (e: unknown) => {
-            const msg = e instanceof Error ? e.message : String(e);
-            console.error(`[ZAI] Web search late error (${msg.substring(0, 100)})`);
-            return [];
-          }
-        );
-        try {
-          result = await Promise.race([
-            guarded,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('ZAI_WEB_SEARCH_TIMEOUT')), timeoutMs)),
-          ]);
-        } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : String(e);
-          if (msg.includes('ZAI_WEB_SEARCH_TIMEOUT')) {
-            status = 'timeout';
-            continue;
-          }
-          throw e;
-        }
-      } else {
-        result = await invoke;
+      const res = await fetch(`${config.baseUrl}/web_search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US,en',
+          'Authorization': `Bearer ${config.apiKey}`,
+        },
+        body: JSON.stringify({
+          search_engine: 'search-prime',
+          search_query: query,
+          count: num,
+        }),
+        signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+      });
+
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`ZAI web_search HTTP ${res.status}: ${body.substring(0, 300)}`);
       }
 
-      if (Array.isArray(result)) {
-        if (result.length > 0) {
-          console.log(`[ZAI] Web search succeeded: "${query.substring(0, 60)}" -> ${result.length} results`);
-          return finish('ok', result);
-        }
-        status = 'empty';
-        console.log(`[ZAI] Web search returned empty array: "${query.substring(0, 60)}"`);
+      const data = await res.json();
+      const rawItems = data.search_result;
+
+      if (!Array.isArray(rawItems)) {
+        status = 'bad_shape';
+        try { rawShape = JSON.stringify(data).substring(0, 300); } catch { rawShape = String(data).substring(0, 300); }
+        console.log(`[ZAI] Web search unexpected shape: "${query.substring(0, 50)}" -> ${rawShape}`);
         continue;
       }
 
-      // ZAI responded but the shape is not the documented array -> record it.
-      status = 'bad_shape';
-      try { rawShape = JSON.stringify(result).substring(0, 300); } catch { rawShape = String(result).substring(0, 300); }
-      console.log(`[ZAI] Web search unexpected shape: "${query.substring(0, 50)}" -> ${rawShape}`);
+      const mapped = rawItems
+        .map((item: any, index: number) => ({
+          url: item.link || '',
+          name: item.title || '',
+          snippet: item.content || '',
+          host_name: item.media || hostOf(item.link || ''),
+          rank: index + 1,
+          date: item.publish_date || '',
+          favicon: item.icon || '',
+        }))
+        .filter((r: any) => r.url && r.url.startsWith('http'));
+
+      if (mapped.length > 0) {
+        console.log(`[ZAI] Web search succeeded: "${query.substring(0, 60)}" -> ${mapped.length} results`);
+        return finish('ok', mapped);
+      }
+
+      status = 'empty';
+      console.log(`[ZAI] Web search returned no results: "${query.substring(0, 60)}"`);
       continue;
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
       lastError = msg;
-      status = 'error';
-      console.error(`[ZAI] Web search error (attempt ${attempt + 1}/${maxRetries}): "${query.substring(0, 50)}" - ${msg.substring(0, 150)}`);
+      const isAbort = error instanceof Error && (error.name === 'AbortError' || msg.includes('abort'));
+      status = isAbort ? 'timeout' : 'error';
+      console.error(`[ZAI] Web search ${status} (attempt ${attempt + 1}/${maxRetries}): "${query.substring(0, 50)}" - ${msg.substring(0, 150)}`);
 
       if (msg.includes('429') && attempt < maxRetries - 1) {
         await new Promise(r => setTimeout(r, 3000));
