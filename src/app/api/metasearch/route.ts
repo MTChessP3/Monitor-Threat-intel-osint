@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, ensureDatabaseInitialized } from '@/lib/db';
 import { verifyToken, AUTH_COOKIE_NAME } from '@/lib/auth';
 import { getZAI, zaiChatCompletion, zaiWebSearch } from '@/lib/zai';
 
@@ -488,6 +488,7 @@ function addResults(
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   try {
+    await ensureDatabaseInitialized();
     const user = await getAuthenticatedUser(request);
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 

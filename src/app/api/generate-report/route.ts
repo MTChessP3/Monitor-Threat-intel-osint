@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, ensureDatabaseInitialized } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
+    await ensureDatabaseInitialized();
     const body = await request.json();
     const { templateId, analysis, title, reportContent } = body;
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, ensureDatabaseInitialized } from '@/lib/db';
 import * as cheerio from 'cheerio';
 import { getZAI, zaiChatCompletion, zaiWebSearch } from '@/lib/zai';
 
@@ -724,6 +724,7 @@ ${severity === 'critico' ? `1. **ACTIVAR PROTOCOLO DE EMERGENCIA**\n2. **CONTENC
 // ============================================================================
 export async function POST(request: NextRequest) {
   try {
+    await ensureDatabaseInitialized();
     const body = await request.json();
     const { mode, urls, writtenData, abuseTypes, severity, tlpLevel, templateId, title, fileNames } = body;
 

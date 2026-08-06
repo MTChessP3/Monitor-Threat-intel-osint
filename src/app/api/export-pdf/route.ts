@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { db } from '@/lib/db';
+import { db, ensureDatabaseInitialized } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
+    await ensureDatabaseInitialized();
     const body = await request.json();
     const { reportId, content, title: inputTitle, threatLevel: inputThreatLevel, date: inputDate } = body;
 

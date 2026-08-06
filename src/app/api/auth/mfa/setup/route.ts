@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, ensureDatabaseInitialized } from '@/lib/db';
 import { verifyToken, generateMfaSecret, generateQrCode, AUTH_COOKIE_NAME } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
+    await ensureDatabaseInitialized();
     // Get auth cookie
     const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
     if (!token) {

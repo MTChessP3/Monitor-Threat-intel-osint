@@ -5,12 +5,19 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow auth pages and API routes (they handle their own auth)
+  // Also allow public static assets so they don't get redirected to login
   if (
     pathname.startsWith('/auth') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/_next') ||
+    pathname === '/robots.txt' ||
+    pathname === '/favicon.ico' ||
+    pathname === '/apple-touch-icon.png' ||
     pathname === '/logo.svg' ||
-    pathname === '/robots.txt'
+    pathname === '/logo.png' ||
+    pathname === '/logo-new.png' ||
+    pathname === '/site.webmanifest' ||
+    /^\/favicon-\d+x\d+\.png$/.test(pathname)
   ) {
     return NextResponse.next();
   }

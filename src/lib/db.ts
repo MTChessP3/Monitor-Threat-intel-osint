@@ -3,7 +3,8 @@ import { PrismaLibSql } from '@prisma/adapter-libsql'
 import { createClient } from '@libsql/client'
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
+  prisma: PrismaClient | undefined;
+  dbInitialized?: boolean;
 }
 
 /**
@@ -56,16 +57,12 @@ export const db = globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db;
 
-// Track if we've already initialized this cold start
-let dbInitialized = false;
-
-/**
- * Ensure the database is initialized with schema and seed data.
- * On Vercel serverless, /tmp is ephemeral so we need to create
- * the schema on every cold start.
- */
+// Ensure the database is initialized with schema and seed data.
+// On Vercel serverless, /tmp is ephemeral so we need to create
+// the schema on every cold start. The flag is stored on globalThis so
+// all route bundles in the same instance only initialize once.
 export async function ensureDatabaseInitialized(): Promise<void> {
-  if (dbInitialized) return;
+  if (globalForPrisma.dbInitialized) return;
 
   // On Vercel serverless (not with Turso which is persistent)
   if ((process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) && !process.env.TURSO_DATABASE_URL) {
@@ -125,7 +122,7 @@ export async function ensureDatabaseInitialized(): Promise<void> {
     console.error('[DB] Error seeding database:', error instanceof Error ? error.message.substring(0, 300) : String(error).substring(0, 300));
   }
 
-  dbInitialized = true;
+  globalForPrisma.dbInitialized = true;
 }
 
 /**
@@ -199,8 +196,7 @@ async function createTablesManually(): Promise<void> {
       "inputUrls" TEXT NOT NULL DEFAULT '[]',
       "inputText" TEXT NOT NULL DEFAULT '',
       "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "templateId_references" TEXT REFERENCES "ReportTemplate"("id")
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
 

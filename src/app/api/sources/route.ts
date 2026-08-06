@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, ensureDatabaseInitialized } from '@/lib/db';
 
 export async function GET() {
   try {
+    await ensureDatabaseInitialized();
     const sources = await db.newsSource.findMany({
       orderBy: { createdAt: 'desc' },
     });
@@ -15,6 +16,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    await ensureDatabaseInitialized();
     const body = await request.json();
     const { name, url, type, category } = body;
 
@@ -41,6 +43,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    await ensureDatabaseInitialized();
     const body = await request.json();
     const { id } = body;
 

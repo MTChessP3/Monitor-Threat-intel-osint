@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, ensureDatabaseInitialized } from '@/lib/db';
 
 export async function GET(request: Request) {
   try {
+    await ensureDatabaseInitialized();
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = parseInt(searchParams.get('offset') || '0');
@@ -30,6 +31,7 @@ export async function GET(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    await ensureDatabaseInitialized();
     const body = await request.json();
     const { id } = body;
 
@@ -50,6 +52,7 @@ export async function DELETE(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    await ensureDatabaseInitialized();
     const body = await request.json();
     const { id, content, title, summary, threatLevel } = body;
 
