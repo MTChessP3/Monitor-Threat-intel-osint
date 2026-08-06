@@ -271,7 +271,8 @@ function b64decode(s: string): string {
 }
 
 function bingRealUrl(href: string): string {
-  const cleanHref = href.replace(/&amp;/g, '&');
+  let cleanHref = href.replace(/&amp;/g, '&');
+  if (cleanHref.startsWith('/')) cleanHref = `https://www.bing.com${cleanHref}`;
   if (cleanHref.includes('bing.com/ck/a') || cleanHref.includes('r.bing.com')) {
     const m = cleanHref.match(/[?&]u=a1([^&]+)/);
     if (m) {
@@ -284,16 +285,28 @@ function bingRealUrl(href: string): string {
 
 function parseBingHtml(html: string): WebSearchResult[] {
   const results: WebSearchResult[] = [];
-  const blockRe = /<li class="b_algo"([\s\S]*?)(?=<li class="b_algo"|<\/ol>|$)/gi;
+  const blockRe = /class="b_algo[^"]*"([\s\S]*?)(?=class="b_algo[^"]*"|<\/ol>|$)/gi;
   let blockMatch: RegExpExecArray | null;
 
   while ((blockMatch = blockRe.exec(html)) !== null) {
     const block = blockMatch[1];
-    const titleMatch = block.match(/<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h2>/);
-    if (!titleMatch) continue;
+    let m = block.match(/<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h2>/i);
+    let href = '';
+    let title = '';
+    if (m) {
+      href = m[1];
+      title = m[2];
+    } else {
+      const anyAnchor = block.match(/<a[^>]*href="(https?:[^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+      if (anyAnchor) {
+        href = anyAnchor[1];
+        title = anyAnchor[2];
+      }
+    }
+    if (!href) continue;
 
     const snipMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
-    const item = makeItem(bingRealUrl(titleMatch[1]), titleMatch[2], snipMatch ? snipMatch[1] : '');
+    const item = makeItem(bingRealUrl(href), title, snipMatch ? snipMatch[1] : '');
     if (item) results.push(item);
   }
   return results;
@@ -422,7 +435,7 @@ export async function zaiWebSearch(
           console.log(`[SEARCH] ${engine.name} succeeded: "${query.substring(0, 60)}" -> ${mapped.length} results`);
           return finish('ok', mapped);
         }
-        lastError = `${engine.name}: no results [len=${html.length}, title='${pageTitle(html)}']`;
+        lastError = `${engine.name}: no results [len=${html.length}, title='${pageTitle(html)}', b_algo=${(html.match(/class="b_algo/g) || []).length}]`;
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
         lastError = `${engine.name}: ${msg}`;

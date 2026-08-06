@@ -188,6 +188,19 @@ function buildOsintQueryMatrix(executive: {
 // ============================================================================
 // WEB SEARCH ENGINE (free: DuckDuckGo + Bing, via lib/zai.ts)
 // ============================================================================
+// The free scrapers (especially Bing RSS) often ignore `filetype:` operators,
+// returning generic web pages. Enforce the operator client-side so a query
+// like `"Name" filetype:pdf` only yields actual PDFs.
+function enforceQueryOperators(query: string, results: MetasearchResult[]): MetasearchResult[] {
+  const filetypes = [...query.matchAll(/filetype:([a-z0-9]+)/gi)].map(m => m[1].toLowerCase());
+  if (filetypes.length === 0) return results;
+  return results.filter(r => {
+    const ft = (r.fileType || '').toLowerCase();
+    const urlPath = (r.url || '').toLowerCase().split('?')[0].split('#')[0];
+    return filetypes.some(req => ft === req || urlPath.endsWith('.' + req));
+  });
+}
+
 async function searchZAI(query: string, diagnostics: ZAIWebSearchDiagnostics[]): Promise<MetasearchResult[]> {
   try {
     const searchResult = await zaiWebSearch(query, {
@@ -210,8 +223,9 @@ async function searchZAI(query: string, diagnostics: ZAIWebSearchDiagnostics[]):
           fileType: extractFileType(item.url),
           querySource: query.substring(0, 120),
         }));
-      console.log(`[METASEARCH v8] ZAI returned ${mapped.length} results for: "${query.substring(0, 50)}"`);
-      return mapped;
+      const filtered = enforceQueryOperators(query, mapped);
+      console.log(`[METASEARCH v8] ZAI returned ${mapped.length} results for: "${query.substring(0, 50)}" -> ${filtered.length} after filetype filter`);
+      return filtered;
     }
     console.log(`[METASEARCH v8] ZAI returned empty for: "${query.substring(0, 50)}"`);
   } catch (e: unknown) {
@@ -328,39 +342,24 @@ function classifyResults(
   const id = executive.identificationNum;
   const email = executive.email;
 
-  const identifiers: Array<{ label: string; patterns: RegExp[] }> = [];
-
-  // Name patterns
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const nameParts = name.toLowerCase().split(/\s+/).filter(p => p.length > 2);
-  identifiers.push({
-    label: 'Nombre',
-    patterns: [
-      new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
-      ...nameParts.filter(p => p.length > 3).map(part => new RegExp(`\\b${part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')),
-    ],
-  });
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts[nameParts.length - 1] || '';
 
-  // ID patterns
+  // Full name (contiguous) is the strongest name signal.
+  const fullNamePattern = new RegExp(esc(name), 'i');
+  // Individual parts only count toward a partial match.
+  const firstNameRe = firstName.length > 3 ? new RegExp(`\\b${esc(firstName)}\\b`, 'i') : null;
+  const lastNameRe = lastName.length > 3 ? new RegExp(`\\b${esc(lastName)}\\b`, 'i') : null;
+
   const idNum = id.replace(/\D/g, '');
-  identifiers.push({
-    label: 'ID',
-    patterns: [
-      new RegExp(id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
-      ...(idNum.length > 4 ? [new RegExp(`\\b${idNum}\\b`, 'i')] : []),
-    ],
-  });
+  const idPattern = new RegExp(esc(id), 'i');
+  const idNumPattern = idNum.length > 4 ? new RegExp(`\\b${idNum}\\b`, 'i') : null;
 
-  // Email patterns
-  if (email) {
-    const emailUser = email.split('@')[0];
-    identifiers.push({
-      label: 'Email',
-      patterns: [
-        new RegExp(email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
-        ...(emailUser.length > 3 ? [new RegExp(`\\b${emailUser.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')] : []),
-      ],
-    });
-  }
+  const emailPattern = email ? new RegExp(esc(email), 'i') : null;
+  const emailUser = email ? email.split('@')[0] : '';
+  const emailUserPattern = email && emailUser.length > 3 ? new RegExp(`\\b${esc(emailUser)}\\b`, 'i') : null;
 
   const validated: MetasearchResult[] = [];
   const potential: MetasearchResult[] = [];
@@ -371,14 +370,26 @@ function classifyResults(
     const matchedIds: string[] = [];
     let hasDirectMatch = false;
 
-    for (const identifier of identifiers) {
-      for (const pattern of identifier.patterns) {
-        if (pattern.test(searchableText)) {
-          hasDirectMatch = true;
-          if (!matchedIds.includes(identifier.label)) matchedIds.push(identifier.label);
-          break;
-        }
-      }
+    // Strong name match: full name contiguous, or first+last name together.
+    if (fullNamePattern.test(searchableText)) {
+      hasDirectMatch = true;
+      matchedIds.push('Nombre completo');
+    } else if (
+      (firstNameRe && lastNameRe && firstName !== lastName && firstNameRe.test(searchableText) && lastNameRe.test(searchableText)) ||
+      (firstName === lastName && firstNameRe && firstNameRe.test(searchableText))
+    ) {
+      hasDirectMatch = true;
+      matchedIds.push('Nombre');
+    }
+
+    if (idPattern.test(searchableText) || (idNumPattern && idNumPattern.test(searchableText))) {
+      hasDirectMatch = true;
+      if (!matchedIds.includes('ID')) matchedIds.push('ID');
+    }
+
+    if (emailPattern && (emailPattern.test(searchableText) || (emailUserPattern && emailUserPattern.test(searchableText)))) {
+      hasDirectMatch = true;
+      if (!matchedIds.includes('Email')) matchedIds.push('Email');
     }
 
     if (hasDirectMatch) {
@@ -388,22 +399,21 @@ function classifyResults(
       validated.push(result);
     } else {
       const queryText = (result.querySource || '').toLowerCase();
-      const isFromTargetedQuery = identifiers.some(idGroup =>
-        idGroup.patterns.some(pattern => pattern.test(queryText))
-      );
-      const isFiletypeQuery = queryText.includes('filetype:');
+      const isFromTargetedQuery = queryText.includes('filetype:') || queryText.includes('site:') ||
+        idPattern.test(queryText) || (emailPattern && emailPattern.test(queryText)) || fullNamePattern.test(queryText);
+      const hasPartialName = (firstNameRe && firstNameRe.test(searchableText)) || (lastNameRe && lastNameRe.test(searchableText));
 
-      result.fromTargetedQuery = isFromTargetedQuery || isFiletypeQuery;
+      result.fromTargetedQuery = isFromTargetedQuery;
 
-      if (isFromTargetedQuery) {
+      if (hasPartialName) {
+        result.classification = 'potential';
+        result.matchedIdentifiers = [];
+        result.classificationReason = 'Coincidencia parcial de nombre (posible homonimo)';
+        potential.push(result);
+      } else if (isFromTargetedQuery) {
         result.classification = 'potential';
         result.matchedIdentifiers = [];
         result.classificationReason = 'Resultado de busqueda dirigida con identificador del ejecutivo';
-        potential.push(result);
-      } else if (isFiletypeQuery) {
-        result.classification = 'potential';
-        result.matchedIdentifiers = [];
-        result.classificationReason = 'Resultado de busqueda con operador filetype dirigido al ejecutivo';
         potential.push(result);
       } else {
         result.classification = 'discarded';
