@@ -186,14 +186,14 @@ function buildOsintQueryMatrix(executive: {
 }
 
 // ============================================================================
-// WEB SEARCH ENGINE (DuckDuckGo via lib/zai.ts)
+// WEB SEARCH ENGINE (free: DuckDuckGo + Bing, via lib/zai.ts)
 // ============================================================================
 async function searchZAI(query: string, diagnostics: ZAIWebSearchDiagnostics[]): Promise<MetasearchResult[]> {
   try {
     const searchResult = await zaiWebSearch(query, {
       num: 15,
-      maxRetries: 2,
-      timeoutMs: 12000,
+      maxRetries: 1,
+      timeoutMs: 8000,
       onDiagnostics: (d) => diagnostics.push(d),
     });
 
