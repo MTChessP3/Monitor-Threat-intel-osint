@@ -1,15 +1,16 @@
 /**
  * Web Search + AI Analysis Integration
  *
- * WEB SEARCH (free): DuckDuckGo HTML + DuckDuckGo Lite scraping (primary)
- * with Bing HTML and Bing RSS as fallbacks. No API key required.
+ * WEB SEARCH (free): public SearXNG instances + Mojeek + Ecosia + DuckDuckGo
+ * scraping (they honour OSINT operators like `filetype:`), with Bing RSS as
+ * last-resort fallback (datacenter IPs are tolerated but operators are ignored).
+ * No API key required.
  *   - The old Z.AI public /web_search endpoint is paid (error 1113
  *     "Insufficient balance") and the original internal-api.z.ai endpoint is
  *     an Alibaba Cloud internal ALB with RFC1918 private IPs that is NOT
  *     reachable from public serverless environments (Vercel).
- *   - DuckDuckGo honours OSINT operators like `filetype:` and `site:`, but it
- *     rate-limits aggressively from server IPs (anti-bot challenge), so we
- *     fall back to Bing's HTML/RSS results when it gets blocked.
+ *   - Most HTML endpoints serve anti-bot challenges to server IPs, so the
+ *     engine chain falls through to Bing RSS when they all get blocked.
  *
  * AI CHAT (free tier): Z.AI public developer API (https://api.z.ai/api/paas/v4/).
  *   - Uses glm-4.5-flash, which is genuinely free (no balance needed).
@@ -244,137 +245,138 @@ function parseDdgHtml(html: string): WebSearchResult[] {
   return results;
 }
 
-async function fetchDdgHtml(query: string, timeoutMs: number): Promise<string> {
-  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': BROWSER_UA,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-    },
-    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
-  });
-  if (!res.ok) throw new Error(`DuckDuckGo HTTP ${res.status}`);
-  const html = await res.text();
-  if (/anomaly|challenge|captcha/i.test(html)) {
-    throw new Error(`DuckDuckGo bot challenge (blocked) [len=${html.length}, title='${pageTitle(html)}']`);
-  }
-  return html;
-}
+async function fetchDdgHtmlPost(query: string, timeoutMs: number): Promise<string> {
 
-// --- DuckDuckGo Lite (lighter page, often honours operators like filetype:) ---
-function parseDdgLiteHtml(html: string): WebSearchResult[] {
+// --- SearXNG (public instances, aggregate engines that honour operators) ---
+function parseSearxHtml(html: string): WebSearchResult[] {
   const results: WebSearchResult[] = [];
-  const linkRe = /<a[^>]*class="[^"]*link-text[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = linkRe.exec(html)) !== null) {
-    const url = ddgRealUrl(m[1]);
-    if (url.includes('duckduckgo.com/y.js') || url.includes('duckduckgo.com/l/') || url.includes('duckduckgo.com/j.js')) continue;
-    const after = html.slice(m.index + m[0].length, m.index + m[0].length + 1200);
-    const snip = after.match(/class="result-snippet"[^>]*>([\s\S]*?)<\/td>/);
-    const item = makeItem(url, m[2], snip ? snip[1] : '');
-    if (item) results.push(item);
-  }
-  return results;
-}
-
-async function fetchDdgLiteHtml(query: string, timeoutMs: number): Promise<string> {
-  const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': BROWSER_UA,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-    },
-    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
-  });
-  if (!res.ok) throw new Error(`DuckDuckGo Lite HTTP ${res.status}`);
-  const html = await res.text();
-  if (/anomaly|challenge|captcha/i.test(html)) {
-    throw new Error(`DuckDuckGo Lite bot challenge (blocked) [len=${html.length}, title='${pageTitle(html)}']`);
-  }
-  return html;
-}
-
-// --- Bing ---
-function b64decode(s: string): string {
-  try {
-    return atob(s);
-  } catch {
-    return '';
-  }
-}
-
-function bingRealUrl(href: string): string {
-  let cleanHref = href.replace(/&amp;/g, '&');
-  if (cleanHref.startsWith('/')) cleanHref = `https://www.bing.com${cleanHref}`;
-  if (cleanHref.includes('bing.com/ck/a') || cleanHref.includes('r.bing.com')) {
-    const m = cleanHref.match(/[?&]u=a1([^&]+)/);
-    if (m) {
-      const decoded = b64decode(m[1]);
-      if (/^https?:\/\//i.test(decoded)) return decoded;
-    }
-  }
-  return cleanHref;
-}
-
-function parseBingHtml(html: string): WebSearchResult[] {
-  const results: WebSearchResult[] = [];
-  const blockRe = /class="b_algo[^"]*"([\s\S]*?)(?=class="b_algo[^"]*"|<\/ol>|$)/gi;
+  const blockRe = /<article[^>]*class="[^"]*\bresult\b[^"]*"[^>]*>([\s\S]*?)(?=<article|$)/gi;
   let blockMatch: RegExpExecArray | null;
-
   while ((blockMatch = blockRe.exec(html)) !== null) {
     const block = blockMatch[1];
-    let m = block.match(/<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h2>/i);
-    let href = '';
-    let title = '';
-    if (m) {
-      href = m[1];
-      title = m[2];
-    } else {
-      const anyAnchor = block.match(/<a[^>]*href="(https?:[^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
-      if (anyAnchor) {
-        href = anyAnchor[1];
-        title = anyAnchor[2];
-      }
-    }
-    if (!href) continue;
-
-    const snipMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
-    const item = makeItem(bingRealUrl(href), title, snipMatch ? snipMatch[1] : '');
+    const m = block.match(/<h3[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+    if (!m) continue;
+    const snipMatch = block.match(/<p[^>]*class="[^"]*content[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
+    const item = makeItem(m[1], m[2], snipMatch ? snipMatch[1] : '');
     if (item) results.push(item);
   }
   return results;
 }
 
-async function fetchBingHtml(query: string, timeoutMs: number): Promise<string> {
-  const variants = [
-    { url: `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=15&setlang=es`, cookie: 'SRCHHPGUSR=SRCHLANG=es' },
-    { url: `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=15&setmkt=en-US&cc=us`, cookie: undefined },
-  ];
-  let lastHtml = '';
-  for (let i = 0; i < variants.length; i++) {
-    const v = variants[i];
-    const headers: Record<string, string> = {
+async function fetchSearxHtml(instance: string, query: string, timeoutMs: number): Promise<string> {
+  const url = `${instance}/search?q=${encodeURIComponent(query)}&language=es&safesearch=0&pageno=1`;
+  const res = await fetch(url, {
+    headers: {
       'User-Agent': BROWSER_UA,
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-    };
-    if (v.cookie) headers['Cookie'] = v.cookie;
-    const res = await fetch(v.url, {
-      headers,
-      signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
-    });
-    if (!res.ok) {
-      if (i === variants.length - 1) throw new Error(`Bing HTTP ${res.status}`);
-      continue;
-    }
-    const html = await res.text();
-    const blocked = /captcha|challenge|verify|consent/i.test(html) && !/<li class="b_algo"/.test(html);
-    if (!blocked || i === variants.length - 1) return html;
-    lastHtml = html;
+    },
+    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  if (!res.ok) throw new Error(`SearXNG HTTP ${res.status}`);
+  const html = await res.text();
+  if (/verifying your browser|antibot|captcha/i.test(html)) {
+    throw new Error(`SearXNG antibot challenge [len=${html.length}, title='${pageTitle(html)}']`);
   }
-  throw new Error(`Bing blocked [len=${lastHtml.length}, title='${pageTitle(lastHtml)}']`);
+  return html;
+}
+
+// --- Mojeek (own index, honours filetype:) ---
+function parseMojeekHtml(html: string): WebSearchResult[] {
+  const results: WebSearchResult[] = [];
+  const blockRe = /<li[^>]*class="[^"]*\bresult\b[^"]*"[^>]*>([\s\S]*?)(?=<li[^>]*class="[^"]*\bresult\b|<\/ul>|$)/gi;
+  let blockMatch: RegExpExecArray | null;
+  while ((blockMatch = blockRe.exec(html)) !== null) {
+    const block = blockMatch[1];
+    let m = block.match(/<a[^>]*class="ob"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+    if (!m) m = block.match(/<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h2>/i);
+    if (!m) continue;
+    const snipMatch = block.match(/<p[^>]*class="s"[^>]*>([\s\S]*?)<\/p>/i);
+    const item = makeItem(m[1], m[2], snipMatch ? snipMatch[1] : '');
+    if (item) results.push(item);
+  }
+  return results;
+}
+
+async function fetchMojeekHtml(query: string, timeoutMs: number): Promise<string> {
+  const url = `https://www.mojeek.com/search?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': BROWSER_UA,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    },
+    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  if (!res.ok) throw new Error(`Mojeek HTTP ${res.status}`);
+  const html = await res.text();
+  if (/forbidden|captcha|automated queries/i.test(html)) {
+    throw new Error(`Mojeek blocked [len=${html.length}, title='${pageTitle(html)}']`);
+  }
+  return html;
+}
+
+// --- Ecosia (Bing-backed, honours filetype:) ---
+function parseEcosiaHtml(html: string): WebSearchResult[] {
+  const results: WebSearchResult[] = [];
+  const blockRe = /<article[^>]*class="[^"]*\bresult\b[^"]*"[^>]*>([\s\S]*?)(?=<article|$)/gi;
+  let blockMatch: RegExpExecArray | null;
+  while ((blockMatch = blockRe.exec(html)) !== null) {
+    const block = blockMatch[1];
+    const m = block.match(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+    if (!m) continue;
+    const snipMatch = block.match(/<p[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
+    const item = makeItem(m[1], m[2], snipMatch ? snipMatch[1] : '');
+    if (item) results.push(item);
+  }
+  return results;
+}
+
+async function fetchEcosiaHtml(query: string, timeoutMs: number): Promise<string> {
+  const url = `https://www.ecosia.org/search?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': BROWSER_UA,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    },
+    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  if (!res.ok) throw new Error(`Ecosia HTTP ${res.status}`);
+  const html = await res.text();
+  if (/firewall|captcha|challenge/i.test(html)) {
+    throw new Error(`Ecosia blocked [len=${html.length}, title='${pageTitle(html)}']`);
+  }
+  return html;
+}
+
+// --- DuckDuckGo with cookie warm-up (GET cookies, then POST the query) ---
+async function fetchDdgHtmlPost(query: string, timeoutMs: number): Promise<string> {
+  const headers = {
+    'User-Agent': BROWSER_UA,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+  };
+  const warm = await fetch('https://html.duckduckgo.com/html/', {
+    headers,
+    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  let cookie = '';
+  try { cookie = (warm.headers.getSetCookie() || []).map(c => c.split(';')[0]).join('; '); } catch { /* ignore */ }
+  const body = new URLSearchParams({ q: query }).toString();
+  const res = await fetch('https://html.duckduckgo.com/html/', {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded', ...(cookie ? { 'Cookie': cookie } : {}) },
+    body,
+    redirect: 'follow',
+    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  if (!res.ok) throw new Error(`DuckDuckGo POST HTTP ${res.status}`);
+  const html = await res.text();
+  if (/anomaly|challenge|captcha/i.test(html)) {
+    throw new Error(`DuckDuckGo POST bot challenge (blocked) [len=${html.length}, title='${pageTitle(html)}']`);
+  }
+  return html;
 }
 
 // --- Bing RSS (tolerant of datacenter IPs that get the HTML consent wall) ---
@@ -412,9 +414,11 @@ async function fetchBingRss(query: string, timeoutMs: number): Promise<string> {
 // WEB SEARCH (free)
 // ============================================================================
 /**
- * Execute a web search via free HTML/RSS scraping: DuckDuckGo HTML, DuckDuckGo
- * Lite, then Bing HTML, then Bing RSS as last-resort fallback (all of them
- * rate-limit server IPs aggressively, so we try several endpoints).
+ * Execute a web search via free scraping. Engines that honour OSINT operators
+ * (`filetype:`, `site:`, exact-phrase quotes) are tried first: public SearXNG
+ * instances, Mojeek, Ecosia, DuckDuckGo (cookie POST). Bing RSS is the
+ * last-resort fallback because it tolerates datacenter IPs that the others
+ * block, though it ignores `filetype:` and quotes.
  * Never throws - returns empty array on failure.
  *
  * Returns items in the shape the app's callers expect
@@ -453,9 +457,12 @@ export async function zaiWebSearch(
   };
 
   const engines: Array<{ name: string; fetch: () => Promise<string>; parse: (html: string) => WebSearchResult[] }> = [
-    { name: 'DuckDuckGo', fetch: () => fetchDdgHtml(query, timeoutMs), parse: parseDdgHtml },
-    { name: 'DuckDuckGo Lite', fetch: () => fetchDdgLiteHtml(query, timeoutMs), parse: parseDdgLiteHtml },
-    { name: 'Bing', fetch: () => fetchBingHtml(query, timeoutMs), parse: parseBingHtml },
+    { name: 'SearXNG (searx.party)', fetch: () => fetchSearxHtml('https://searx.party', query, timeoutMs), parse: parseSearxHtml },
+    { name: 'SearXNG (searx.be)', fetch: () => fetchSearxHtml('https://searx.be', query, timeoutMs), parse: parseSearxHtml },
+    { name: 'SearXNG (searx.work)', fetch: () => fetchSearxHtml('https://searx.work', query, timeoutMs), parse: parseSearxHtml },
+    { name: 'Mojeek', fetch: () => fetchMojeekHtml(query, timeoutMs), parse: parseMojeekHtml },
+    { name: 'Ecosia', fetch: () => fetchEcosiaHtml(query, timeoutMs), parse: parseEcosiaHtml },
+    { name: 'DuckDuckGo', fetch: () => fetchDdgHtmlPost(query, timeoutMs), parse: parseDdgHtml },
     { name: 'Bing RSS', fetch: () => fetchBingRss(query, timeoutMs), parse: parseBingRss },
   ];
   let lastEngine = '';

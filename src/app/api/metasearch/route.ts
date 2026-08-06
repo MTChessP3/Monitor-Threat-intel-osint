@@ -543,8 +543,8 @@ export async function POST(request: NextRequest) {
       for (const query of g.queries) tasks.push({ query, groupIndex: gi });
     });
 
-    const SEARCH_DEADLINE_MS = 25000;
-    const SEARCH_CONCURRENCY = 4;
+    const SEARCH_DEADLINE_MS = 50000;
+    const SEARCH_CONCURRENCY = 5;
     const searchStart = Date.now();
     const groupFound = queryGroups.map(() => 0);
     const searchDiagnostics: ZAIWebSearchDiagnostics[] = [];
@@ -572,7 +572,7 @@ export async function POST(request: NextRequest) {
     queryGroups.forEach((g, i) => { g.resultsFound = groupFound[i]; });
 
     engineDetails.push({
-      name: 'Free Web Search (DDG + Bing)',
+      name: 'Free Web Search (SearXNG + Mojeek + Ecosia + DDG + Bing)',
       queriesRun: totalQueriesRun,
       resultsFound: allResults.length,
       status: allResults.length > 0 ? 'active' : 'failed',
@@ -650,8 +650,8 @@ export async function POST(request: NextRequest) {
     // ============================================================================
     return NextResponse.json({
       success: true,
-      searchEngine: `OSINT v8.0 [DuckDuckGo + Bing]`,
-      enginesUsed: ['DuckDuckGo', 'Bing'],
+      searchEngine: `OSINT v8.1 [SearXNG + Mojeek + Ecosia + DDG + Bing]`,
+      enginesUsed: ['SearXNG', 'Mojeek', 'Ecosia', 'DuckDuckGo', 'Bing'],
       engineDetails,
       zaiDebug: {
         configured: isZAIConfigured(),
