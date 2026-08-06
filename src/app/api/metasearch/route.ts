@@ -94,7 +94,7 @@ function extractFileType(url: string): string {
 }
 
 // ============================================================================
-// OSINT QUERY MATRIX v8.0 - Uses ZAI Web Search filetype: operators
+// OSINT QUERY MATRIX v8.0 - Uses DuckDuckGo filetype: operators
 // ============================================================================
 function buildOsintQueryMatrix(executive: {
   fullName: string;
@@ -186,7 +186,7 @@ function buildOsintQueryMatrix(executive: {
 }
 
 // ============================================================================
-// ZAI SDK SEARCH ENGINE (using unified lib/zai.ts)
+// WEB SEARCH ENGINE (DuckDuckGo via lib/zai.ts)
 // ============================================================================
 async function searchZAI(query: string, diagnostics: ZAIWebSearchDiagnostics[]): Promise<MetasearchResult[]> {
   try {
@@ -521,11 +521,11 @@ export async function POST(request: NextRequest) {
     let totalQueriesRun = 0;
 
     // ============================================================================
-    // PHASE 1: Execute ALL queries via ZAI Web Search
+    // PHASE 1: Execute ALL queries via DuckDuckGo
     // Bounded: limited concurrency + global deadline + per-query timeout so the
     // whole request completes well under the serverless/proxy limits.
     // ============================================================================
-    console.log(`[METASEARCH v8] Phase 1: Executing ZAI Web Search queries...`);
+    console.log(`[METASEARCH v8] Phase 1: Executing DuckDuckGo search queries...`);
 
     interface QueryTask { query: string; groupIndex: number; }
     const tasks: QueryTask[] = [];
@@ -554,13 +554,15 @@ export async function POST(request: NextRequest) {
         } catch (e: unknown) {
           console.log(`[METASEARCH v8] Query error: ${e instanceof Error ? e.message.substring(0, 60) : String(e).substring(0, 60)}`);
         }
+        // Small stagger between queries to reduce anti-bot triggering (DDG rate-limits server IPs).
+        await new Promise(r => setTimeout(r, 500));
       }
     }
     await Promise.all(Array.from({ length: SEARCH_CONCURRENCY }, () => searchWorker()));
     queryGroups.forEach((g, i) => { g.resultsFound = groupFound[i]; });
 
     engineDetails.push({
-      name: 'ZAI Web Search',
+      name: 'DuckDuckGo (free)',
       queriesRun: totalQueriesRun,
       resultsFound: allResults.length,
       status: allResults.length > 0 ? 'active' : 'failed',
@@ -638,8 +640,8 @@ export async function POST(request: NextRequest) {
     // ============================================================================
     return NextResponse.json({
       success: true,
-      searchEngine: `OSINT v8.0 [ZAI Web Search]`,
-      enginesUsed: ['ZAI Web Search'],
+      searchEngine: `OSINT v8.0 [DuckDuckGo]`,
+      enginesUsed: ['DuckDuckGo'],
       engineDetails,
       zaiDebug: {
         configured: isZAIConfigured(),

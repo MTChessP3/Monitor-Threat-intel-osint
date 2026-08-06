@@ -56,7 +56,7 @@ En **Settings** > **Environment Variables**, agrega:
 | `TURSO_AUTH_TOKEN` | Token de autenticacion de Turso | Tu token |
 | `ZAI_BASE_URL` | URL base de la API publica de Z.AI | `https://api.z.ai/api/paas/v4` |
 | `ZAI_API_KEY` | API Key de Z.AI (https://z.ai/manage-apikey/apikey-list) | Tu API key |
-| `ZAI_MODEL` | (Opcional) Modelo para chat/analisis | `glm-5.2` |
+| `ZAI_MODEL` | (Opcional) Modelo para chat/analisis | `glm-4.5-flash` |
 
 ### Paso 3: Deploy
 
@@ -93,14 +93,16 @@ O manualmente desde el dashboard de Turso (consola SQL).
 
 **Sintoma**: `/api/metasearch` responde 200 pero con `resultCount: 0`, `status: "failed"` ("No se obtuvieron resultados").
 
-**Causa raiz**: La integracion original apuntaba a `https://internal-api.z.ai/v1`. Ese host es un balanceador INTERNO de Alibaba Cloud (cn-hongkong) con IPs privadas RFC1918 (`172.25.x.x`); NO es alcanzable desde Vercel ni desde internet publico. Cada llamada desde Vercel se colgaba ~10s y terminaba con `fetch failed` (o vacio, por el wrapper de timeouts). Ninguna configuracion de credenciales puede arreglarlo: el endpoint no es publico.
+**Causa raiz (historica)**: La integracion original apuntaba a `https://internal-api.z.ai/v1`. Ese host es un balanceador INTERNO de Alibaba Cloud (cn-hongkong) con IPs privadas RFC1918 (`172.25.x.x`); NO es alcanzable desde Vercel ni desde internet publico. Cada llamada desde Vercel se colgaba ~10s y terminaba con `fetch failed` (o vacio, por el wrapper de timeouts). Ninguna configuracion de credenciales puede arreglarlo: el endpoint no es publico.
 
-**Solucion**: Usar la API publica de Z.AI:
+**Estado actual**: La busqueda web ahora es GRATIS y no requiere API key: usa scraping de DuckDuckGo (`html.duckduckgo.com`), que soporta los operadores `filetype:` y `site:`. El endpoint `/web_search` de Z.AI es de pago (error 1113 "Insufficient balance") y queda descartado salvo que recargues saldo en https://z.ai/manage-apikey/billing.
+
+**Z.AI se usa solo para el chat/analisis** con el modelo gratuito `glm-4.5-flash`:
 1. Crea una API key en https://z.ai/manage-apikey/apikey-list.
 2. En Vercel > Settings > Environment Variables, establece `ZAI_BASE_URL=https://api.z.ai/api/paas/v4` y `ZAI_API_KEY=<tu key>` en Production, Preview y Development. Las variables antiguas (`ZAI_CHAT_ID`, `ZAI_TOKEN`, `ZAI_USER_ID`) ya no se usan y pueden eliminarse.
 3. Redeplea y prueba `/api/metasearch`.
 
-**Verificacion**: La respuesta de `/api/metasearch` incluye `zaiDebug` (si la config esta activa) y `zaiDiagnostics` por query (estado `ok`/`empty`/`timeout`/`error` con el mensaje HTTP exacto).
+**Verificacion**: La respuesta de `/api/metasearch` incluye `zaiDiagnostics` por query (estado `ok`/`empty`/`timeout`/`error`). Si DuckDuckGo responde con un challenge anti-bot, el estado sera `error` con el detalle.
 
 ### 3. Los favicons/logos redirigen a /auth/login
 

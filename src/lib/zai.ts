@@ -1,17 +1,19 @@
 /**
- * ZAI Public Platform Integration
+ * Web Search + AI Analysis Integration
  *
- * Talks to Z.AI's PUBLIC developer API (https://api.z.ai/api/paas/v4/).
- * The original integration pointed at internal-api.z.ai, an Alibaba Cloud
- * internal load balancer with RFC1918 private IPs that is NOT reachable from
- * public serverless environments (Vercel) - every call hung ~10s and then
- * failed with "fetch failed".
+ * WEB SEARCH (free): DuckDuckGo HTML scraping (primary) with Bing HTML as
+ * fallback. No API key required.
+ *   - The old Z.AI public /web_search endpoint is paid (error 1113
+ *     "Insufficient balance") and the original internal-api.z.ai endpoint is
+ *     an Alibaba Cloud internal ALB with RFC1918 private IPs that is NOT
+ *     reachable from public serverless environments (Vercel).
+ *   - DuckDuckGo honours OSINT operators like `filetype:` and `site:`, but it
+ *     rate-limits aggressively from server IPs (anti-bot challenge), so we
+ *     fall back to Bing's HTML results when it gets blocked.
  *
- * Endpoints used:
- *  - POST {baseUrl}/web_search        -> dedicated web search engine
- *  - POST {baseUrl}/chat/completions  -> OpenAI-compatible chat (GLM models)
- *
- * Requires only a Z.AI API key (https://z.ai/manage-apikey/apikey-list).
+ * AI CHAT (free tier): Z.AI public developer API (https://api.z.ai/api/paas/v4/).
+ *   - Uses glm-4.5-flash, which is genuinely free (no balance needed).
+ *   - Requires a Z.AI API key (https://z.ai/manage-apikey/apikey-list).
  */
 
 // ============================================================================
@@ -19,7 +21,7 @@
 // ============================================================================
 const ZAI_BASE_URL = process.env.ZAI_BASE_URL || 'https://api.z.ai/api/paas/v4';
 const ZAI_API_KEY = process.env.ZAI_API_KEY || '';
-const ZAI_MODEL = process.env.ZAI_MODEL || 'glm-5.2';
+const ZAI_MODEL = process.env.ZAI_MODEL || 'glm-4.5-flash';
 
 export interface ZAIConfig {
   baseUrl: string;
@@ -112,7 +114,8 @@ export async function zaiChatCompletion(
       const msg = error instanceof Error ? error.message : String(error);
       console.error(`[ZAI] Chat completion error (attempt ${attempt + 1}/${maxRetries}): ${msg.substring(0, 150)}`);
 
-      if (msg.includes('429')) {
+      const rateLimited = msg.includes('429') || /temporarily overloaded|1305|1302/i.test(msg);
+      if (rateLimited) {
         const waitTime = retryDelay * Math.pow(2, attempt);
         console.log(`[ZAI] Rate limited, waiting ${waitTime / 1000}s before retry...`);
         await new Promise(r => setTimeout(r, waitTime));
@@ -143,6 +146,21 @@ export interface ZAIWebSearchDiagnostics {
   raw?: string;
 }
 
+interface WebSearchResult {
+  url: string;
+  name: string;
+  snippet: string;
+  host_name: string;
+  rank: number;
+  date: string;
+  favicon: string;
+}
+
+// ============================================================================
+// HTML scraping helpers
+// ============================================================================
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
 function hostOf(url: string): string {
   try {
     return new URL(url).hostname;
@@ -151,12 +169,154 @@ function hostOf(url: string): string {
   }
 }
 
+function stripTags(html: string): string {
+  return html.replace(/<[^>]*>/g, '');
+}
+
+function decodeEntities(text: string): string {
+  return text
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)));
+}
+
+function makeItem(url: string, name: string, snippet: string): WebSearchResult | null {
+  if (!/^https?:\/\//i.test(url)) return null;
+  const cleanName = decodeEntities(stripTags(name)).replace(/\s+/g, ' ').trim();
+  if (!cleanName) return null;
+  const cleanSnippet = decodeEntities(stripTags(snippet)).replace(/\s+/g, ' ').trim();
+  const host = hostOf(url);
+  return {
+    url,
+    name: cleanName.substring(0, 300),
+    snippet: cleanSnippet.substring(0, 500),
+    host_name: host,
+    rank: 0,
+    date: '',
+    favicon: host ? `https://icons.duckduckgo.com/ip3/${host}.ico` : '',
+  };
+}
+
+// --- DuckDuckGo ---
+function ddgRealUrl(href: string): string {
+  const cleanHref = href.replace(/&amp;/g, '&');
+  const m = cleanHref.match(/[?&]uddg=([^&]+)/);
+  if (m) {
+    try {
+      const decoded = decodeURIComponent(m[1]);
+      if (/^https?:\/\//i.test(decoded)) return decoded;
+    } catch { /* fall through to raw href */ }
+  }
+  if (cleanHref.startsWith('//')) return `https:${cleanHref}`;
+  return cleanHref;
+}
+
+function parseDdgHtml(html: string): WebSearchResult[] {
+  const results: WebSearchResult[] = [];
+  const blockRe = /<div[^>]*class="result[ "]([\s\S]*?)(?=<div[^>]*class="result[ "]|$)/gi;
+  let blockMatch: RegExpExecArray | null;
+
+  while ((blockMatch = blockRe.exec(html)) !== null) {
+    const block = blockMatch[1];
+    const titleMatch = block.match(/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+    if (!titleMatch) continue;
+
+    const snipMatch = block.match(/<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
+    const url = ddgRealUrl(titleMatch[1]);
+    if (url.includes('duckduckgo.com/y.js') || url.includes('duckduckgo.com/l/')) continue;
+    const item = makeItem(url, titleMatch[2], snipMatch ? snipMatch[1] : '');
+    if (item) results.push(item);
+  }
+  return results;
+}
+
+async function fetchDdgHtml(query: string, timeoutMs: number): Promise<string> {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': BROWSER_UA,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    },
+    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  if (!res.ok) throw new Error(`DuckDuckGo HTTP ${res.status}`);
+  const html = await res.text();
+  if (/anomaly|challenge|captcha/i.test(html)) {
+    throw new Error('DuckDuckGo bot challenge (blocked)');
+  }
+  return html;
+}
+
+// --- Bing ---
+function b64decode(s: string): string {
+  try {
+    return atob(s);
+  } catch {
+    return '';
+  }
+}
+
+function bingRealUrl(href: string): string {
+  const cleanHref = href.replace(/&amp;/g, '&');
+  if (cleanHref.includes('bing.com/ck/a') || cleanHref.includes('r.bing.com')) {
+    const m = cleanHref.match(/[?&]u=a1([^&]+)/);
+    if (m) {
+      const decoded = b64decode(m[1]);
+      if (/^https?:\/\//i.test(decoded)) return decoded;
+    }
+  }
+  return cleanHref;
+}
+
+function parseBingHtml(html: string): WebSearchResult[] {
+  const results: WebSearchResult[] = [];
+  const blockRe = /<li class="b_algo"([\s\S]*?)(?=<li class="b_algo"|<\/ol>|$)/gi;
+  let blockMatch: RegExpExecArray | null;
+
+  while ((blockMatch = blockRe.exec(html)) !== null) {
+    const block = blockMatch[1];
+    const titleMatch = block.match(/<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h2>/);
+    if (!titleMatch) continue;
+
+    const snipMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+    const item = makeItem(bingRealUrl(titleMatch[1]), titleMatch[2], snipMatch ? snipMatch[1] : '');
+    if (item) results.push(item);
+  }
+  return results;
+}
+
+async function fetchBingHtml(query: string, timeoutMs: number): Promise<string> {
+  const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=15&setlang=es`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': BROWSER_UA,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+      'Cookie': 'SRCHHPGUSR=SRCHLANG=es',
+    },
+    signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  if (!res.ok) throw new Error(`Bing HTTP ${res.status}`);
+  return await res.text();
+}
+
+// ============================================================================
+// WEB SEARCH (free)
+// ============================================================================
 /**
- * Execute a Z.AI web search via the public /web_search endpoint.
+ * Execute a web search via free HTML scraping: DuckDuckGo primary, Bing as
+ * fallback (DDG rate-limits aggressively from server IPs).
  * Never throws - returns empty array on failure.
  *
- * Maps the platform's search_result items to the same shape the app's callers
- * expect ({url, name, snippet, host_name, rank, date, favicon}).
+ * Returns items in the shape the app's callers expect
+ * ({url, name, snippet, host_name, rank, date, favicon}).
  */
 export async function zaiWebSearch(
   query: string,
@@ -166,31 +326,14 @@ export async function zaiWebSearch(
     timeoutMs?: number;
     onDiagnostics?: (diagnostics: ZAIWebSearchDiagnostics) => void;
   } = {}
-): Promise<Array<{
-  url: string;
-  name: string;
-  snippet: string;
-  host_name: string;
-  rank: number;
-  date: string;
-  favicon: string;
-}>> {
-  const { num = 10, maxRetries = 2, timeoutMs, onDiagnostics } = options;
+): Promise<WebSearchResult[]> {
+  const { num = 10, maxRetries = 2, timeoutMs = 12000, onDiagnostics } = options;
   const startedAt = Date.now();
-
-  const config = getZAISafe();
-  if (!config) {
-    console.error('[ZAI] Cannot execute web search - not configured');
-    onDiagnostics?.({ query, status: 'error', attempts: 0, elapsedMs: Date.now() - startedAt, error: 'ZAI_API_KEY not configured' });
-    return [];
-  }
-
   let status: ZAIWebSearchStatus = 'empty';
   let lastError = '';
-  let rawShape = '';
   let attempts = 0;
 
-  const finish = (finalStatus: ZAIWebSearchStatus, results: Array<any>): Array<any> => {
+  const finish = (finalStatus: ZAIWebSearchStatus, results: WebSearchResult[]): WebSearchResult[] => {
     const diagnostics: ZAIWebSearchDiagnostics = {
       query,
       status: finalStatus,
@@ -198,74 +341,41 @@ export async function zaiWebSearch(
       elapsedMs: Date.now() - startedAt,
     };
     if (lastError) diagnostics.error = lastError;
-    if (rawShape) diagnostics.raw = rawShape;
     onDiagnostics?.(diagnostics);
     return results;
   };
 
+  const engines: Array<{ name: string; fetch: () => Promise<string>; parse: (html: string) => WebSearchResult[] }> = [
+    { name: 'DuckDuckGo', fetch: () => fetchDdgHtml(query, timeoutMs), parse: parseDdgHtml },
+    { name: 'Bing', fetch: () => fetchBingHtml(query, timeoutMs), parse: parseBingHtml },
+  ];
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     attempts++;
-    try {
-      const res = await fetch(`${config.baseUrl}/web_search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept-Language': 'en-US,en',
-          'Authorization': `Bearer ${config.apiKey}`,
-        },
-        body: JSON.stringify({
-          search_engine: 'search-prime',
-          search_query: query,
-          count: num,
-        }),
-        signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
-      });
+    let attemptStatus: ZAIWebSearchStatus = 'empty';
 
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(`ZAI web_search HTTP ${res.status}: ${body.substring(0, 300)}`);
+    for (const engine of engines) {
+      try {
+        const html = await engine.fetch();
+        const mapped = engine.parse(html).slice(0, num);
+        if (mapped.length > 0) {
+          mapped.forEach((r, i) => { r.rank = i + 1; });
+          console.log(`[DDG] ${engine.name} search succeeded: "${query.substring(0, 60)}" -> ${mapped.length} results`);
+          return finish('ok', mapped);
+        }
+        lastError = `${engine.name}: no results`;
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        lastError = `${engine.name}: ${msg}`;
+        const isAbort = error instanceof Error && (error.name === 'AbortError' || msg.includes('abort'));
+        attemptStatus = isAbort ? 'timeout' : 'error';
+        console.error(`[DDG] ${engine.name} ${attemptStatus} (attempt ${attempt + 1}/${maxRetries}): "${query.substring(0, 50)}" - ${msg.substring(0, 150)}`);
       }
+    }
 
-      const data = await res.json();
-      const rawItems = data.search_result;
-
-      if (!Array.isArray(rawItems)) {
-        status = 'bad_shape';
-        try { rawShape = JSON.stringify(data).substring(0, 300); } catch { rawShape = String(data).substring(0, 300); }
-        console.log(`[ZAI] Web search unexpected shape: "${query.substring(0, 50)}" -> ${rawShape}`);
-        continue;
-      }
-
-      const mapped = rawItems
-        .map((item: any, index: number) => ({
-          url: item.link || '',
-          name: item.title || '',
-          snippet: item.content || '',
-          host_name: item.media || hostOf(item.link || ''),
-          rank: index + 1,
-          date: item.publish_date || '',
-          favicon: item.icon || '',
-        }))
-        .filter((r: any) => r.url && r.url.startsWith('http'));
-
-      if (mapped.length > 0) {
-        console.log(`[ZAI] Web search succeeded: "${query.substring(0, 60)}" -> ${mapped.length} results`);
-        return finish('ok', mapped);
-      }
-
-      status = 'empty';
-      console.log(`[ZAI] Web search returned no results: "${query.substring(0, 60)}"`);
-      continue;
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      lastError = msg;
-      const isAbort = error instanceof Error && (error.name === 'AbortError' || msg.includes('abort'));
-      status = isAbort ? 'timeout' : 'error';
-      console.error(`[ZAI] Web search ${status} (attempt ${attempt + 1}/${maxRetries}): "${query.substring(0, 50)}" - ${msg.substring(0, 150)}`);
-
-      if (msg.includes('429') && attempt < maxRetries - 1) {
-        await new Promise(r => setTimeout(r, 3000));
-      }
+    status = attemptStatus;
+    if (attempt < maxRetries - 1) {
+      await new Promise(r => setTimeout(r, 1000));
     }
   }
 
