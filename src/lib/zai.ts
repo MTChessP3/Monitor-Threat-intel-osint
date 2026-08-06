@@ -186,6 +186,12 @@ function decodeEntities(text: string): string {
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)));
 }
 
+function pageTitle(html: string): string {
+  const m = html.match(/<title>([\s\S]*?)<\/title>/i);
+  const t = m ? decodeEntities(stripTags(m[1])).replace(/\s+/g, ' ').trim() : '';
+  return t.length > 60 ? t.slice(0, 60) + '...' : t;
+}
+
 function makeItem(url: string, name: string, snippet: string): WebSearchResult | null {
   if (!/^https?:\/\//i.test(url)) return null;
   const cleanName = decodeEntities(stripTags(name)).replace(/\s+/g, ' ').trim();
@@ -249,7 +255,7 @@ async function fetchDdgHtml(query: string, timeoutMs: number): Promise<string> {
   if (!res.ok) throw new Error(`DuckDuckGo HTTP ${res.status}`);
   const html = await res.text();
   if (/anomaly|challenge|captcha/i.test(html)) {
-    throw new Error('DuckDuckGo bot challenge (blocked)');
+    throw new Error(`DuckDuckGo bot challenge (blocked) [len=${html.length}, title='${pageTitle(html)}']`);
   }
   return html;
 }
@@ -293,26 +299,73 @@ function parseBingHtml(html: string): WebSearchResult[] {
 }
 
 async function fetchBingHtml(query: string, timeoutMs: number): Promise<string> {
-  const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=15&setlang=es`;
-  const res = await fetch(url, {
-    headers: {
+  const variants = [
+    { url: `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=15&setlang=es`, cookie: 'SRCHHPGUSR=SRCHLANG=es' },
+    { url: `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=15&setmkt=en-US&cc=us`, cookie: undefined },
+  ];
+  let lastHtml = '';
+  for (let i = 0; i < variants.length; i++) {
+    const v = variants[i];
+    const headers: Record<string, string> = {
       'User-Agent': BROWSER_UA,
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-      'Cookie': 'SRCHHPGUSR=SRCHLANG=es',
+    };
+    if (v.cookie) headers['Cookie'] = v.cookie;
+    const res = await fetch(v.url, {
+      headers,
+      signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+    });
+    if (!res.ok) {
+      if (i === variants.length - 1) throw new Error(`Bing HTTP ${res.status}`);
+      continue;
+    }
+    const html = await res.text();
+    const blocked = /captcha|challenge|verify|consent/i.test(html) && !/<li class="b_algo"/.test(html);
+    if (!blocked || i === variants.length - 1) return html;
+    lastHtml = html;
+  }
+  throw new Error(`Bing blocked [len=${lastHtml.length}, title='${pageTitle(lastHtml)}']`);
+}
+
+// --- Bing RSS (tolerant of datacenter IPs that get the HTML consent wall) ---
+function parseBingRss(xml: string): WebSearchResult[] {
+  const results: WebSearchResult[] = [];
+  const itemRe = /<item>([\s\S]*?)<\/item>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = itemRe.exec(xml)) !== null) {
+    const block = m[1];
+    const title = (block.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/) || [])[1] || '';
+    const link = (block.match(/<link>([\s\S]*?)<\/link>/) || [])[1] || '';
+    const desc = (block.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/) || [])[1] || '';
+    const item = makeItem(link.trim(), title, desc);
+    if (item) results.push(item);
+  }
+  return results;
+}
+
+async function fetchBingRss(query: string, timeoutMs: number): Promise<string> {
+  const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&format=rss&setmkt=en-US`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': BROWSER_UA,
+      'Accept': 'application/rss+xml,application/xml;q=0.9,text/xml;q=0.8,*/*;q=0.7',
     },
     signal: timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
   });
-  if (!res.ok) throw new Error(`Bing HTTP ${res.status}`);
-  return await res.text();
+  if (!res.ok) throw new Error(`Bing RSS HTTP ${res.status}`);
+  const xml = await res.text();
+  if (!/<item>/.test(xml)) throw new Error(`Bing RSS no items [len=${xml.length}, title='${pageTitle(xml)}']`);
+  return xml;
 }
 
 // ============================================================================
 // WEB SEARCH (free)
 // ============================================================================
 /**
- * Execute a web search via free HTML scraping: DuckDuckGo primary, Bing as
- * fallback (DDG rate-limits aggressively from server IPs).
+ * Execute a web search via free HTML/RSS scraping: DuckDuckGo primary, then
+ * Bing HTML, then Bing RSS as last-resort fallback (DDG and Bing both
+ * rate-limit server IPs aggressively, so we try several endpoints).
  * Never throws - returns empty array on failure.
  *
  * Returns items in the shape the app's callers expect
@@ -348,6 +401,7 @@ export async function zaiWebSearch(
   const engines: Array<{ name: string; fetch: () => Promise<string>; parse: (html: string) => WebSearchResult[] }> = [
     { name: 'DuckDuckGo', fetch: () => fetchDdgHtml(query, timeoutMs), parse: parseDdgHtml },
     { name: 'Bing', fetch: () => fetchBingHtml(query, timeoutMs), parse: parseBingHtml },
+    { name: 'Bing RSS', fetch: () => fetchBingRss(query, timeoutMs), parse: parseBingRss },
   ];
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -360,16 +414,16 @@ export async function zaiWebSearch(
         const mapped = engine.parse(html).slice(0, num);
         if (mapped.length > 0) {
           mapped.forEach((r, i) => { r.rank = i + 1; });
-          console.log(`[DDG] ${engine.name} search succeeded: "${query.substring(0, 60)}" -> ${mapped.length} results`);
+          console.log(`[SEARCH] ${engine.name} succeeded: "${query.substring(0, 60)}" -> ${mapped.length} results`);
           return finish('ok', mapped);
         }
-        lastError = `${engine.name}: no results`;
+        lastError = `${engine.name}: no results [len=${html.length}, title='${pageTitle(html)}']`;
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
         lastError = `${engine.name}: ${msg}`;
         const isAbort = error instanceof Error && (error.name === 'AbortError' || msg.includes('abort'));
         attemptStatus = isAbort ? 'timeout' : 'error';
-        console.error(`[DDG] ${engine.name} ${attemptStatus} (attempt ${attempt + 1}/${maxRetries}): "${query.substring(0, 50)}" - ${msg.substring(0, 150)}`);
+        console.error(`[SEARCH] ${engine.name} ${attemptStatus} (attempt ${attempt + 1}/${maxRetries}): "${query.substring(0, 50)}" - ${msg.substring(0, 150)}`);
       }
     }
 
