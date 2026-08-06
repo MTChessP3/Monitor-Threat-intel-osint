@@ -474,7 +474,8 @@ export async function zaiWebSearch(
           console.log(`[SEARCH] ${engine.name} succeeded: "${query.substring(0, 60)}" -> ${mapped.length} results`);
           return finish('ok', mapped);
         }
-        const emptyNote = `no results [len=${html.length}, title='${pageTitle(html)}', b_algo=${(html.match(/class="b_algo/g) || []).length}]`;
+        const headFrag = html.slice(0, 220).replace(/\s+/g, ' ');
+        const emptyNote = `no results [len=${html.length}, title='${pageTitle(html)}', b_algo=${(html.match(/class="b_algo/g) || []).length}, head="${headFrag}"]`;
         lastError = `${engine.name}: ${emptyNote}`;
         engineAttempts.push({ engine: engine.name, status: 'empty', note: emptyNote });
       } catch (error: unknown) {
