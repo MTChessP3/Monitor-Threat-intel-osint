@@ -446,7 +446,7 @@ export async function zaiWebSearch(
     };
     if (lastError) diagnostics.error = lastError;
     if (lastEngine) diagnostics.engine = lastEngine;
-    if (lastRawHtml) diagnostics.raw = lastRawHtml.slice(0, 20000);
+    if (lastRawHtml) diagnostics.raw = lastRawHtml.slice(0, 80000);
     if (engineAttempts.length > 0) diagnostics.engineAttempts = engineAttempts;
     onDiagnostics?.(diagnostics);
     return results;
