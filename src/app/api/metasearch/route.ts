@@ -562,7 +562,7 @@ export async function POST(request: NextRequest) {
     queryGroups.forEach((g, i) => { g.resultsFound = groupFound[i]; });
 
     engineDetails.push({
-      name: 'DuckDuckGo (free)',
+      name: 'Free Web Search (DDG + Bing)',
       queriesRun: totalQueriesRun,
       resultsFound: allResults.length,
       status: allResults.length > 0 ? 'active' : 'failed',
@@ -640,8 +640,8 @@ export async function POST(request: NextRequest) {
     // ============================================================================
     return NextResponse.json({
       success: true,
-      searchEngine: `OSINT v8.0 [DuckDuckGo]`,
-      enginesUsed: ['DuckDuckGo'],
+      searchEngine: `OSINT v8.0 [DuckDuckGo + Bing]`,
+      enginesUsed: ['DuckDuckGo', 'Bing'],
       engineDetails,
       zaiDebug: {
         configured: isZAIConfigured(),

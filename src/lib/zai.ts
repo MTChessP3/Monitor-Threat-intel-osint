@@ -144,6 +144,7 @@ export interface ZAIWebSearchDiagnostics {
   elapsedMs: number;
   error?: string;
   raw?: string;
+  engine?: string;
 }
 
 interface WebSearchResult {
@@ -394,6 +395,7 @@ export async function zaiWebSearch(
       elapsedMs: Date.now() - startedAt,
     };
     if (lastError) diagnostics.error = lastError;
+    if (lastEngine) diagnostics.engine = lastEngine;
     onDiagnostics?.(diagnostics);
     return results;
   };
@@ -403,6 +405,7 @@ export async function zaiWebSearch(
     { name: 'Bing', fetch: () => fetchBingHtml(query, timeoutMs), parse: parseBingHtml },
     { name: 'Bing RSS', fetch: () => fetchBingRss(query, timeoutMs), parse: parseBingRss },
   ];
+  let lastEngine = '';
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     attempts++;
@@ -414,6 +417,8 @@ export async function zaiWebSearch(
         const mapped = engine.parse(html).slice(0, num);
         if (mapped.length > 0) {
           mapped.forEach((r, i) => { r.rank = i + 1; });
+          lastEngine = engine.name;
+          lastError = '';
           console.log(`[SEARCH] ${engine.name} succeeded: "${query.substring(0, 60)}" -> ${mapped.length} results`);
           return finish('ok', mapped);
         }
