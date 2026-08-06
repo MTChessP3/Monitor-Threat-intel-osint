@@ -89,10 +89,7 @@ O manualmente desde el dashboard de Turso (consola SQL).
 
 **Causa**: Sin `TURSO_DATABASE_URL`, Vercel usa SQLite en `/tmp`, que es efimero y unico por instancia serverless. Cada request puede caer en una instancia distinta con una base vacia.
 
-**Solucion**: Configurar `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` (ver Paso 1) y luego aplicar el schema a la base persistente:
-```bash
-DATABASE_URL=libsql://vip-intelligence-xxx.turso.io TURSO_DATABASE_URL=libsql://vip-intelligence-xxx.turso.io npx prisma db push
-```
+**Solucion**: Configurar `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` (ver Paso 1). La app crea las tablas automaticamente en Turso al recibir el primer request, asi que no requiere pasos manuales adicionales. (Opcional: aplicar el schema manualmente con `npx prisma db push` apuntando a la URL de Turso.)
 
 ### 2. La busqueda web (OSINT/metasearch) no devuelve resultados en produccion
 

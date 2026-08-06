@@ -64,8 +64,17 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db;
 export async function ensureDatabaseInitialized(): Promise<void> {
   if (globalForPrisma.dbInitialized) return;
 
-  // On Vercel serverless (not with Turso which is persistent)
-  if ((process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) && !process.env.TURSO_DATABASE_URL) {
+  // On Vercel serverless, ensure the schema exists.
+  // - With Turso (persistent): create tables via raw SQL (idempotent).
+  // - Without Turso (/tmp ephemeral SQLite): push schema, fallback to raw SQL.
+  if (process.env.TURSO_DATABASE_URL) {
+    try {
+      console.log('[DB] Creating tables on Turso/libSQL...');
+      await createTablesManually();
+    } catch (error) {
+      console.error('[DB] Manual table creation on Turso failed:', error instanceof Error ? error.message.substring(0, 300) : String(error).substring(0, 300));
+    }
+  } else if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
     try {
       // Push the schema to create tables if they don't exist
       const { execSync } = await import('child_process');
