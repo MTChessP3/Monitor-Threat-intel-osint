@@ -8,9 +8,10 @@ import {
   Loader2, CheckCircle, XCircle, Menu, X, Zap, Target, TrendingUp,
   BookOpen, Newspaper, Play, RefreshCw, ExternalLink, Pencil, FileDown,
   Upload, CheckSquare, Square, Filter, ListChecks, ToggleLeft, ToggleRight,
-  LogOut, User as UserIcon, Lock, Smartphone
+  LogOut, User as UserIcon, Lock, Smartphone, Layers, Bug, Send
 } from 'lucide-react';
 import { ThemeSelector } from '@/components/ThemeSelector';
+import { TakeDownPanel } from '@/components/takedown/TakeDownPanel';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -80,7 +81,7 @@ interface Report {
   template?: { name: string };
 }
 
-type ActiveTab = 'panel' | 'plantillas' | 'fuentes' | 'analisis' | 'informes';
+type ActiveTab = 'panel' | 'plantillas' | 'fuentes' | 'analisis' | 'informes' | 'url-sandbox' | 'takedown';
 
 const threatLevelColors: Record<string, string> = {
   bajo: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -982,6 +983,8 @@ export default function Home() {
     { id: 'fuentes' as ActiveTab, label: 'Fuentes', icon: Globe },
     { id: 'analisis' as ActiveTab, label: 'Análisis', icon: Brain },
     { id: 'informes' as ActiveTab, label: 'Informes', icon: FileText },
+    { id: 'url-sandbox' as ActiveTab, label: 'URL Sandbox', icon: Layers },
+    { id: 'takedown' as ActiveTab, label: 'TakeDown URL', icon: Send },
   ];
 
   return (
@@ -1041,6 +1044,22 @@ export default function Home() {
             Generar Informe
             <ChevronRight className="w-3 h-3 ml-auto" />
           </NextLink>
+          <NextLink
+            href="/url-sandbox"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-purple-400 bg-purple-500/8 border border-purple-500/15 hover:bg-purple-500/10"
+          >
+            <Layers className="w-4 h-4" />
+            URL Sandbox
+            <ChevronRight className="w-3 h-3 ml-auto" />
+          </NextLink>
+          <button
+            onClick={() => setActiveTab('takedown')}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-orange-400 bg-orange-500/8 border border-orange-500/15 hover:bg-orange-500/10"
+          >
+            <Send className="w-4 h-4" />
+            TakeDown URL
+            <ChevronRight className="w-3 h-3 ml-auto" />
+          </button>
         </nav>
 
         <div className="p-4 border-t border-border space-y-3">
@@ -1146,6 +1165,21 @@ export default function Home() {
                   <Zap className="w-4 h-4" />
                   Generar Informe
                 </NextLink>
+                <NextLink
+                  href="/url-sandbox"
+                  onClick={() => setSidebarOpen(false)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-purple-400 bg-purple-500/8 border border-purple-500/15 hover:bg-purple-500/10"
+                >
+                  <Layers className="w-4 h-4" />
+                  URL Sandbox
+                </NextLink>
+                <button
+                  onClick={() => { setActiveTab('takedown'); setSidebarOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-orange-400 bg-orange-500/8 border border-orange-500/15 hover:bg-orange-500/10"
+                >
+                  <Send className="w-4 h-4" />
+                  TakeDown URL
+                </button>
               </nav>
               {authUser && (
                 <div className="p-4 border-t border-border mt-auto space-y-3">
@@ -2335,6 +2369,20 @@ export default function Home() {
                     )}
                   </CardContent>
                 </Card>
+              </motion.div>
+            )}
+
+            {/* ========== TAKEDOWN URL ========== */}
+            {activeTab === 'takedown' && (
+              <motion.div
+                key="takedown"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.15 }}
+                className="space-y-6"
+              >
+                <TakeDownPanel />
               </motion.div>
             )}
           </AnimatePresence>

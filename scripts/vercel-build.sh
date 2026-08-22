@@ -1,7 +1,4 @@
 #!/bin/bash
-# Build script for Vercel deployment
-# Uses SQLite for local dev and libSQL/Turso for production
-
 set -e
 
 echo "🔧 Preparing Prisma for Vercel serverless..."
