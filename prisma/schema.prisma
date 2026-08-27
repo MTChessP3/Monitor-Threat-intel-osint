@@ -75,4 +75,23 @@ model Executive {
   active              Boolean  @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+  familyMembers       FamilyMember[]
+}
+
+model FamilyMember {
+  id                  String   @id @default(cuid())
+  executiveId         String   @unique
+  fullName            String
+  relationship        String   // father, mother, son, daughter, spouse, etc
+  identificationNum   String?
+  email               String?
+  phone               String?
+  riskLevel           String   @default("bajo")
+  notes               String?
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  // Relation to Executive
+  executive           Executive @relation(fields: [executiveId], references: [id])
 }

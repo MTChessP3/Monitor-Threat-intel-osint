@@ -46,7 +46,34 @@ interface Executive {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  familyMembers?: FamilyMember[];
 }
+
+interface FamilyMember {
+  id: string;
+  executiveId: string;
+  fullName: string;
+  relationship: string;
+  identificationNum: string | null;
+  email: string | null;
+  phone: string | null;
+  riskLevel: string;
+  notes: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const MAX_EXECUTIVES = 300;
+const MAX_FAMILY_MEMBERS_PER_EXECUTIVE = 3;
+
+const RELATIONSHIP_OPTIONS = [
+  { value: 'esposo', label: 'Esposo/a' },
+  { value: 'hijo', label: 'Hijo/a' },
+  { value: 'padre', label: 'Padre/Madre' },
+  { value: 'hermano', label: 'Hermano/a' },
+  { value: 'otro', label: 'Otro' },
+];
 
 interface MetasearchResult {
   title: string;
@@ -120,7 +147,9 @@ interface MetasearchResponse {
   aiAnalysis: string;
   evidence: EvidenceDetail[];
   evidenceDetailPath: string;
-  executive: { id: string; fullName: string; identificationNum: string; email: string | null } | null;
+  executive: { id: string; fullName: string; identificationNum: string; email: string | null; phone: string | null; organization: string | null } | null;
+  targetType?: 'executive' | 'family';
+  targetName?: string;
   timestamp: string;
   extensionsMonitored?: string[];
   extensionGroups?: ExtensionGroup[];
@@ -505,11 +534,28 @@ export default function ProteccionEjecutivosPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
 
+  // Family Member Dialog states
+  const [showCreateFamilyDialog, setShowCreateFamilyDialog] = useState(false);
+  const [showEditFamilyDialog, setShowEditFamilyDialog] = useState(false);
+  const [showDeleteFamilyDialog, setShowDeleteFamilyDialog] = useState(false);
+  const [selectedFamilyMember, setSelectedFamilyMember] = useState<FamilyMember | null>(null);
+  const [selectedExecutiveForFamily, setSelectedExecutiveForFamily] = useState<Executive | null>(null);
+
   // Form state
   const [formData, setFormData] = useState({
     identificationNum: '', fullName: '', email: '', phone: '',
     position: '', organization: '', riskLevel: 'bajo', notes: '',
   });
+
+  // Family Member Form state
+  const [familyFormData, setFamilyFormData] = useState({
+    fullName: '', relationship: '', identificationNum: '', email: '',
+    phone: '', riskLevel: 'bajo', notes: '',
+  });
+
+  // Tree view state
+  const [expandedExecutives, setExpandedExecutives] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'tree' | 'table'>('tree');
 
   // Check auth — resilient with caching and retry
   useEffect(() => {
@@ -548,13 +594,146 @@ export default function ProteccionEjecutivosPage() {
       const res = await fetch(`/api/executives?${params.toString()}`);
       if (!res.ok) throw new Error('Error al cargar ejecutivos');
       const data = await res.json();
-      setExecutives(data.executives || []);
+      
+      // Fetch family members for each executive
+      const executivesWithFamily = await Promise.all(
+        (data.executives || []).map(async (exec: Executive) => {
+          const familyRes = await fetch(`/api/family-members?executiveId=${exec.id}`);
+          const familyData = await familyRes.json();
+          return { ...exec, familyMembers: familyData.familyMembers || [] };
+        })
+      );
+      setExecutives(executivesWithFamily);
     } catch {
       toast.error('Error al cargar la lista de ejecutivos');
     } finally {
       setLoading(false);
     }
   }, [searchTerm]);
+
+  // Fetch family members for an executive
+  const fetchFamilyMembers = useCallback(async (executiveId: string) => {
+    try {
+      const res = await fetch(`/api/family-members?executiveId=${executiveId}`);
+      if (!res.ok) throw new Error('Error al cargar familiares');
+      const data = await res.json();
+      return data.familyMembers || [];
+    } catch {
+      toast.error('Error al cargar familiares');
+      return [];
+    }
+  }, []);
+
+  // Handle family member creation
+  const handleCreateFamilyMember = async () => {
+    if (!selectedExecutiveForFamily) return;
+    try {
+      const res = await fetch('/api/family-members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          executiveId: selectedExecutiveForFamily.id,
+          ...familyFormData,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Error al crear familiar');
+        return;
+      }
+      toast.success(`Familiar ${familyFormData.fullName} creado exitosamente`);
+      setShowCreateFamilyDialog(false);
+      resetFamilyForm();
+      fetchExecutives();
+    } catch {
+      toast.error('Error de conexión al crear familiar');
+    }
+  };
+
+  // Handle family member update
+  const handleUpdateFamilyMember = async () => {
+    if (!selectedFamilyMember) return;
+    try {
+      const res = await fetch('/api/family-members', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedFamilyMember.id,
+          ...familyFormData,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Error al actualizar familiar');
+        return;
+      }
+      toast.success(`Familiar ${familyFormData.fullName} actualizado exitosamente`);
+      setShowEditFamilyDialog(false);
+      setSelectedFamilyMember(null);
+      resetFamilyForm();
+      fetchExecutives();
+    } catch {
+      toast.error('Error de conexión al actualizar familiar');
+    }
+  };
+
+  // Handle family member deletion
+  const handleDeleteFamilyMember = async () => {
+    if (!selectedFamilyMember) return;
+    try {
+      const res = await fetch(`/api/family-members?id=${selectedFamilyMember.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        toast.error('Error al eliminar familiar');
+        return;
+      }
+      toast.success('Familiar eliminado exitosamente');
+      setShowDeleteFamilyDialog(false);
+      setSelectedFamilyMember(null);
+      fetchExecutives();
+    } catch {
+      toast.error('Error de conexión al eliminar familiar');
+    }
+  };
+
+  const resetFamilyForm = () => {
+    setFamilyFormData({
+      fullName: '', relationship: '', identificationNum: '', email: '',
+      phone: '', riskLevel: 'bajo', notes: '',
+    });
+  };
+
+  const openEditFamilyDialog = (familyMember: FamilyMember, executive: Executive) => {
+    setSelectedFamilyMember(familyMember);
+    setSelectedExecutiveForFamily(executive);
+    setFamilyFormData({
+      fullName: familyMember.fullName,
+      relationship: familyMember.relationship,
+      identificationNum: familyMember.identificationNum || '',
+      email: familyMember.email || '',
+      phone: familyMember.phone || '',
+      riskLevel: familyMember.riskLevel,
+      notes: familyMember.notes || '',
+    });
+    setShowEditFamilyDialog(true);
+  };
+
+  const openCreateFamilyDialog = (executive: Executive) => {
+    setSelectedExecutiveForFamily(executive);
+    resetFamilyForm();
+    setShowCreateFamilyDialog(true);
+  };
+
+  const toggleExecutiveExpanded = (executiveId: string) => {
+    setExpandedExecutives(prev => {
+      const next = new Set(prev);
+      if (next.has(executiveId)) {
+        next.delete(executiveId);
+      } else {
+        next.add(executiveId);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => { fetchExecutives(); }, [fetchExecutives]);
 
@@ -638,8 +817,10 @@ export default function ProteccionEjecutivosPage() {
   };
 
   // Execute metabusqueda with OSINT query matrix v7.0
-  const handleMetasearch = async () => {
-    if (!selectedExecutive) return;
+  const handleMetasearch = async (target?: { id: string; fullName: string; email: string | null; phone: string | null; organization: string | null }) => {
+    const searchTarget = target || selectedExecutive;
+    if (!searchTarget) return;
+    
     setMetasearchLoading(true);
     setShowResults(true);
     setMetasearchResults(null);
@@ -657,7 +838,15 @@ export default function ProteccionEjecutivosPage() {
       const res = await fetch('/api/metasearch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ executiveId: selectedExecutive.id, downloadFiles: true }),
+        body: JSON.stringify({ 
+          executiveId: searchTarget.id, 
+          downloadFiles: true,
+          targetType: 'executive' in searchTarget ? 'executive' : 'family',
+          targetName: searchTarget.fullName,
+          targetEmail: searchTarget.email,
+          targetPhone: searchTarget.phone,
+          targetOrg: searchTarget.organization,
+        }),
       });
 
       const data = await res.json();
@@ -796,7 +985,7 @@ export default function ProteccionEjecutivosPage() {
             <div className="relative flex-1 sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar ejecutivo..."
+                placeholder="Buscar ejecutivo o familiar..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9 bg-muted/30 border-border"
@@ -804,6 +993,26 @@ export default function ProteccionEjecutivosPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 border border-border rounded-lg p-1 bg-card">
+              <Button
+                variant={viewMode === 'tree' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('tree')}
+                className="gap-1"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Árbol</span>
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                className="gap-1"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Tabla</span>
+              </Button>
+            </div>
             <Button
               onClick={() => setShowDorkingPanel(true)}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-2"
@@ -821,6 +1030,15 @@ export default function ProteccionEjecutivosPage() {
           </div>
         </div>
 
+        {/* Limits Info */}
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Users className="w-3 h-3" />
+            Ejecutivos: {executives.length} / {MAX_EXECUTIVES}
+            {executives.length >= MAX_EXECUTIVES * 0.9 && <AlertTriangle className="w-3 h-3 text-yellow-500" />}
+          </span>
+        </div>
+
         {/* Selection indicator */}
         {selectedExecutive && !showDorkingPanel && (
           <motion.div
@@ -830,10 +1048,30 @@ export default function ProteccionEjecutivosPage() {
             <UserCheck className="w-4 h-4 text-primary" />
             <span className="text-sm text-primary">
               Seleccionado: <strong>{selectedExecutive.fullName}</strong>
-              {selectedExecutive.position && ` - ${selectedExecutive.position}`}
-              {selectedExecutive.organization && ` - ${selectedExecutive.organization}`}
+              {'identificationNum' in selectedExecutive && 'relationship' in selectedExecutive ? (
+                <>
+                  <Badge variant="outline" className="ml-2 text-[9px] h-4 px-1.5 border-green-500/20 text-green-400">
+                    Familiar - {RELATIONSHIP_OPTIONS.find(r => r.value === (selectedExecutive as any).relationship)?.label || (selectedExecutive as any).relationship}
+                  </Badge>
+                </>
+              ) : (
+                <>
+                  {selectedExecutive.position && ` - ${selectedExecutive.position}`}
+                  {selectedExecutive.organization && ` - ${selectedExecutive.organization}`}
+                </>
+              )}
             </span>
-            <button onClick={() => { setSelectedExecutive(null); setShowResults(false); }} className="ml-auto text-primary hover:text-primary/80">
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto gap-1 border-emerald-600/30 text-emerald-400 hover:bg-emerald-600/10"
+              onClick={() => handleMetasearch(selectedExecutive)}
+              disabled={metasearchLoading}
+            >
+              <Search className="w-3.5 h-3.5" />
+              Ejecutar OSINT
+            </Button>
+            <button onClick={() => { setSelectedExecutive(null); setShowResults(false); }} className="ml-2 text-primary hover:text-primary/80">
               <X className="w-4 h-4" />
             </button>
           </motion.div>
@@ -854,12 +1092,12 @@ export default function ProteccionEjecutivosPage() {
           )}
         </AnimatePresence>
 
-        {/* Executives Table */}
+        {/* Executives Tree/Table View */}
         <Card className="border-border bg-card/60 overflow-hidden">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base text-foreground">Directorio de Ejecutivos</CardTitle>
+            <CardTitle className="text-base text-foreground">Directorio de Ejecutivos y Familiares</CardTitle>
             <CardDescription className="text-muted-foreground text-xs">
-              Seleccione un ejecutivo para habilitar la Meta-Busqueda OSINT v7.0 (ZAI Web Search + Dorking 40+ extensiones)
+              Seleccione un ejecutivo o familiar para habilitar la Meta-Busqueda OSINT v7.0. Límite: {MAX_EXECUTIVES} ejecutivos, {MAX_FAMILY_MEMBERS_PER_EXECUTIVE} familiares por ejecutivo.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -872,64 +1110,206 @@ export default function ProteccionEjecutivosPage() {
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <Shield className="w-12 h-12 mb-3 opacity-30" />
                 <p className="text-sm">No hay ejecutivos registrados</p>
+                <p className="text-xs">Haga clic en "Nuevo Ejecutivo" para comenzar</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-border hover:bg-transparent">
-                      <TableHead className="w-10"></TableHead>
-                      <TableHead className="text-xs text-muted-foreground">Identificacion</TableHead>
-                      <TableHead className="text-xs text-muted-foreground">Nombre Completo</TableHead>
-                      <TableHead className="text-xs text-muted-foreground">Correo Electronico</TableHead>
-                      <TableHead className="text-xs text-muted-foreground">Cargo / Organizacion</TableHead>
-                      <TableHead className="text-xs text-muted-foreground">Riesgo</TableHead>
-                      <TableHead className="text-xs text-muted-foreground">Ultima Busqueda</TableHead>
-                      <TableHead className="w-24 text-xs text-muted-foreground">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {executives.map((exec) => (
-                      <TableRow
-                        key={exec.id}
-                        className={`border-border cursor-pointer transition-colors ${
-                          selectedExecutive?.id === exec.id ? 'bg-primary/8 border-primary/15' : 'hover:bg-muted/30'
+              viewMode === 'tree' ? (
+                <div className="p-2 max-h-[600px] overflow-y-auto">
+                  {executives.map((exec) => (
+                    <div key={exec.id} className="border-border">
+                      {/* Executive Row */}
+                      <div
+                        className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors rounded-lg ${
+                          selectedExecutive?.id === exec.id ? 'bg-primary/8 border border-primary/20' : 'hover:bg-muted/30'
                         }`}
                         onClick={() => handleSelectExecutive(exec)}
                       >
-                        <TableCell className="py-3">
-                          <div className={`w-3 h-3 rounded-full border-2 ${
-                            selectedExecutive?.id === exec.id ? 'bg-primary border-primary' : 'border-muted-foreground/30'
-                          }`} />
-                        </TableCell>
-                        <TableCell className="py-3"><span className="text-xs font-mono text-muted-foreground">{exec.identificationNum}</span></TableCell>
-                        <TableCell className="py-3"><span className="text-sm font-medium text-foreground">{exec.fullName}</span></TableCell>
-                        <TableCell className="py-3"><span className="text-xs text-muted-foreground">{exec.email || '-'}</span></TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex flex-col">
-                            <span className="text-xs text-foreground">{exec.position || '-'}</span>
-                            <span className="text-xs text-muted-foreground">{exec.organization || ''}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-3"><RiskBadge level={exec.riskLevel} /></TableCell>
-                        <TableCell className="py-3">
-                          <span className="text-xs text-muted-foreground">
-                            {exec.lastMetasearch ? new Date(exec.lastMetasearch).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Nunca'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setSelectedExecutive(exec); setShowDetailDialog(true); }}><Eye className="w-3.5 h-3.5" /></Button>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" onClick={() => openEditDialog(exec)}><Edit3 className="w-3.5 h-3.5" /></Button>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500" onClick={() => { setSelectedExecutive(exec); setShowDeleteDialog(true); }}><Trash2 className="w-3.5 h-3.5" /></Button>
-                          </div>
-                        </TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                          onClick={(e) => { e.stopPropagation(); toggleExecutiveExpanded(exec.id); }}
+                        >
+                          {expandedExecutives.has(exec.id) ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
+                          )}
+                        </Button>
+                        <div className={`w-3 h-3 rounded-full border-2 ${
+                          selectedExecutive?.id === exec.id ? 'bg-primary border-primary' : 'border-muted-foreground/30'
+                        }`} />
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground truncate">{exec.fullName}</span>
+                          <RiskBadge level={exec.riskLevel} />
+                          <span className="text-xs text-muted-foreground font-mono">{exec.identificationNum}</span>
+                          {exec.organization && <span className="text-xs text-muted-foreground">{exec.organization}</span>}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                            onClick={(e) => { e.stopPropagation(); openCreateFamilyDialog(exec); }}
+                            disabled={executives.length >= MAX_EXECUTIVES || (exec.familyMembers?.length || 0) >= MAX_FAMILY_MEMBERS_PER_EXECUTIVE}
+                            title={(exec.familyMembers?.length || 0) >= MAX_FAMILY_MEMBERS_PER_EXECUTIVE ? `Máximo ${MAX_FAMILY_MEMBERS_PER_EXECUTIVE} familiares` : 'Agregar familiar'}
+                          >
+                            <Users className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setSelectedExecutive(exec); setShowDetailDialog(true); }}><Eye className="w-3.5 h-3.5" /></Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); openEditDialog(exec); }}><Edit3 className="w-3.5 h-3.5" /></Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500" onClick={(e) => { e.stopPropagation(); setSelectedExecutive(exec); setShowDeleteDialog(true); }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                        </div>
+                      </div>
+
+                      {/* Family Members - Expanded */}
+                      {expandedExecutives.has(exec.id) && exec.familyMembers && exec.familyMembers.length > 0 && (
+                        <div className="pl-10 border-l border-border/30 ml-5 space-y-1">
+                          {exec.familyMembers.map((family) => (
+                            <div
+                              key={family.id}
+                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors rounded-lg ${
+                                selectedExecutive?.id === family.id ? 'bg-primary/8 border border-primary/20' : 'hover:bg-muted/30'
+                              }`}
+                              onClick={() => handleSelectExecutive({ ...family, id: family.id, identificationNum: family.identificationNum || '', position: family.relationship, organization: exec.organization || '', lastMetasearch: null, lastMetasearchResults: null, active: family.active, createdAt: family.createdAt, updatedAt: family.updatedAt, riskLevel: family.riskLevel, notes: family.notes } as Executive)}
+                            >
+                              <div className="w-3 h-3 rounded-full border-2 border-primary/30 bg-primary/10" />
+                              <div className="flex-1 min-w-0 flex items-center gap-2">
+                                <span className="text-sm font-medium text-foreground truncate">{family.fullName}</span>
+                                <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/20 text-primary">
+                                  {RELATIONSHIP_OPTIONS.find(r => r.value === family.relationship)?.label || family.relationship}
+                                </Badge>
+                                <RiskBadge level={family.riskLevel} />
+                                {family.identificationNum && <span className="text-xs text-muted-foreground font-mono">{family.identificationNum}</span>}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); openEditFamilyDialog(family, exec); }}><Edit3 className="w-3.5 h-3.5" /></Button>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500" onClick={(e) => { e.stopPropagation(); setSelectedFamilyMember(family); setShowDeleteFamilyDialog(true); }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                              </div>
+                            </div>
+                          ))}
+                          {(exec.familyMembers.length < MAX_FAMILY_MEMBERS_PER_EXECUTIVE) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full justify-start text-xs gap-1 border-dashed border-primary/30 text-primary hover:bg-primary/5"
+                              onClick={(e) => { e.stopPropagation(); openCreateFamilyDialog(exec); }}
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Agregar familiar ({exec.familyMembers.length}/{MAX_FAMILY_MEMBERS_PER_EXECUTIVE})
+                            </Button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Empty Family State - Add Button */}
+                      {expandedExecutives.has(exec.id) && (!exec.familyMembers || exec.familyMembers.length === 0) && (
+                        <div className="pl-10 ml-5 py-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full justify-start text-xs gap-1 border-dashed border-primary/30 text-primary hover:bg-primary/5"
+                            onClick={(e) => { e.stopPropagation(); openCreateFamilyDialog(exec); }}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Agregar primer familiar (0/{MAX_FAMILY_MEMBERS_PER_EXECUTIVE})
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border hover:bg-transparent">
+                        <TableHead className="w-10"></TableHead>
+                        <TableHead className="text-xs text-muted-foreground">Identificacion</TableHead>
+                        <TableHead className="text-xs text-muted-foreground">Nombre Completo</TableHead>
+                        <TableHead className="text-xs text-muted-foreground">Tipo</TableHead>
+                        <TableHead className="text-xs text-muted-foreground">Relación / Cargo</TableHead>
+                        <TableHead className="text-xs text-muted-foreground">Correo Electronico</TableHead>
+                        <TableHead className="text-xs text-muted-foreground">Organización</TableHead>
+                        <TableHead className="text-xs text-muted-foreground">Riesgo</TableHead>
+                        <TableHead className="text-xs text-muted-foreground">Ultima Busqueda</TableHead>
+                        <TableHead className="w-28 text-xs text-muted-foreground">Acciones</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+                    </TableHeader>
+                    <TableBody>
+                      {executives.flatMap((exec) => [
+                        <TableRow
+                          key={exec.id}
+                          className={`border-border cursor-pointer transition-colors ${
+                            selectedExecutive?.id === exec.id ? 'bg-primary/8 border-primary/15' : 'hover:bg-muted/30'
+                          }`}
+                          onClick={() => handleSelectExecutive(exec)}
+                        >
+                          <TableCell className="py-3">
+                            <div className={`w-3 h-3 rounded-full border-2 ${
+                              selectedExecutive?.id === exec.id ? 'bg-primary border-primary' : 'border-muted-foreground/30'
+                            }`} />
+                          </TableCell>
+                          <TableCell className="py-3"><span className="text-xs font-mono text-muted-foreground">{exec.identificationNum}</span></TableCell>
+                          <TableCell className="py-3"><span className="text-sm font-medium text-foreground">{exec.fullName}</span></TableCell>
+                          <TableCell className="py-3">
+                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/20 text-primary">Ejecutivo</Badge>
+                          </TableCell>
+                          <TableCell className="py-3"><span className="text-xs text-foreground">{exec.position || '-'}</span></TableCell>
+                          <TableCell className="py-3"><span className="text-xs text-muted-foreground">{exec.email || '-'}</span></TableCell>
+                          <TableCell className="py-3"><span className="text-xs text-muted-foreground">{exec.organization || '-'}</span></TableCell>
+                          <TableCell className="py-3"><RiskBadge level={exec.riskLevel} /></TableCell>
+                          <TableCell className="py-3">
+                            <span className="text-xs text-muted-foreground">
+                              {exec.lastMetasearch ? new Date(exec.lastMetasearch).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Nunca'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setSelectedExecutive(exec); setShowDetailDialog(true); }}><Eye className="w-3.5 h-3.5" /></Button>
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" onClick={() => openEditDialog(exec)}><Edit3 className="w-3.5 h-3.5" /></Button>
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500" onClick={() => { setSelectedExecutive(exec); setShowDeleteDialog(true); }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>,
+                        ...(exec.familyMembers || []).map((family) => (
+                          <TableRow
+                            key={family.id}
+                            className={`border-border cursor-pointer transition-colors pl-4 ${
+                              selectedExecutive?.id === family.id ? 'bg-primary/8 border-primary/15' : 'hover:bg-muted/30'
+                            }`}
+                            onClick={() => handleSelectExecutive({ ...family, id: family.id, identificationNum: family.identificationNum || '', position: family.relationship, organization: exec.organization || '', lastMetasearch: null, lastMetasearchResults: null, active: family.active, createdAt: family.createdAt, updatedAt: family.updatedAt, riskLevel: family.riskLevel, notes: family.notes } as Executive)}
+                          >
+                            <TableCell className="py-2">
+                              <div className="w-3 h-3 rounded-full border-2 border-primary/30 bg-primary/10" />
+                            </TableCell>
+                            <TableCell className="py-2"><span className="text-xs font-mono text-muted-foreground">{family.identificationNum || '-'}</span></TableCell>
+                            <TableCell className="py-2"><span className="text-sm font-medium text-foreground">{family.fullName}</span></TableCell>
+                            <TableCell className="py-2">
+                              <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-green-500/20 text-green-400">Familiar</Badge>
+                            </TableCell>
+                            <TableCell className="py-2">
+                              <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/20 text-primary">
+                                {RELATIONSHIP_OPTIONS.find(r => r.value === family.relationship)?.label || family.relationship}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="py-2"><span className="text-xs text-muted-foreground">{family.email || '-'}</span></TableCell>
+                            <TableCell className="py-2"><span className="text-xs text-muted-foreground">{exec.organization || '-'}</span></TableCell>
+                            <TableCell className="py-2"><RiskBadge level={family.riskLevel} /></TableCell>
+                            <TableCell className="py-2"><span className="text-xs text-muted-foreground">-</span></TableCell>
+                            <TableCell className="py-2">
+                              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); openEditFamilyDialog(family, exec); }}><Edit3 className="w-3.5 h-3.5" /></Button>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500" onClick={(e) => { e.stopPropagation(); setSelectedFamilyMember(family); setShowDeleteFamilyDialog(true); }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ])}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
           </CardContent>
         </Card>
 
@@ -946,10 +1326,17 @@ export default function ProteccionEjecutivosPage() {
                         Resultados de Meta-Busqueda OSINT v7.0
                       </CardTitle>
                       {metasearchResults && (
-                        <CardDescription className="text-xs text-muted-foreground mt-1">
-                          {metasearchResults.searchEngine} - {localValidated.length} validados / {localPotential.length} potenciales / {localDiscarded.length} descartados
-                          {metasearchResults.elapsedSeconds ? ` - ${metasearchResults.elapsedSeconds}s` : ''}
-                        </CardDescription>
+                        <div className="flex items-center gap-2 mt-1">
+                          <CardDescription className="text-xs text-muted-foreground">
+                            {metasearchResults.searchEngine} - {localValidated.length} validados / {localPotential.length} potenciales / {localDiscarded.length} descartados
+                            {metasearchResults.elapsedSeconds ? ` - ${metasearchResults.elapsedSeconds}s` : ''}
+                          </CardDescription>
+                          {metasearchResults.targetType === 'family' && (
+                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-green-500/20 text-green-400">
+                              <Users className="w-2.5 h-2.5 mr-0.5" /> Familiar: {metasearchResults.targetName}
+                            </Badge>
+                          )}
+                        </div>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
@@ -1965,6 +2352,140 @@ export default function ProteccionEjecutivosPage() {
             <DialogFooter>
               <Button variant="ghost" onClick={() => setShowDeleteDialog(false)} className="text-muted-foreground">Cancelar</Button>
               <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white gap-2">
+                <Trash2 className="w-4 h-4" /> Eliminar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Create Family Member Dialog */}
+        <Dialog open={showCreateFamilyDialog} onOpenChange={setShowCreateFamilyDialog}>
+          <DialogContent className="max-w-lg bg-card border-border">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">Nuevo Familiar</DialogTitle>
+              <DialogDescription className="text-muted-foreground">
+                Registrar un familiar para <strong>{selectedExecutiveForFamily?.fullName}</strong>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Nombre Completo *</Label>
+                  <Input placeholder="Maria Perez Gomez" value={familyFormData.fullName} onChange={(e) => setFamilyFormData(prev => ({ ...prev, fullName: e.target.value }))} className="bg-muted/30 border-border" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Relación *</Label>
+                  <select value={familyFormData.relationship} onChange={(e) => setFamilyFormData(prev => ({ ...prev, relationship: e.target.value }))} className="w-full h-9 rounded-md bg-muted/30 border border-border text-sm text-foreground px-3">
+                    {RELATIONSHIP_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="w-3 h-3" /> Correo Electronico</Label>
+                  <Input placeholder="correo@ejemplo.com" type="email" value={familyFormData.email} onChange={(e) => setFamilyFormData(prev => ({ ...prev, email: e.target.value }))} className="bg-muted/30 border-border" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3" /> Telefono</Label>
+                  <Input placeholder="+57 300 1234567" value={familyFormData.phone} onChange={(e) => setFamilyFormData(prev => ({ ...prev, phone: e.target.value }))} className="bg-muted/30 border-border" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Numero de Identificacion</Label>
+                  <Input placeholder="CC-12345678" value={familyFormData.identificationNum} onChange={(e) => setFamilyFormData(prev => ({ ...prev, identificationNum: e.target.value }))} className="bg-muted/30 border-border" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Nivel de Riesgo</Label>
+                  <select value={familyFormData.riskLevel} onChange={(e) => setFamilyFormData(prev => ({ ...prev, riskLevel: e.target.value }))} className="w-full h-9 rounded-md bg-muted/30 border border-border text-sm text-foreground px-3">
+                    <option value="bajo">Bajo</option><option value="medio">Medio</option><option value="alto">Alto</option><option value="critico">Critico</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Notas</Label>
+                <Textarea placeholder="Observaciones adicionales..." value={familyFormData.notes} onChange={(e) => setFamilyFormData(prev => ({ ...prev, notes: e.target.value }))} className="bg-muted/30 border-border min-h-[60px]" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => { setShowCreateFamilyDialog(false); resetFamilyForm(); }} className="text-muted-foreground">Cancelar</Button>
+              <Button onClick={handleCreateFamilyMember} disabled={!familyFormData.fullName || !familyFormData.relationship} className="bg-primary hover:bg-primary/90 text-white gap-2">
+                <Save className="w-4 h-4" /> Crear Familiar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Family Member Dialog */}
+        <Dialog open={showEditFamilyDialog} onOpenChange={setShowEditFamilyDialog}>
+          <DialogContent className="max-w-lg bg-card border-border">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">Editar Familiar</DialogTitle>
+              <DialogDescription className="text-muted-foreground">Modificar informacion del familiar de <strong>{selectedExecutiveForFamily?.fullName}</strong></DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Nombre Completo *</Label>
+                  <Input value={familyFormData.fullName} onChange={(e) => setFamilyFormData(prev => ({ ...prev, fullName: e.target.value }))} className="bg-muted/30 border-border" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Relación *</Label>
+                  <select value={familyFormData.relationship} onChange={(e) => setFamilyFormData(prev => ({ ...prev, relationship: e.target.value }))} className="w-full h-9 rounded-md bg-muted/30 border border-border text-sm text-foreground px-3">
+                    {RELATIONSHIP_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="w-3 h-3" /> Correo Electronico</Label>
+                  <Input type="email" value={familyFormData.email} onChange={(e) => setFamilyFormData(prev => ({ ...prev, email: e.target.value }))} className="bg-muted/30 border-border" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3" /> Telefono</Label>
+                  <Input value={familyFormData.phone} onChange={(e) => setFamilyFormData(prev => ({ ...prev, phone: e.target.value }))} className="bg-muted/30 border-border" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Numero de Identificacion</Label>
+                  <Input value={familyFormData.identificationNum} onChange={(e) => setFamilyFormData(prev => ({ ...prev, identificationNum: e.target.value }))} className="bg-muted/30 border-border" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Nivel de Riesgo</Label>
+                  <select value={familyFormData.riskLevel} onChange={(e) => setFamilyFormData(prev => ({ ...prev, riskLevel: e.target.value }))} className="w-full h-9 rounded-md bg-muted/30 border border-border text-sm text-foreground px-3">
+                    <option value="bajo">Bajo</option><option value="medio">Medio</option><option value="alto">Alto</option><option value="critico">Critico</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Notas</Label>
+                <Textarea value={familyFormData.notes} onChange={(e) => setFamilyFormData(prev => ({ ...prev, notes: e.target.value }))} className="bg-muted/30 border-border min-h-[60px]" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => { setShowEditFamilyDialog(false); setSelectedFamilyMember(null); resetFamilyForm(); }} className="text-muted-foreground">Cancelar</Button>
+              <Button onClick={handleUpdateFamilyMember} disabled={!familyFormData.fullName || !familyFormData.relationship} className="bg-primary hover:bg-primary/90 text-white gap-2">
+                <Save className="w-4 h-4" /> Guardar Cambios
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Family Member Dialog */}
+        <Dialog open={showDeleteFamilyDialog} onOpenChange={setShowDeleteFamilyDialog}>
+          <DialogContent className="max-w-md bg-card border-border">
+            <DialogHeader>
+              <DialogTitle className="text-foreground flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-500" /> Confirmar Eliminacion
+              </DialogTitle>
+              <DialogDescription className="text-muted-foreground">
+                Esta accion no se puede deshacer. Se eliminara el familiar <strong>{selectedFamilyMember?.fullName}</strong> de <strong>{selectedExecutiveForFamily?.fullName}</strong>.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => { setShowDeleteFamilyDialog(false); setSelectedFamilyMember(null); }} className="text-muted-foreground">Cancelar</Button>
+              <Button onClick={handleDeleteFamilyMember} className="bg-red-600 hover:bg-red-700 text-white gap-2">
                 <Trash2 className="w-4 h-4" /> Eliminar
               </Button>
             </DialogFooter>

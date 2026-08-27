@@ -509,18 +509,57 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
     const body = await request.json();
-    const { executiveId, query: customQuery } = body;
+    const { 
+      executiveId, 
+      query: customQuery, 
+      targetType = 'executive',
+      targetName,
+      targetEmail,
+      targetPhone,
+      targetOrg,
+    } = body;
     if (!executiveId && !customQuery) return NextResponse.json({ error: 'Se requiere executiveId o query' }, { status: 400 });
 
-    let executive: { id: string; fullName: string; identificationNum: string; email: string | null; [key: string]: any } | null = null;
+    let executive: { id: string; fullName: string; identificationNum: string; email: string | null; phone: string | null; organization: string | null; [key: string]: any } | null = null;
     let queryGroups: SearchQueryGroup[] = [];
 
     if (executiveId) {
-      executive = await db.executive.findUnique({ where: { id: executiveId } });
-      if (!executive) return NextResponse.json({ error: 'Ejecutivo no encontrado' }, { status: 404 });
-      const matrix = buildOsintQueryMatrix({ fullName: executive.fullName, identificationNum: executive.identificationNum, email: executive.email });
-      queryGroups = matrix.groups;
-      console.log(`[METASEARCH v8] Built ${matrix.groups.length} query groups with ${matrix.allQueries.length} unique queries for: ${executive.fullName}`);
+      if (targetType === 'family') {
+        // For family members, we need to find the executive first, then the family member
+        executive = await db.executive.findUnique({ where: { id: executiveId } });
+        if (!executive) return NextResponse.json({ error: 'Ejecutivo no encontrado' }, { status: 404 });
+        
+        // Find family member
+        const familyMember = await db.familyMember.findFirst({ 
+          where: { executiveId: executive.id, fullName: targetName }
+        });
+        
+        if (familyMember) {
+          // Use family member data for search, but include executive context
+          const matrix = buildOsintQueryMatrix({ 
+            fullName: familyMember.fullName, 
+            identificationNum: familyMember.identificationNum || executive.identificationNum, 
+            email: familyMember.email 
+          });
+          queryGroups = matrix.groups;
+          console.log(`[METASEARCH v8] Built ${matrix.groups.length} query groups with ${matrix.allQueries.length} unique queries for family member: ${familyMember.fullName} (of ${executive.fullName})`);
+        } else {
+          // Fallback to targetName from request body
+          const matrix = buildOsintQueryMatrix({ 
+            fullName: targetName, 
+            identificationNum: executive.identificationNum, 
+            email: targetEmail 
+          });
+          queryGroups = matrix.groups;
+          console.log(`[METASEARCH v8] Built ${matrix.groups.length} query groups with ${matrix.allQueries.length} unique queries for family member: ${targetName} (of ${executive.fullName})`);
+        }
+      } else {
+        executive = await db.executive.findUnique({ where: { id: executiveId } });
+        if (!executive) return NextResponse.json({ error: 'Ejecutivo no encontrado' }, { status: 404 });
+        const matrix = buildOsintQueryMatrix({ fullName: executive.fullName, identificationNum: executive.identificationNum, email: executive.email });
+        queryGroups = matrix.groups;
+        console.log(`[METASEARCH v8] Built ${matrix.groups.length} query groups with ${matrix.allQueries.length} unique queries for: ${executive.fullName}`);
+      }
     } else {
       queryGroups = [{ label: 'Busqueda personalizada', queries: [customQuery], blockType: 'custom' as const, resultsFound: 0 }];
     }
@@ -628,7 +667,7 @@ export async function POST(request: NextRequest) {
     // ============================================================================
     // UPDATE DB
     // ============================================================================
-    if (executive) {
+    if (executive && targetType === 'executive') {
       try {
         await db.executive.update({
           where: { id: executive.id },
@@ -691,7 +730,9 @@ export async function POST(request: NextRequest) {
       aiAnalysis,
       evidence: [],
       evidenceDetailPath: '',
-      executive: executive ? { id: executive.id, fullName: executive.fullName, identificationNum: executive.identificationNum, email: executive.email } : null,
+      executive: executive ? { id: executive.id, fullName: executive.fullName, identificationNum: executive.identificationNum, email: executive.email, phone: executive.phone, organization: executive.organization } : null,
+      targetType,
+      targetName: targetName || executive?.fullName,
       timestamp: new Date().toISOString(),
       extensionsMonitored: ALL_EXTENSIONS,
       extensionGroups: EXTENSION_GROUPS,

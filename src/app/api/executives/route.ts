@@ -78,6 +78,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check total executives limit (300)
+    const totalExecutives = await db.executive.count();
+    if (totalExecutives >= 300) {
+      return NextResponse.json(
+        { error: 'Máximo 300 ejecutivos permitidos' },
+        { status: 400 }
+      );
+    }
+
     // Check for duplicate identification number
     const existing = await db.executive.findUnique({
       where: { identificationNum },
