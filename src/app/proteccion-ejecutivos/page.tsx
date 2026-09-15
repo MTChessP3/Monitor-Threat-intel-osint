@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import GoogleDorkingPanel from '@/components/osint/GoogleDorkingPanel';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import NextLink from 'next/link';
+import { openPrintReport } from '@/lib/printable-report';
 
 // ============================================================================
 // Types
@@ -1357,6 +1358,42 @@ export default function ProteccionEjecutivosPage() {
                             className="text-[10px] h-7 gap-1 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
                           >
                             <FileCode className="w-3 h-3" /> Exportar TODO TXT
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openPrintReport({
+                              moduleName: 'Meta-Búsqueda OSINT v7.0 - Protección de Ejecutivos',
+                              moduleIcon: '🔍',
+                              targetValue: metasearchResults.targetType === 'family' ? `${metasearchResults.targetName} (Familiar de ${metasearchResults.executive?.fullName})` : metasearchResults.executive?.fullName || 'Ejecutivo',
+                              data: {
+                                executive: metasearchResults.executive,
+                                searchEngine: metasearchResults.searchEngine,
+                                enginesUsed: metasearchResults.enginesUsed,
+                                engineDetails: metasearchResults.engineDetails,
+                                queryGroups: metasearchResults.queryGroups,
+                                classificationStats: metasearchResults.classificationStats,
+                                validatedResults: localValidated,
+                                potentialResults: localPotential,
+                                discardedResults: localDiscarded,
+                                aiAnalysis: metasearchResults.aiAnalysis,
+                                evidence: metasearchResults.evidence,
+                                elapsedSeconds: metasearchResults.elapsedSeconds,
+                                extensionsMonitored: metasearchResults.extensionsMonitored,
+                                extensionGroups: metasearchResults.extensionGroups,
+                              },
+                              timestamp: metasearchResults.timestamp,
+                              riskLevel: 'medio',
+                              verdict: metasearchResults.aiAnalysis || 'Análisis de meta-búsqueda OSINT completado',
+                              metadata: {
+                                source: 'NEXUS-INTEL OSINT Platform - Meta-Búsqueda v7.0',
+                                classification: 'CLASIFICADO',
+                                version: '7.0',
+                              },
+                            })}
+                            className="text-[10px] h-7 gap-1 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                          >
+                            <Download className="w-3 h-3" /> Informe Imprimible HTML
                           </Button>
                         </>
                       )}

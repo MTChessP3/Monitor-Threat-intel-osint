@@ -23,6 +23,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import NextLink from 'next/link';
+import { openPrintReport } from '@/lib/printable-report';
 
 // ============================================================================
 // Types
@@ -1411,6 +1412,29 @@ export default function UrlSandboxPage() {
                           >
                             <Download className="w-3.5 h-3.5" />
                             Exportar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openPrintReport({
+                              moduleName: 'URL Sandbox - Análisis Forense',
+                              moduleIcon: '🔬',
+                              targetValue: scanResult.url,
+                              data: scanResult,
+                              timestamp: new Date().toISOString(),
+                              riskLevel: scanResult.analysis?.riskLevel || 'medio',
+                              riskScore: scanResult.threatIntel?.score || 0,
+                              verdict: scanResult.analysis?.findings.map(f => `${f.type}: ${f.description}`).join('; ') || 'Análisis forense completado',
+                              metadata: {
+                                source: 'NEXUS-INTEL OSINT Platform - URL Sandbox',
+                                classification: 'CLASIFICADO',
+                                version: '1.0',
+                              },
+                            })}
+                            className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 gap-1"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Informe Imprimible
                           </Button>
                         </div>
                       </div>

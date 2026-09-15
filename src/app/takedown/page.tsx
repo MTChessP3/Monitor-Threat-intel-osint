@@ -24,6 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { openPrintReport } from '@/lib/printable-report';
 
 interface ServiceResult {
   id: string;
@@ -655,6 +656,42 @@ export default function TakeDownDashboard() {
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => handleExport(selectedBatch.id, 'csv')}>
                       <Download className="w-4 h-4 mr-1" /> CSV
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openPrintReport({
+                        moduleName: 'TakeDown URL - Reporte de Eliminación',
+                        moduleIcon: '🛡️',
+                        targetValue: selectedBatch.name,
+                        data: {
+                          batchId: selectedBatch.id,
+                          name: selectedBatch.name,
+                          status: selectedBatch.status,
+                          totalUrls: selectedBatch.totalUrls,
+                          processedUrls: selectedBatch.processedUrls,
+                          successfulUrls: selectedBatch.successfulUrls,
+                          failedUrls: selectedBatch.failedUrls,
+                          notes: selectedBatch.notes,
+                          createdAt: selectedBatch.createdAt,
+                          updatedAt: selectedBatch.updatedAt,
+                          completedAt: selectedBatch.completedAt,
+                          serviceResults: selectedBatch.serviceResults,
+                          reports: selectedBatch.reports,
+                        },
+                        timestamp: selectedBatch.createdAt,
+                        riskLevel: selectedBatch.failedUrls > selectedBatch.successfulUrls ? 'alto' : selectedBatch.failedUrls > 0 ? 'medio' : 'bajo',
+                        riskScore: selectedBatch.totalUrls > 0 ? Math.round((selectedBatch.successfulUrls / selectedBatch.totalUrls) * 100) : 0,
+                        verdict: `Lote de TakeDown: ${selectedBatch.successfulUrls}/${selectedBatch.totalUrls} URLs procesadas exitosamente`,
+                        metadata: {
+                          source: 'NEXUS-INTEL OSINT Platform - TakeDown Module',
+                          classification: 'CLASIFICADO',
+                          version: '1.0',
+                        },
+                      })}
+                      className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 gap-1"
+                    >
+                      <Download className="w-4 h-4 mr-1" /> Informe HTML
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setSelectedBatch(null)}>
                       <ChevronUp className="w-4 h-4 mr-1" /> Volver

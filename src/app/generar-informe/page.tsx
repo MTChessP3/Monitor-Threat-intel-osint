@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import NextLink from 'next/link';
 import { ThemeSelector } from '@/components/ThemeSelector';
+import { openPrintReport } from '@/lib/printable-report';
 
 // ============================================================================
 // TYPES
@@ -1117,6 +1118,38 @@ export default function GenerarInformePage() {
                     >
                       <Download className="w-4 h-4 mr-2" />
                       Markdown
+                    </Button>
+                    <Button
+                      onClick={() => openPrintReport({
+                        moduleName: 'Generador de Informes de Inteligencia',
+                        moduleIcon: '📋',
+                        targetValue: generatedReport?.report?.title || 'Informe de Inteligencia',
+                        data: {
+                          title: generatedReport?.report?.title,
+                          content: generatedReport?.report?.content,
+                          threatLevel: generatedReport?.report?.threatLevel,
+                          generationMode: generatedReport?.report?.generationMode,
+                          tlpLevel: generatedReport?.report?.tlpLevel,
+                          abuseTypes: Array.from(selectedAbuseTypes),
+                          severity: selectedSeverity,
+                          urls: urlInputs.filter(u => u.trim()),
+                          fileNames: uploadedFiles.map(f => f.name),
+                          writtenDataLength: writtenData.length,
+                        },
+                        timestamp: generatedReport?.report?.createdAt || new Date().toISOString(),
+                        riskLevel: generatedReport?.report?.threatLevel || 'medio',
+                        verdict: generatedReport?.report?.content?.slice(0, 500) || 'Informe de inteligencia generado',
+                        metadata: {
+                          source: 'NEXUS-INTEL OSINT Platform - Generador de Informes',
+                          classification: `TLP:${generatedReport?.report?.tlpLevel || 'GREEN'}`,
+                          version: '1.0',
+                        },
+                      })}
+                      variant="outline"
+                      className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Informe Imprimible HTML
                     </Button>
                     <Button
                       onClick={() => { setShowResult(false); setGeneratedReport(null); }}

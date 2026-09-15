@@ -28,6 +28,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import NextLink from 'next/link';
+import { openPrintReport } from '@/lib/printable-report';
 
 // Types
 interface ReportTemplate {
@@ -2100,25 +2101,48 @@ export default function Home() {
                         <CardHeader className="pb-3">
                           <CardTitle className="text-base flex items-center gap-2">
                             <Shield className="w-4 h-4 text-primary" />
-                            Generar Informe
+                            Acciones del Análisis
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
                           <p className="text-xs text-muted-foreground">
-                            Convierta este análisis en un informe ejecutivo profesional usando la plantilla seleccionada.
+                            Convierta este análisis en un informe ejecutivo profesional o genere un informe imprimible HTML.
                           </p>
-                          <Button
-                            onClick={handleGenerateReport}
-                            disabled={isGenerating}
-                            className="w-full primary-gradient text-primary-foreground font-semibold hover:opacity-95"
-                          >
-                            {isGenerating ? (
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            ) : (
-                              <FileText className="w-4 h-4 mr-2" />
-                            )}
-                            {isGenerating ? 'Generando...' : 'Generar Informe'}
-                          </Button>
+                          <div className="space-y-2">
+                            <Button
+                              onClick={handleGenerateReport}
+                              disabled={isGenerating}
+                              className="w-full primary-gradient text-primary-foreground font-semibold hover:opacity-95"
+                            >
+                              {isGenerating ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <FileText className="w-4 h-4 mr-2" />
+                              )}
+                              {isGenerating ? 'Generando...' : 'Generar Informe'}
+                            </Button>
+                            <Button
+                              onClick={() => openPrintReport({
+                                moduleName: 'Análisis de Inteligencia OSINT',
+                                moduleIcon: '🧠',
+                                targetValue: Array.from(selectedCategories).map(catId => industryCategories.find(c => c.id === catId)?.label).filter(Boolean).join(', ') || 'Análisis general',
+                                data: analysisResult,
+                                timestamp: new Date().toISOString(),
+                                riskLevel: analysisResult.overallRiskLevel,
+                                riskScore: analysisResult.threats.reduce((acc, t) => acc + (t.severity === 'critico' ? 25 : t.severity === 'alto' ? 15 : t.severity === 'medio' ? 10 : 5), 0),
+                                verdict: analysisResult.summary,
+                                metadata: {
+                                  source: 'NEXUS-INTEL OSINT Platform - Análisis IA',
+                                  classification: 'CLASIFICADO',
+                                  version: '1.0',
+                                },
+                              })}
+                              className="w-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 font-semibold"
+                            >
+                              <Download className="w-4 h-4 mr-2" />
+                              Informe Imprimible HTML
+                            </Button>
+                          </div>
                           {isGenerating && (
                             <Progress value={generatingProgress} className="h-1.5" />
                           )}
