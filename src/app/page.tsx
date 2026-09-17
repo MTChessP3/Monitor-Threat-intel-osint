@@ -5215,7 +5215,8 @@ export default function OSINTPlatform() {
 
           {/* ==================== DNS DUMP TAB ==================== */}
           {activeTab === 'dnsdump' && (
-            <div className="space-y-6">
+            <ModuleErrorBoundary module="DNS Dump">
+              <div className="space-y-6">
               <h2 className="text-2xl font-bold flex items-center gap-3">
                 <Network className="w-7 h-7 text-teal-400" /> DNS Dump
                 <span className="text-sm font-normal text-gray-400">(dnsdumpster.com style enumeration)</span>
@@ -5493,6 +5494,7 @@ export default function OSINTPlatform() {
                 </div>
               )}
             </div>
+            </ModuleErrorBoundary>
           )}
 
           {/* ==================== SOCIAL MONITOR TAB ==================== */}
