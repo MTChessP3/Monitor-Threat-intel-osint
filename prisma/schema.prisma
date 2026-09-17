@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ReportTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  content   String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  reports   Report[]
+}
+
+model NewsSource {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  type      String   @default("web")
+  category  String   @default("seguridad")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Report {
+  id              String          @id @default(cuid())
+  title           String
+  date            DateTime        @default(now())
+  summary         String
+  threatLevel     String          @default("bajo")
+  content         String
+  templateId      String?
+  template        ReportTemplate? @relation(fields: [templateId], references: [id])
+  sourcesUsed     String          @default("[]")
+  generationMode  String          @default("automatic")
+  abuseTypes      String          @default("[]")
+  severity        String          @default("medio")
+  tlpLevel        String          @default("GREEN")
+  inputUrls       String          @default("[]")
+  inputText       String          @default("")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model User {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  password   String
+  role       String   @default("analyst")
+  mfaEnabled Boolean  @default(false)
+  mfaSecret  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Executive {
+  id                  String   @id @default(cuid())
+  identificationNum   String   @unique
+  fullName            String
+  email               String?
+  phone               String?
+  position            String?
+  organization        String?
+  riskLevel           String   @default("bajo")
+  notes               String?
+  lastMetasearch      DateTime?
+  lastMetasearchResults String?  @default("[]")
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  familyMembers       FamilyMember[]
+}
+
+model FamilyMember {
+  id                  String   @id @default(cuid())
+  executiveId         String   @unique
+  fullName            String
+  relationship        String   // father, mother, son, daughter, spouse, etc
+  identificationNum   String?
+  email               String?
+  phone               String?
+  riskLevel           String   @default("bajo")
+  notes               String?
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  // Relation to Executive
+  executive           Executive @relation(fields: [executiveId], references: [id])
+}

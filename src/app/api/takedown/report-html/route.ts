@@ -54,9 +54,20 @@ function generateHTMLReport(data: HTMLReportRequest): string {
   const serviceIcons: Record<string, string> = {
     'Google Safe Browsing': '🛡️',
     'Microsoft SmartScreen': '🔷',
+    'Netcraft': '👁️',
+    'ESET': '🛡️',
+    'PhishFort': '🛡️',
+    'PhishReport': '📧',
+    'EasyDMARC': '📊',
+    'Norton (Gen Digital)': '🛡️',
+    'Fortinet / FortiGuard': '🏢',
+    'McAfee (Trellix)': '🛡️',
+    'CRDF ThreatCenter': '📋',
+    'PhishTank': '🦠',
+    'antiphishing.ch': '🌐',
+    'VirusTotal': '🦠',
     'APWG (Anti-Phishing Working Group)': '📧',
     'CISA / US-CERT': '🇺🇸',
-    'VirusTotal': '🦠',
   };
 
   const resultsByUrl = urls.map(url => ({
@@ -142,9 +153,20 @@ function generateHTMLReport(data: HTMLReportRequest): string {
     const names: Record<string, string> = {
       google: 'Google Safe Browsing',
       microsoft: 'Microsoft SmartScreen',
+      netcraft: 'Netcraft',
+      eset: 'ESET',
+      phishfort: 'PhishFort',
+      phishreport: 'PhishReport',
+      easydmarc: 'EasyDMARC',
+      norton: 'Norton (Gen Digital)',
+      fortinet: 'Fortinet / FortiGuard',
+      mcafee: 'McAfee (Trellix)',
+      crdf: 'CRDF ThreatCenter',
+      phishtank: 'PhishTank',
+      antiphishing: 'antiphishing.ch',
+      virustotal: 'VirusTotal',
       apwg: 'APWG (Anti-Phishing Working Group)',
       cisa: 'CISA / US-CERT',
-      virustotal: 'VirusTotal',
     };
     return names[s] || s;
   }).join(', ');
@@ -262,9 +284,20 @@ function generateHTMLReport(data: HTMLReportRequest): string {
             <div style="display: flex; flex-wrap: wrap; gap: 8px;">
               <a href="https://safebrowsing.google.com/safebrowsing/report_phish/?url=${encodeURIComponent(url)}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #1e3a8a; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🛡️ Google Safe Browsing</a>
               <a href="https://www.microsoft.com/wdsi/support/report-unsafe-site" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #0067b8; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🔷 Microsoft SmartScreen</a>
+              <a href="https://netcraft.com/report-phishing/?url=${encodeURIComponent(url)}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #4f46e5; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">👁️ Netcraft</a>
+              <a href="https://www.eset.com/us/support/phishing-report?url=${encodeURIComponent(url)}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #7c3aed; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🛡️ ESET</a>
+              <a href="https://www.phishfort.com/report-phishing?url=${encodeURIComponent(url)}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #db2777; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🛡️ PhishFort</a>
+              <a href="mailto:report@phishreport.org?subject=Phishing%20Report&body=${encodeURIComponent(`URL: ${url}\n\n${notes || ''}`)}" style="padding: 8px 16px; background: #dc2626; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">📧 PhishReport</a>
+              <a href="https://www.easydmarc.com/report-phishing?url=${encodeURIComponent(url)}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #d97706; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">📊 EasyDMARC</a>
+              <a href="https://support.norton.com/report-unsafe-site" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #ea580c; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🛡️ Norton</a>
+              <a href="https://fortiguard.com/phishing-report?url=${encodeURIComponent(url)}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #374151; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🏢 Fortinet</a>
+              <a href="https://support.mcafee.com/report-phishing" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #84cc16; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🛡️ McAfee</a>
+              <a href="https://threatcenter.crdf.org/report" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #0d9488; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">📋 CRDF</a>
+              <a href="https://phishtank.org/reportphish?url=${encodeURIComponent(url)}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #7c3aed; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🦠 PhishTank</a>
+              <a href="https://antiphishing.ch/report/" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #0891b2; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🌐 antiphishing.ch</a>
+              <a href="https://www.virustotal.com/gui/url/${Buffer.from(url).toString('base64').replace(/=+$/, '')}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #7c3aed; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🦠 VirusTotal</a>
               <a href="mailto:reportphishing@apwg.org?subject=Phishing%20Report&body=${encodeURIComponent(`URL: ${url}\n\n${notes || ''}`)}" style="padding: 8px 16px; background: #dc2626; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">📧 APWG</a>
               <a href="mailto:phishing-report@us-cert.gov?subject=Phishing%20Report&body=${encodeURIComponent(`URL: ${url}\n\n${notes || ''}`)}" style="padding: 8px 16px; background: #002b5c; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🇺🇸 CISA/US-CERT</a>
-              <a href="https://www.virustotal.com/gui/url/${Buffer.from(url).toString('base64').replace(/=+$/, '')}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #7c3aed; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🦠 VirusTotal</a>
             </div>
           </div>
         `).join('')}

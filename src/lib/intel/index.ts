@@ -12,9 +12,49 @@ export type TargetType =
   | 'mobile'
   | 'general';
 
+export interface IPValidationResult {
+  valid: boolean;
+  version: 'ipv4' | 'ipv6' | null;
+  error?: string;
+  normalized: string;
+}
+
+export function validateIP(ip: string): IPValidationResult {
+  const trimmed = ip.trim();
+  
+  // IPv4 validation
+  const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  const ipv4Match = trimmed.match(ipv4Regex);
+  if (ipv4Match) {
+    const octets = [ipv4Match[1], ipv4Match[2], ipv4Match[3], ipv4Match[4]].map(Number);
+    const validOctets = octets.every((octet) => octet >= 0 && octet <= 255);
+    if (!validOctets) {
+      return { valid: false, version: 'ipv4', error: 'IPv4 octets must be between 0 and 255', normalized: trimmed };
+    }
+    // Check for leading zeros (e.g., 01.02.03.04)
+    const hasLeadingZeros = [ipv4Match[1], ipv4Match[2], ipv4Match[3], ipv4Match[4]].some(
+      (octet) => octet.length > 1 && octet.startsWith('0')
+    );
+    if (hasLeadingZeros) {
+      return { valid: false, version: 'ipv4', error: 'IPv4 octets cannot have leading zeros', normalized: trimmed };
+    }
+    return { valid: true, version: 'ipv4', normalized: trimmed };
+  }
+  
+  // IPv6 validation (simplified but RFC 4291 compliant)
+  const ipv6Regex = /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{1,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4})?:)?((25[0-5]|(2[0-4]|1?\d?)\d)\.){3,3}(25[0-5]|(2[0-4]|1?\d?)\d)|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1?\d?)\d)\.){3,3}(25[0-5]|(2[0-4]|1?\d?)\d))$/;
+  
+  if (ipv6Regex.test(trimmed)) {
+    return { valid: true, version: 'ipv6', normalized: trimmed.toLowerCase() };
+  }
+  
+  return { valid: false, version: null, error: 'Invalid IP format. Enter a valid IPv4 (e.g., 8.8.8.8) or IPv6 (e.g., 2001:db8::1)', normalized: trimmed };
+}
+
 export function detectType(value: string): TargetType {
   const v = value.trim();
-  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(v)) return 'ip';
+  const ipValidation = validateIP(v);
+  if (ipValidation.valid) return 'ip';
   if (/^[a-f0-9]{32}$/i.test(v)) return 'hash';
   if (/^[a-f0-9]{40}$/i.test(v)) return 'hash';
   if (/^[a-f0-9]{64}$/i.test(v)) return 'hash';

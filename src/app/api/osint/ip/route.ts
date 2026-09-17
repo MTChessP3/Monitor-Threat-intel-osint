@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { lookupIP } from '@/lib/intel';
+import { lookupIP, validateIP, IPValidationResult } from '@/lib/intel';
 import { enrichIP } from '@/lib/intel/ipenrich';
 import { upsertIOC, createAnalysis, createAlert } from '@/lib/store';
 import { resolveModuleScope } from '@/lib/intel/moduleScope';
@@ -65,14 +65,28 @@ export async function GET(request: NextRequest) {
       {
         success: false,
         error: 'IP address is required',
-        suggestion: 'Enter a valid IP address (e.g., 8.8.8.8 or 185.220.101.34)',
+        suggestion: 'Enter a valid IP address (e.g., 8.8.8.8 or 2001:db8::1)',
+      },
+      { status: 400 }
+    );
+  }
+
+  // Validate IP using new robust validator
+  const validation: IPValidationResult = validateIP(ip);
+  if (!validation.valid) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: validation.error || 'Invalid IP address',
+        suggestion: 'Enter a valid IPv4 (e.g., 8.8.8.8) or IPv6 (e.g., 2001:db8::1)',
+        provided: ip,
       },
       { status: 400 }
     );
   }
 
   try {
-    const { live, source, data } = await lookupIP(ip);
+    const { live, source, data } = await lookupIP(validation.normalized);
 
     const [rdap, enrichment] = await Promise.all([fetchRdap(ip), enrichIP(ip, { scan })]);
 

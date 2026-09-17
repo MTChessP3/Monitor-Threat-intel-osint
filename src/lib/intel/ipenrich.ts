@@ -9,6 +9,7 @@
 
 import net from 'net';
 import { promises as dns } from 'dns';
+import { lookupVirusTotalIp } from './virustotal';
 
 export interface DnsblResult {
   name: string;
@@ -42,10 +43,29 @@ export interface PortResult {
   banner: string | null;
 }
 
+export interface VirusTotalIpResult {
+  source: string;
+  analyzed: boolean;
+  url: string;
+  reputation: number;
+  lastAnalysisDate: string | null;
+  lastAnalysisStats: { malicious: number; suspicious: number; undetected: number; harmless: number; timeout: number };
+  totalEngines: number;
+  verdict: 'MALICIOUS' | 'SUSPICIOUS' | 'CLEAN' | 'UNKNOWN';
+  categories: string[];
+  votes: { harmless: number; malicious: number };
+  tags: string[];
+  firstSeen: string | null;
+  lastSeen: string | null;
+  asn?: string;
+  country?: string;
+}
+
 export interface IpReputation {
   dnsbl: DnsblResult[];
   torExit: boolean;
   urlhaus: UrlhausResult;
+  virusTotal: VirusTotalIpResult | null;
 }
 
 export interface IpPivot {
@@ -140,6 +160,14 @@ function reverseOctets(ip: string): string {
   return ip.split('.').reverse().join('.');
 }
 
+function isIPv4(ip: string): boolean {
+  return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip);
+}
+
+function isIPv6(ip: string): boolean {
+  return ip.includes(':');
+}
+
 async function resolveWithTimeout(hostname: string, timeoutMs: number): Promise<string[]> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve([]), timeoutMs);
@@ -173,7 +201,7 @@ async function resolveTxtWithTimeout(hostname: string, timeoutMs: number): Promi
 }
 
 async function queryDnsbl(ip: string): Promise<DnsblResult[]> {
-  if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return [];
+  if (!isIPv4(ip)) return [];
   const reversed = reverseOctets(ip);
   const results = await Promise.all(
     DNSBL_ZONES.map(async (entry) => {
@@ -195,7 +223,7 @@ async function queryDnsbl(ip: string): Promise<DnsblResult[]> {
 }
 
 async function checkTorExit(ip: string): Promise<boolean> {
-  if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return false;
+  if (!isIPv4(ip)) return false;
   const records = await resolveWithTimeout(`${reverseOctets(ip)}.${TOR_DNSBL_ZONE}`, 4000);
   return records.length > 0;
 }
@@ -314,8 +342,11 @@ function checkPort(ip: string, target: { port: number; service: string }): Promi
 }
 
 async function scanPorts(ip: string): Promise<IpScan> {
-  if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) {
-    return { os: 'Unknown (IPv6 not scanned)', ports: [] };
+  if (isIPv6(ip)) {
+    return { os: 'IPv6 (port scan not supported)', ports: [] };
+  }
+  if (!isIPv4(ip)) {
+    return { os: 'Unknown', ports: [] };
   }
   const results = await Promise.all(SCAN_PORTS.map((target) => checkPort(ip, target)));
   const open = results.filter((r) => r.state === 'open');
@@ -340,17 +371,18 @@ export async function enrichIP(ip: string, opts: { scan?: boolean } = {}): Promi
   scan: IpScan;
 }> {
   const scanPromise =
-    opts.scan !== false ? scanPorts(ip) : Promise.resolve<IpScan>({ os: 'Unknown', ports: [] });
+    opts.scan !== false ? scanPorts(ip) : Promise.resolve<IpScan>({ os: isIPv6(ip) ? 'IPv6 (port scan not supported)' : 'Unknown', ports: [] });
 
-  const [dnsbl, torExit, urlhaus, certificates, scan] = await Promise.all([
+  const [dnsbl, torExit, urlhaus, certificates, scan, virusTotal] = await Promise.all([
     queryDnsbl(ip),
     checkTorExit(ip),
     lookupUrlhaus(ip),
     lookupCrt(ip),
     scanPromise,
+    lookupVirusTotalIp(ip),
   ]);
 
-  const reputation: IpReputation = { dnsbl, torExit, urlhaus };
+  const reputation: IpReputation = { dnsbl, torExit, urlhaus, virusTotal };
 
   return { reputation, pivot: { certificates }, scan };
 }

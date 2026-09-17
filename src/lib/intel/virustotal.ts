@@ -127,3 +127,55 @@ export async function lookupVirusTotalUrl(url: string): Promise<null | {
     return null;
   }
 }
+
+export async function lookupVirusTotalIp(ip: string): Promise<null | {
+  source: string;
+  analyzed: boolean;
+  url: string;
+  reputation: number;
+  lastAnalysisDate: string | null;
+  lastAnalysisStats: { malicious: number; suspicious: number; undetected: number; harmless: number; timeout: number };
+  totalEngines: number;
+  verdict: 'MALICIOUS' | 'SUSPICIOUS' | 'CLEAN' | 'UNKNOWN';
+  categories: string[];
+  votes: { harmless: number; malicious: number };
+  tags: string[];
+  firstSeen: string | null;
+  lastSeen: string | null;
+  asn?: string;
+  country?: string;
+}> {
+  if (!vtEnabled()) return null;
+  try {
+    const res = await fetch(`${VT_BASE}/ip_addresses/${encodeURIComponent(ip)}`, {
+      headers: vtAuth({}),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const attrs = data.data?.attributes;
+    if (!attrs) return null;
+    const stats = attrs.last_analysis_stats || EMPTY_STATS;
+    const vTtl = stats.malicious + stats.suspicious;
+    return {
+      source: 'VirusTotal',
+      analyzed: true,
+      url: `https://www.virustotal.com/gui/ip-address/${encodeURIComponent(ip)}`,
+      reputation: attrs.reputation ?? 0,
+      lastAnalysisDate: attrs.last_analysis_date ? new Date(attrs.last_analysis_date * 1000).toISOString() : null,
+      lastAnalysisStats: stats,
+      totalEngines: stats.malicious + stats.suspicious + stats.undetected + stats.harmless + stats.timeout,
+      verdict: stats.malicious > 0 ? 'MALICIOUS' : stats.suspicious > 0 ? 'SUSPICIOUS' : vTtl === 0 && stats.harmless > 0 ? 'CLEAN' : 'UNKNOWN',
+      categories: Object.values(attrs.categories || {}),
+      votes: attrs.total_votes || { harmless: 0, malicious: 0 },
+      tags: (attrs.tags || []).slice(0, 12),
+      firstSeen: attrs.first_submission_date ? new Date(attrs.first_submission_date * 1000).toISOString() : null,
+      lastSeen: attrs.last_analysis_date ? new Date(attrs.last_analysis_date * 1000).toISOString() : null,
+      asn: attrs.asn,
+      country: attrs.country,
+    };
+  } catch (e) {
+    console.log('[VT] IP lookup failed:', e);
+    return null;
+  }
+}
