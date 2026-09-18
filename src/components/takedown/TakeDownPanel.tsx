@@ -33,11 +33,8 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { openPrintReport } from '@/lib/printable-report';
-import { sha256File, sha256, generateTransactionId } from '@/lib/takedown/hashGenerator';
+import { sha256OfFile, sha256, generateTransactionId } from '@/lib/takedown/hashGenerator';
 import { defangUrl, normalizeUrl, isValidUrl, extractUrlsFromText } from '@/lib/takedown/defang';
-import { virustotalPreCheck } from '@/lib/takedown/virustotal';
-import { sendApwgEmail, sendCisaEmail } from '@/lib/takedown/smtp';
-import { parseFile } from '@/lib/takedown/fileParser';
 import { generateHtmlReport } from '@/lib/takedown/reportGenerator';
 
 interface ExtractedUrl {
@@ -288,71 +285,54 @@ export default function TakeDownDashboard() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const fileHash = sha256File(Buffer.from(buffer));
+      const fileHash = await sha256OfFile(buffer);
 
       setUploadProgress(30);
-      setUploadStep('Parseando URLs...');
+      setUploadStep('Enviando archivo al servidor para parseo...');
 
-      const parseResult = await parseFile(Buffer.from(buffer), file.name);
-      const validUrls: ExtractedUrl[] = parseResult.validUrls.map(url => ({
+      const formData = new FormData();
+      const blob = new Blob([buffer]);
+      formData.append('file', blob, file.name);
+      formData.append('virustotalApiKey', batchForm.virustotalApiKey || process.env.VIRUSTOTAL_API_KEY || '');
+
+      const res = await fetch('/api/takedown/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Error al parsear archivo');
+      }
+
+      const data = await res.json();
+
+      setUploadProgress(70);
+      setUploadStep('Procesando resultados...');
+
+      const validUrls: ExtractedUrl[] = data.validUrls.map((url: string) => ({
         url,
         defangedUrl: defangUrl(url),
         valid: true,
         selected: true,
-        hash: sha256(url),
+        hash: await sha256(url),
       }));
-
-      setUploadProgress(50);
-      setUploadStep('Ejecutando pre-check VirusTotal...');
-
-      const virustotalApiKey = batchForm.virustotalApiKey || process.env.VIRUSTOTAL_API_KEY || '';
-      let vtResults: Array<{ url: string; classification: string; maliciousEngines: number }> = [];
-
-      if (virustotalApiKey && validUrls.length > 0) {
-        try {
-          setVirustotalChecking(true);
-          const vtRes = await fetch('/api/takedown/virustotal', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              urls: validUrls.slice(0, 10).map(u => u.url),
-              apiKey: virustotalApiKey,
-            }),
-          });
-          if (vtRes.ok) {
-            const vtData = await vtRes.json();
-            if (Array.isArray(vtData)) {
-              vtResults = vtData;
-              for (const vt of vtData) {
-                const match = validUrls.find(u => u.url === vt.url);
-                if (match) {
-                  match.virustotalClassification = vt.classification;
-                  match.virustotalMaliciousEngines = vt.maliciousEngines;
-                }
-              }
-            } else if (vtData.classification) {
-              vtResults.push(vtData);
-            }
-          }
-        } catch { /* VirusTotal check failed, continue without it */ }
-        finally { setVirustotalChecking(false); }
-      }
 
       setUploadProgress(90);
       setUploadStep('Generando huella digital SHA-256...');
 
       setFileResult({
         validUrls,
-        invalidUrls: parseResult.invalidUrls,
+        invalidUrls: [],
         fileName: file.name,
-        fileHash,
-        fileType: ext,
-        virustotalResults: vtResults,
+        fileHash: data.fileHash,
+        fileType: '.' + file.name.split('.').pop()?.toLowerCase(),
+        virustotalResults: data.virustotalPreCheck,
       });
 
       setUploadProgress(100);
       setUploadStep('¡Archivo procesado exitosamente!');
-      toast.success(`${parseResult.validUrls.length} URLs válidas extraídas de ${file.name}`);
+      toast.success(`${data.validUrls.length} URLs válidas extraídas de ${file.name}`);
     } catch (error) {
       toast.error('Error al procesar el archivo');
       console.error(error);

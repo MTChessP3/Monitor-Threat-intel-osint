@@ -1,4 +1,4 @@
-import { extractUrlsFromText, normalizeUrl, isValidUrl } from './defang';
+import { extractUrlsFromText, isValidUrl } from './defang';
 
 interface ParsedFileResult {
   urls: string[];
@@ -126,5 +126,18 @@ export async function parseFile(buffer: Buffer, fileName: string): Promise<Parse
     }
     default:
       throw new Error(`Formato de archivo no soportado: ${ext}`);
+  }
+}
+
+function normalizeUrl(url: string): string {
+  let normalized = url.trim();
+  if (!normalized.match(/^https?:\/\//i)) {
+    normalized = 'https://' + normalized;
+  }
+  try {
+    const parsed = new URL(normalized);
+    return parsed.toString();
+  } catch {
+    return normalized;
   }
 }

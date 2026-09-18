@@ -1,8 +1,6 @@
 import { sha256 } from './hashGenerator';
 import { defangUrl } from './defang';
 
-const crypto = require('crypto');
-
 interface ReportEvidence {
   url: string;
   defangedUrl: string;
@@ -348,10 +346,10 @@ export function generateHtmlReport(data: {
 </html>`;
 }
 
-export function generateReportHash(content: string): string {
+export async function generateReportHash(content: string): Promise<string> {
   return sha256(content);
 }
 
 export function generateReportId(): string {
-  return crypto.randomUUID();
+  return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substr(2);
 }

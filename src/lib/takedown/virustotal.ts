@@ -1,3 +1,11 @@
+function base64Url(url: string): string {
+  try {
+    return btoa(url).replace(/=+$/, '');
+  } catch {
+    return Buffer.from(url).toString('base64').replace(/=+$/, '');
+  }
+}
+
 interface VirusTotalPreCheckResult {
   url: string;
   urlId: string;
@@ -32,7 +40,7 @@ export async function virustotalPreCheck(
   url: string,
   apiKey: string
 ): Promise<VirusTotalPreCheckResult> {
-  const urlId = Buffer.from(url).toString('base64').replace(/=+$/, '');
+  const urlId = base64Url(url);
   const apiUrl = `https://www.virustotal.com/api/v3/urls/${urlId}`;
 
   const response = await fetch(apiUrl, {
