@@ -230,14 +230,15 @@ export const takedownWorker = new Worker<TakedownJobData>('takedown-reports', as
   await job.updateProgress(50);
 
   // Store in database
-  await prisma.takedownReport.create({
+  await prisma.takeDownReport.create({
     data: {
-      reportId,
+      id: reportId,
+      batchId: job.data.batchId || '',
       url,
-      service,
+      originalUrl: url,
       status: result.status,
       referenceId: result.referenceId,
-      timestamp: new Date(),
+      createdAt: new Date(),
       notes: notes || result.message,
     },
   });

@@ -1,1117 +1,1322 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Upload, FileText, Shield, Send, Download, Printer, CheckCircle, XCircle,
-  AlertCircle, Clock, Globe, Mail, Bug, Eye, RefreshCw, Trash2, Copy,
-  ChevronDown, ChevronUp, Filter, List, Settings, Key, ExternalLink,
-  ChevronRight, Layers, Loader2, Lock, MapPin
+  Shield, Upload, FileText, Download, RefreshCw, Search, Filter,
+  ChevronDown, ChevronUp, Eye, Trash2, Clock, CheckCircle, XCircle,
+  AlertCircle, Loader2, BarChart2, LayoutDashboard, Settings,
+  ExternalLink, Copy, MoreHorizontal, Bell, BellOff, Send,
+  Hash, Link, GripVertical, X, Sparkles, FileSpreadsheet,
+  FileJson, FolderOpen, Wifi, WifiOff, Database, Lock, Key,
+  Scan, ShieldCheck, AlertTriangle
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+} from '@/components/ui/table';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
+} from '@/components/ui/dialog';
+import { toast } from 'sonner';
+import { openPrintReport } from '@/lib/printable-report';
+import { sha256File, sha256, generateTransactionId } from '@/lib/takedown/hashGenerator';
+import { defangUrl, normalizeUrl, isValidUrl, extractUrlsFromText } from '@/lib/takedown/defang';
+import { virustotalPreCheck } from '@/lib/takedown/virustotal';
+import { sendApwgEmail, sendCisaEmail } from '@/lib/takedown/smtp';
+import { parseFile } from '@/lib/takedown/fileParser';
+import { generateHtmlReport } from '@/lib/takedown/reportGenerator';
 
 interface ExtractedUrl {
   url: string;
+  defangedUrl: string;
   valid: boolean;
+  virustotalClassification?: string;
+  virustotalMaliciousEngines?: number;
+  selected: boolean;
+  hash: string;
 }
 
-interface ServiceOption {
+interface ServiceResult {
+  id: string;
+  service: string;
+  serviceName: string;
+  url: string;
+  status: string;
+  message?: string;
+  referenceId?: string;
+  retryCount: number;
+  createdAt: string;
+  timestamp: string;
+}
+
+interface TakeDownReport {
+  id: string;
+  batchId: string;
+  url: string;
+  status: string;
+  fingerprint?: string;
+  createdAt: string;
+  serviceResults: ServiceResult[];
+}
+
+interface TakeDownBatch {
   id: string;
   name: string;
-  icon: React.ReactNode;
-  description: string;
-  requiresApiKey: boolean;
-  manualUrl?: string;
-}
-
-interface ReportResult {
-  service: string;
-  url: string;
-  status: 'success' | 'failed' | 'pending' | 'manual';
-  message: string;
-  timestamp: string;
-  referenceId?: string;
-}
-
-interface FullReport {
-  reportId: string;
-  timestamp: string;
-  urls: string[];
-  services: string[];
-  notes?: string;
-  results: ReportResult[];
+  status: string;
+  totalUrls: number;
+  processedUrls: number;
+  successfulUrls: number;
+  failedUrls: number;
   fingerprint: string;
-  summary: {
-    total: number;
-    success: number;
-    failed: number;
-    pending: number;
-    manual: number;
-  };
+  fileHash: string;
+  reportHash: string;
+  notes?: string;
+  createdAt: string;
+  completedAt?: string;
+  reports: TakeDownReport[];
+  virustotalResults?: Array<{ url: string; classification: string; maliciousEngines: number }>;
+  _count?: { reports: number };
 }
 
-const SERVICE_OPTIONS: ServiceOption[] = [
-  {
-    id: 'google',
-    name: 'Google Safe Browsing',
-    icon: <Shield className="w-4 h-4" />,
-    description: 'Reporte automático vía API (requiere API Key) o manual',
-    requiresApiKey: true,
-    manualUrl: 'https://safebrowsing.google.com/safebrowsing/report_phish/',
-  },
-  {
-    id: 'microsoft',
-    name: 'Microsoft SmartScreen',
-    icon: <Globe className="w-4 h-4" />,
-    description: 'Reporte manual a través del portal web',
-    requiresApiKey: false,
-    manualUrl: 'https://www.microsoft.com/wdsi/support/report-unsafe-site',
-  },
-  {
-    id: 'netcraft',
-    name: 'Netcraft',
-    icon: <Eye className="w-4 h-4" />,
-    description: 'API de reporte de phishing web',
-    requiresApiKey: true,
-    manualUrl: 'https://netcraft.com/report-phishing/',
-  },
-  {
-    id: 'eset',
-    name: 'ESET',
-    icon: <Bug className="w-4 h-4" />,
-    description: 'API de reporte de amenazas ESET',
-    requiresApiKey: true,
-    manualUrl: 'https://www.eset.com/us/support/phishing-report/',
-  },
-  {
-    id: 'phishfort',
-    name: 'PhishFort',
-    icon: <Shield className="w-4 h-4" />,
-    description: 'API de reporte de phishing PhishFort',
-    requiresApiKey: true,
-    manualUrl: 'https://www.phishfort.com/report-phishing/',
-  },
-  {
-    id: 'phishreport',
-    name: 'PhishReport',
-    icon: <Mail className="w-4 h-4" />,
-    description: 'Envío de reporte de phishing por email',
-    requiresApiKey: false,
-    manualUrl: 'mailto:report@phishreport.org',
-  },
-  {
-    id: 'easydmarc',
-    name: 'EasyDMARC',
-    icon: <Globe className="w-4 h-4" />,
-    description: 'API de reporte DMARC y phishing',
-    requiresApiKey: true,
-    manualUrl: 'https://www.easydmarc.com/report-phishing/',
-  },
-  {
-    id: 'norton',
-    name: 'Norton (Gen Digital)',
-    icon: <Shield className="w-4 h-4" />,
-    description: 'Reporte de sitio unsafe Norton',
-    requiresApiKey: false,
-    manualUrl: 'https://support.norton.com/report-unsafe-site',
-  },
-  {
-    id: 'fortinet',
-    name: 'Fortinet / FortiGuard',
-    icon: <Shield className="w-4 h-4" />,
-    description: 'API de reporte FortiGuard',
-    requiresApiKey: true,
-    manualUrl: 'https://fortiguard.com/phishing-report/',
-  },
-  {
-    id: 'mcafee',
-    name: 'McAfee (Trellix)',
-    icon: <Lock className="w-4 h-4" />,
-    description: 'Reporte de phishing McAfee',
-    requiresApiKey: false,
-    manualUrl: 'https://support.mcafee.com/report-phishing',
-  },
-  {
-    id: 'crdf',
-    name: 'CRDF ThreatCenter',
-    icon: <MapPin className="w-4 h-4" />,
-    description: 'Centro de reporte de amenazas CRDF',
-    requiresApiKey: false,
-    manualUrl: 'https://threatcenter.crdf.org/report/',
-  },
-  {
-    id: 'phishtank',
-    name: 'PhishTank',
-    icon: <Bug className="w-4 h-4" />,
-    description: 'Base de datos colaborativa de phishing',
-    requiresApiKey: true,
-    manualUrl: 'https://phishtank.org/reportphish/',
-  },
-  {
-    id: 'antiphishing',
-    name: 'antiphishing.ch',
-    icon: <Globe className="w-4 h-4" />,
-    description: 'Reporte de phishing antiphishing.ch',
-    requiresApiKey: false,
-    manualUrl: 'https://antiphishing.ch/report/',
-  },
+interface BatchListResponse {
+  batches: TakeDownBatch[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}
+
+const ALL_SERVICES = [
+  { id: 'google', name: 'Google Safe Browsing', requiresApiKey: true },
+  { id: 'microsoft', name: 'Microsoft SmartScreen', requiresApiKey: false },
+  { id: 'netcraft', name: 'Netcraft', requiresApiKey: true },
+  { id: 'eset', name: 'ESET', requiresApiKey: true },
+  { id: 'phishfort', name: 'PhishFort', requiresApiKey: true },
+  { id: 'phishreport', name: 'PhishReport', requiresApiKey: false },
+  { id: 'easydmarc', name: 'EasyDMARC', requiresApiKey: true },
+  { id: 'norton', name: 'Norton (Gen Digital)', requiresApiKey: false },
+  { id: 'fortinet', name: 'Fortinet / FortiGuard', requiresApiKey: true },
+  { id: 'mcafee', name: 'McAfee (Trellix)', requiresApiKey: false },
+  { id: 'crdf', name: 'CRDF ThreatCenter', requiresApiKey: false },
+  { id: 'phishtank', name: 'PhishTank', requiresApiKey: true },
+  { id: 'antiphishing_ch', name: 'antiphishing.ch', requiresApiKey: false },
+  { id: 'virustotal', name: 'VirusTotal (Pre-Check)', requiresApiKey: true },
+  { id: 'apwg', name: 'APWG', requiresApiKey: false },
+  { id: 'cisa', name: 'CISA / US-CERT', requiresApiKey: false },
 ];
 
 const STATUS_CONFIG = {
-  success: { label: 'ÉXITO', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: CheckCircle },
-  failed: { label: 'FALLIDO', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: XCircle },
-  pending: { label: 'PENDIENTE', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: Clock },
-  manual: { label: 'MANUAL', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: ExternalLink },
+  pending: { label: 'Pendiente', color: 'bg-slate-500/20 text-slate-500 border-slate-500/30', icon: Clock },
+  processing: { label: 'Procesando', color: 'bg-blue-500/20 text-blue-500 border-blue-500/30', icon: Loader2 },
+  completed: { label: 'Completado', color: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30', icon: CheckCircle },
+  failed: { label: 'Fallido', color: 'bg-red-500/20 text-red-500 border-red-500/30', icon: XCircle },
+  queued: { label: 'Encolado', color: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', icon: Clock },
 };
 
-const URL_REGEX = /(?:https?:\/\/)?(?:www\.)?[\w-]+(?:\.[\w-]+)+(?:[\w.,@?^=%&:/~+#-]*[\w@?^=%&/~+#-])?/gi;
+const SERVICE_STATUS_CONFIG = {
+  pending: { label: 'Pendiente', color: 'bg-slate-500/20 text-slate-500', icon: Clock },
+  sent: { label: 'Enviado', color: 'bg-blue-500/20 text-blue-500', icon: Loader2 },
+  success: { label: 'Éxito', color: 'bg-emerald-500/20 text-emerald-500', icon: CheckCircle },
+  failed: { label: 'Fallido', color: 'bg-red-500/20 text-red-500', icon: XCircle },
+  manual: { label: 'Manual', color: 'bg-yellow-500/20 text-yellow-500', icon: ExternalLink },
+  rate_limited: { label: 'Rate Limited', color: 'bg-orange-500/20 text-orange-500', icon: AlertCircle },
+};
 
-function extractUrlsFromText(text: string): string[] {
-  const urls = text.match(URL_REGEX) || [];
-  const normalized = urls.map(u => {
-    if (!u.startsWith('http://') && !u.startsWith('https://')) {
-      return 'https://' + u;
-    }
-    return u;
+export default function TakeDownDashboard() {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'batches' | 'reports' | 'settings'>('dashboard');
+  const [batches, setBatches] = useState<TakeDownBatch[]>([]);
+  const [selectedBatch, setSelectedBatch] = useState<TakeDownBatch | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
+  const [filters, setFilters] = useState({ status: '', search: '', service: '' });
+  const [showNewBatch, setShowNewBatch] = useState(false);
+  const [showSingleUrl, setShowSingleUrl] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [queueStats, setQueueStats] = useState({ waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 });
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // File upload state
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStep, setUploadStep] = useState('');
+  const [fileResult, setFileResult] = useState<{
+    validUrls: ExtractedUrl[];
+    invalidUrls: string[];
+    fileName: string;
+    fileHash: string;
+    fileType: string;
+    virustotalResults?: Array<{ url: string; classification: string; maliciousEngines: number }>;
+  } | null>(null);
+
+  // Batch form state
+  const [batchForm, setBatchForm] = useState({
+    file: null as File | null,
+    services: [] as string[],
+    notes: '',
+    batchName: '',
+    maxUrlsPerBatch: 500,
+    virustotalApiKey: '',
+    async: true,
   });
-  return [...new Set(normalized)];
-}
 
-export function TakeDownPanel() {
-  const [activeStep, setActiveStep] = useState<'upload' | 'review' | 'services' | 'report' | 'result'>('upload');
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [extractedUrls, setExtractedUrls] = useState<ExtractedUrl[]>([]);
-  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
-  const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set(SERVICE_OPTIONS.map(s => s.id)));
-  const [notes, setNotes] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState(0);
-  const [processingStep, setProcessingStep] = useState('');
-  const [reportResult, setReportResult] = useState<FullReport | null>(null);
+  // Single URL form state
+  const [singleUrlForm, setSingleUrlForm] = useState({
+    url: '',
+    services: [] as string[],
+    notes: '',
+    apiKeys: {} as Record<string, string>,
+    async: true,
+    virustotalPreCheck: false,
+  });
+
+  // VirusTotal pre-check state
+  const [virustotalResults, setVirustotalResults] = useState<Array<{ url: string; classification: string; maliciousEngines: number }>>([]);
+  const [virustotalChecking, setVirustotalChecking] = useState(false);
+
+  // Processing state
+  const [submitting, setSubmitting] = useState(false);
+  const [processingResult, setProcessingResult] = useState<{
+    batchId: string;
+    fingerprint: string;
+    reportHash: string;
+    totalUrls: number;
+    successfulUrls: number;
+    failedUrls: number;
+    results: ServiceResult[];
+  } | null>(null);
+
+  const eventSourceRef = useRef<EventSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>({
-    google: '',
-    microsoft: '',
-    netcraft: '',
-    eset: '',
-    phishfort: '',
-    phishreport: '',
-    easydmarc: '',
-    norton: '',
-    fortinet: '',
-    mcafee: '',
-    crdf: '',
-    phishtank: '',
-    antiphishing: '',
-    virustotal: '',
-  });
 
-  const validUrls = extractedUrls.filter(u => u.valid).map(u => u.url);
-  const invalidUrls = extractedUrls.filter(u => !u.valid).map(u => u.url);
+  const fetchBatches = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(pagination.page),
+        limit: String(pagination.limit),
+      });
+      if (filters.status) params.append('status', filters.status);
+      const res = await fetch(`/api/takedown/batch?${params}`);
+      if (res.ok) {
+        const data: BatchListResponse = await res.json();
+        setBatches(data.batches);
+        setPagination(prev => ({ ...prev, total: data.pagination.total, totalPages: data.pagination.totalPages }));
+      }
+    } catch (error) {
+      console.error('Error fetching batches:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.page, pagination.limit, filters.status]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const fetchQueueStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/takedown/queue/stats');
+      if (res.ok) {
+        const data = await res.json();
+        setQueueStats(data);
+      }
+    } catch { /* Silently fail */ }
+  }, []);
 
+  const fetchBatchDetails = useCallback(async (batchId: string) => {
+    try {
+      const res = await fetch(`/api/takedown/batch?batchId=${batchId}`);
+      if (res.ok) {
+        const batch = await res.json();
+        setSelectedBatch(batch);
+      }
+    } catch (error) {
+      console.error('Error fetching batch details:', error);
+    }
+  }, []);
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length === 0) return;
+
+    const file = files[0];
     const validExtensions = ['.txt', '.csv', '.xlsx'];
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!validExtensions.includes(ext)) {
-      alert('Formato no soportado. Use .txt, .csv o .xlsx');
+      toast.error('Formato no soportado. Use .txt, .csv o .xlsx');
       return;
     }
 
-    setUploadedFile(file);
-    setIsProcessing(true);
-    setProcessingStep('Extrayendo URLs del archivo...');
-    setProcessingProgress(10);
+    setUploadFile(file);
+    await processFile(file);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadFile(file);
+    await processFile(file);
+  };
+
+  const processFile = async (file: File) => {
+    setUploadProgress(10);
+    setUploadStep('Leyendo archivo...');
 
     try {
+      const buffer = await file.arrayBuffer();
+      const fileHash = sha256File(Buffer.from(buffer));
+
+      setUploadProgress(30);
+      setUploadStep('Parseando URLs...');
+
+      const parseResult = await parseFile(Buffer.from(buffer), file.name);
+      const validUrls: ExtractedUrl[] = parseResult.validUrls.map(url => ({
+        url,
+        defangedUrl: defangUrl(url),
+        valid: true,
+        selected: true,
+        hash: sha256(url),
+      }));
+
+      setUploadProgress(50);
+      setUploadStep('Ejecutando pre-check VirusTotal...');
+
+      const virustotalApiKey = batchForm.virustotalApiKey || process.env.VIRUSTOTAL_API_KEY || '';
+      let vtResults: Array<{ url: string; classification: string; maliciousEngines: number }> = [];
+
+      if (virustotalApiKey && validUrls.length > 0) {
+        try {
+          setVirustotalChecking(true);
+          const vtRes = await fetch('/api/takedown/virustotal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              urls: validUrls.slice(0, 10).map(u => u.url),
+              apiKey: virustotalApiKey,
+            }),
+          });
+          if (vtRes.ok) {
+            const vtData = await vtRes.json();
+            if (Array.isArray(vtData)) {
+              vtResults = vtData;
+              for (const vt of vtData) {
+                const match = validUrls.find(u => u.url === vt.url);
+                if (match) {
+                  match.virustotalClassification = vt.classification;
+                  match.virustotalMaliciousEngines = vt.maliciousEngines;
+                }
+              }
+            } else if (vtData.classification) {
+              vtResults.push(vtData);
+            }
+          }
+        } catch { /* VirusTotal check failed, continue without it */ }
+        finally { setVirustotalChecking(false); }
+      }
+
+      setUploadProgress(90);
+      setUploadStep('Generando huella digital SHA-256...');
+
+      setFileResult({
+        validUrls,
+        invalidUrls: parseResult.invalidUrls,
+        fileName: file.name,
+        fileHash,
+        fileType: ext,
+        virustotalResults: vtResults,
+      });
+
+      setUploadProgress(100);
+      setUploadStep('¡Archivo procesado exitosamente!');
+      toast.success(`${parseResult.validUrls.length} URLs válidas extraídas de ${file.name}`);
+    } catch (error) {
+      toast.error('Error al procesar el archivo');
+      console.error(error);
+    }
+  };
+
+  const handleBatchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fileResult && !batchForm.file) {
+      toast.error('Seleccione un archivo o ingrese URLs');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
       const formData = new FormData();
-      formData.append('file', file);
+      if (batchForm.file) formData.append('file', batchForm.file);
+      else if (fileResult) {
+        const blob = new Blob([fileResult.validUrls.map(u => u.url).join('\n')]);
+        formData.append('file', blob, 'urls.txt');
+      }
+      formData.append('services', JSON.stringify(batchForm.services.length > 0 ? batchForm.services : ALL_SERVICES.map(s => s.id)));
+      formData.append('notes', batchForm.notes);
+      formData.append('batchName', batchForm.batchName);
+      formData.append('maxUrlsPerBatch', String(batchForm.maxUrlsPerBatch));
+      formData.append('virustotalApiKey', batchForm.virustotalApiKey);
 
       const res = await fetch('/api/takedown/upload', {
         method: 'POST',
         body: formData,
       });
 
-      setProcessingProgress(50);
-      setProcessingStep('Procesando resultados...');
-
       if (res.ok) {
         const data = await res.json();
-        const urls: ExtractedUrl[] = data.validUrls.map((url: string) => ({ url, valid: true }));
-        setExtractedUrls(urls);
-        setSelectedUrls(new Set(data.validUrls));
-        alert(`${data.validCount} URLs válidas extraídas de ${data.fileName}`);
-        setActiveStep('review');
+        toast.success(`${data.totalUrlsSubmitted} URLs encoladas para procesamiento`);
+        setShowNewBatch(false);
+        setBatchForm({ file: null, services: [], notes: '', batchName: '', maxUrlsPerBatch: 500, virustotalApiKey: '', async: true });
+        setFileResult(null);
+        setUploadFile(null);
+        fetchBatches();
       } else {
-        const errorData = await res.json();
-        alert(errorData.error || 'Error al procesar el archivo');
+        const error = await res.json();
+        toast.error(error.error || 'Error al crear lote');
       }
     } catch {
-      alert('Error al subir el archivo');
+      toast.error('Error de conexión');
     } finally {
-      setIsProcessing(false);
-      setProcessingProgress(0);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      setSubmitting(false);
     }
   };
 
-  const handleTextPaste = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSingleUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    const textarea = form.querySelector('textarea');
-    const text = textarea?.value || '';
-    if (!text.trim()) return;
+    if (!singleUrlForm.url.trim()) {
+      toast.error('Ingrese una URL');
+      return;
+    }
 
-    setIsProcessing(true);
-    setProcessingStep('Extrayendo URLs del texto...');
-    setProcessingProgress(10);
-
+    setSubmitting(true);
     try {
-      const urls = extractUrlsFromText(text);
-      const validUrls = urls.filter(url => {
-        try { new URL(url); return true; } catch { return false; }
-      });
-      const extractedUrls: ExtractedUrl[] = validUrls.map(url => ({ url, valid: true }));
-      setExtractedUrls(extractedUrls);
-      setSelectedUrls(new Set(validUrls));
-      alert(`${validUrls.length} URLs válidas extraídas`);
-      setActiveStep('review');
-      if (textarea) textarea.value = '';
-    } catch {
-      alert('Error al procesar el texto');
-    } finally {
-      setIsProcessing(false);
-      setProcessingProgress(0);
-    }
-  };
-
-  const toggleUrlSelection = (url: string) => {
-    setSelectedUrls(prev => {
-      const next = new Set(prev);
-      if (next.has(url)) next.delete(url); else next.add(url);
-      return next;
-    });
-  };
-
-  const toggleSelectAllUrls = () => {
-    if (selectedUrls.size === validUrls.length) {
-      setSelectedUrls(new Set());
-    } else {
-      setSelectedUrls(new Set(validUrls));
-    }
-  };
-
-  const toggleServiceSelection = (id: string) => {
-    setSelectedServices(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const generateReport = async () => {
-    const urlsToReport = Array.from(selectedUrls);
-    const servicesToReport = Array.from(selectedServices);
-
-    const MAX_URLS = 50;
-
-    if (urlsToReport.length === 0) {
-      alert('Seleccione al menos una URL');
-      return;
-    }
-    if (urlsToReport.length > MAX_URLS) {
-      alert(`Demasiadas URLs seleccionadas (${urlsToReport.length}). Máximo ${MAX_URLS} por reporte para evitar timeout. Deseleccione algunas o divida en varios reportes.`);
-      return;
-    }
-    if (servicesToReport.length === 0) {
-      alert('Seleccione al menos un servicio');
-      return;
-    }
-
-    setActiveStep('report');
-    setIsProcessing(true);
-    setProcessingProgress(0);
-    setProcessingStep('Iniciando reportes...');
-
-    try {
-      const res = await fetch('/api/takedown/report', {
+      const virustotalApiKey = batchForm.virustotalApiKey || process.env.VIRUSTOTAL_API_KEY || '';
+      const res = await fetch('/api/takedown/single', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          urls: urlsToReport,
-          services: servicesToReport,
-          notes,
-          apiKeys,
+          url: singleUrlForm.url,
+          services: singleUrlForm.services.length > 0 ? singleUrlForm.services : ['virustotal'],
+          notes: singleUrlForm.notes,
+          apiKeys: singleUrlForm.apiKeys,
+          async: singleUrlForm.async,
+          virustotalApiKey,
         }),
       });
 
-      setProcessingProgress(50);
-      setProcessingStep('Procesando respuestas de los servicios...');
-
       if (res.ok) {
         const data = await res.json();
-        setReportResult(data);
-        setProcessingProgress(100);
-        setProcessingStep('Reporte completado');
-        alert(`Reporte generado: ${data.summary.success} exitosos, ${data.summary.manual} manuales`);
+        toast.success(data.status === 'queued' ? 'URL encolada para procesamiento' : 'Reporte completado');
+        setShowSingleUrl(false);
+        setSingleUrlForm({ url: '', services: [], notes: '', apiKeys: {}, async: true, virustotalPreCheck: false });
+        setProcessingResult(null);
+        fetchBatches();
       } else {
-        const errorData = await res.json();
-        alert(errorData.error || 'Error al generar reporte');
+        const error = await res.json();
+        toast.error(error.error || 'Error al enviar URL');
       }
     } catch {
-      alert('Error de conexión');
+      toast.error('Error de conexión');
     } finally {
-      setIsProcessing(false);
+      setSubmitting(false);
     }
   };
 
-  const generateHtmlReport = async () => {
-    if (!reportResult) return;
-
+  const handleVirusTotalPreCheck = async (url: string) => {
+    if (!url || !singleUrlForm.virustotalPreCheck) return;
+    const apiKey = batchForm.virustotalApiKey || process.env.VIRUSTOTAL_API_KEY || '';
+    if (!apiKey) {
+      toast.error('VirusTotal API key no configurada');
+      return;
+    }
+    setVirustotalChecking(true);
     try {
-      const res = await fetch('/api/takedown/report-html', {
+      const res = await fetch('/api/takedown/virustotal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reportResult),
+        body: JSON.stringify({ url, apiKey }),
       });
-
       if (res.ok) {
-        const html = await res.text();
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        alert('Reporte HTML abierto en nueva pestaña');
-      } else {
-        alert('Error al generar reporte HTML');
+        const data = await res.json();
+        setVirustotalResults([data]);
+        toast.info(`VirusTotal: ${data.classification} (${data.maliciousEngines || 0} motores maliciosos)`);
       }
     } catch {
-      alert('Error al generar reporte HTML');
+      toast.error('Error en VirusTotal pre-check');
+    } finally {
+      setVirustotalChecking(false);
     }
   };
 
-  const downloadReport = async () => {
-    if (!reportResult) return;
+  const handleExport = async (batchId: string, format: 'pdf' | 'csv' | 'json' | 'xlsx') => {
+    try {
+      const res = await fetch('/api/takedown/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId, format, includeDetails: true }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const disposition = res.headers.get('Content-Disposition');
+        const filename = disposition?.match(/filename="(.+)"/)?.[1] || `export-${batchId}.${format}`;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        toast.success(`Exportado como ${format.toUpperCase()}`);
+      } else {
+        toast.error('Error al exportar');
+      }
+    } catch {
+      toast.error('Error al exportar');
+    }
+  };
 
+  const handleGenerateHtmlReport = async (batchId: string) => {
     try {
       const res = await fetch('/api/takedown/report-html', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reportResult),
+        body: JSON.stringify({ batchId }),
       });
-
       if (res.ok) {
         const html = await res.text();
+        const reportHash = sha256(html);
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `takedown-report-${reportResult.reportId}.html`;
+        a.download = `takedown-report-${batchId}.html`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        alert('Reporte HTML descargado');
+        toast.success('Reporte HTML generado con SHA-256 fingerprint');
       }
     } catch {
-      alert('Error al descargar reporte');
+      toast.error('Error al generar reporte HTML');
     }
   };
 
-  const copyFingerprint = () => {
-    if (reportResult) {
-      navigator.clipboard.writeText(reportResult.fingerprint);
-      alert('Huella digital copiada al portapapeles');
+  const handleRetryBatch = async (batchId: string) => {
+    try {
+      const res = await fetch('/api/takedown/batch/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId }),
+      });
+      if (res.ok) {
+        toast.success('Reintentando URLs fallidas...');
+        fetchBatches();
+      }
+    } catch {
+      toast.error('Error al reintentar');
     }
   };
 
-  const resetAll = () => {
-    setActiveStep('upload');
-    setUploadedFile(null);
-    setExtractedUrls([]);
-    setSelectedUrls(new Set());
-    setSelectedServices(new Set(SERVICE_OPTIONS.map(s => s.id)));
-    setNotes('');
-    setReportResult(null);
-    setApiKeys({
-      google: '', microsoft: '', netcraft: '', eset: '', phishfort: '',
-      phishreport: '', easydmarc: '', norton: '', fortinet: '',
-      mcafee: '', crdf: '', phishtank: '', antiphishing: '', virustotal: ''
-    });
+  useEffect(() => {
+    fetchBatches();
+    fetchQueueStats();
+  }, [fetchBatches, fetchQueueStats]);
+
+  useEffect(() => {
+    if (selectedBatch && activeTab === 'reports') {
+      eventSourceRef.current = new EventSource(`/api/takedown/events?batchId=${selectedBatch.id}`);
+      eventSourceRef.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'progress') {
+          setSelectedBatch(prev => prev ? { ...prev, ...data.batch } : null);
+        }
+      };
+      return () => eventSourceRef.current?.close();
+    }
+  }, [selectedBatch, activeTab]);
+
+  const getBatchStatusConfig = (status: string) => STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.pending;
+  const getServiceStatusConfig = (status: string) => SERVICE_STATUS_CONFIG[status as keyof typeof SERVICE_STATUS_CONFIG] || SERVICE_STATUS_CONFIG.pending;
+
+  const dashboardStats = {
+    totalBatches: batches.length,
+    processingBatches: batches.filter(b => b.status === 'processing' || b.status === 'queued').length,
+    completedBatches: batches.filter(b => b.status === 'completed').length,
+    failedBatches: batches.filter(b => b.status === 'failed').length,
+    totalUrls: batches.reduce((sum, b) => sum + b.totalUrls, 0),
+    totalProcessed: batches.reduce((sum, b) => sum + b.processedUrls, 0),
+    totalSuccess: batches.reduce((sum, b) => sum + b.successfulUrls, 0),
+    totalFailed: batches.reduce((sum, b) => sum + b.failedUrls, 0),
   };
-
-  const getServiceOption = (id: string) => SERVICE_OPTIONS.find(s => s.id === id);
-
-  const renderStepIndicator = (step: number, label: string, completed: boolean, active: boolean) => (
-    <div className="flex flex-col items-center">
-      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-        completed
-          ? 'bg-green-500 text-white'
-          : active
-          ? 'bg-blue-600 text-white'
-          : 'bg-gray-700 text-gray-400'
-      }`}>
-        {completed ? <CheckCircle className="w-5 h-5" /> : <span>{step}</span>}
-      </div>
-      <span className={`text-xs mt-2 font-medium ${active ? 'text-blue-400' : 'text-gray-500'}`}>{label}</span>
-      {step !== 4 && (
-        <div className={`w-px h-16 flex-1 ${completed ? 'bg-green-500' : 'bg-gray-700'}`} />
-      )}
-    </div>
-  );
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-4 md:p-8">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="max-w-6xl mx-auto mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Shield className="w-8 h-8 text-green-400" />
-              TakeDown URL
-            </h1>
-            <p className="text-gray-400 mt-1">
-              Cargue URLs maliciosas y repórtelas a los principales servicios de seguridad
-            </p>
-          </div>
-          {activeStep !== 'upload' && (
-            <button
-              onClick={resetAll}
-              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Reiniciar
-            </button>
-          )}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Shield className="w-6 h-6 text-primary" />
+            TakeDown URL Module
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Gestión profesional de reporte de URLs maliciosas — 13+ servicios con pre-check VirusTotal y firma SHA-256
+          </p>
         </div>
-
-        {/* Step Indicator */}
-        <div className="hidden md:flex items-center justify-center gap-0 px-4 mb-8">
-          {['upload', 'review', 'services', 'report'].map((step, i) => (
-            <React.Fragment key={step}>
-              {renderStepIndicator(
-                i + 1,
-                ['Subir', 'Revisar', 'Servicios', 'Reportar'][i],
-                ['upload', 'review', 'services'].includes(activeStep) && ['review', 'services', 'report'].indexOf(step) >= 0 ? false : 
-                  ['upload', 'review', 'services'].indexOf(activeStep) > ['upload', 'review', 'services'].indexOf(step),
-                activeStep === step
-              )}
-            </React.Fragment>
-          ))}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setShowSingleUrl(true)} className="gap-2">
+            <Link className="w-4 h-4" /> URL Individual
+          </Button>
+          <Button onClick={() => setShowNewBatch(true)} className="gap-2">
+            <Upload className="w-4 h-4" /> Nuevo Lote
+          </Button>
+          <Button variant="outline" onClick={() => setAutoRefresh(!autoRefresh)} className="gap-2">
+            {autoRefresh ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+            {autoRefresh ? 'Auto' : 'Manual'}
+          </Button>
+          <Button variant="outline" onClick={() => { fetchBatches(); fetchQueueStats(); }} className="gap-2" disabled={loading}>
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto">
+      {/* Queue Stats */}
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="py-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <span className="font-medium text-primary">Cola de Procesamiento:</span>
+            {[
+              { label: 'Activos', value: queueStats.active, color: 'text-blue-500' },
+              { label: 'Espera', value: queueStats.waiting, color: 'text-yellow-500' },
+              { label: 'Completados', value: queueStats.completed, color: 'text-emerald-500' },
+              { label: 'Fallidos', value: queueStats.failed, color: 'text-red-500' },
+            ].map(item => (
+              <Badge key={item.label} variant="outline" className={`gap-1 border-${item.color.replace('text-', '')}/30 ${item.color}`}>
+                {item.label}: {item.value}
+              </Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Dashboard Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+        {[
+          { label: 'Total Lotes', value: dashboardStats.totalBatches, icon: FileText, color: '' },
+          { label: 'Procesando', value: dashboardStats.processingBatches, icon: Loader2, color: 'text-blue-500' },
+          { label: 'Completados', value: dashboardStats.completedBatches, icon: CheckCircle, color: 'text-emerald-500' },
+          { label: 'Fallidos', value: dashboardStats.failedBatches, icon: XCircle, color: 'text-red-500' },
+          { label: 'Total URLs', value: dashboardStats.totalUrls, icon: FileText, color: '' },
+          { label: 'Procesadas', value: dashboardStats.totalProcessed, icon: Clock, color: 'text-blue-500' },
+          { label: 'Exitosas', value: dashboardStats.totalSuccess, icon: CheckCircle, color: 'text-emerald-500' },
+          { label: 'Fallidas', value: dashboardStats.totalFailed, icon: XCircle, color: 'text-red-500' },
+        ].map((stat, i) => (
+          <Card key={i}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">{stat.label}</p>
+                  <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+                </div>
+                <stat.icon className={`w-10 h-10 ${stat.color || 'text-muted-foreground/30'}`} />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="dashboard"><LayoutDashboard className="w-4 h-4 mr-2" /> Dashboard</TabsTrigger>
+          <TabsTrigger value="batches"><FileText className="w-4 h-4 mr-2" /> Lotes</TabsTrigger>
+          <TabsTrigger value="reports"><Shield className="w-4 h-4 mr-2" /> Reportes</TabsTrigger>
+          <TabsTrigger value="settings"><Settings className="w-4 h-4 mr-2" /> Servicios</TabsTrigger>
+        </TabsList>
+
         <AnimatePresence mode="wait">
-          {/* STEP 1: UPLOAD */}
-          {activeStep === 'upload' && (
-            <motion.div key="upload" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="bg-gray-900 rounded-2xl border border-gray-800 p-8">
-              <div className="text-center mb-8">
-                <Upload className="w-12 h-12 text-green-400 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold mb-2">Paso 1: Subir Archivo o Pegar URLs</h2>
-                <p className="text-gray-400">Arrastre un archivo .txt, .csv, .xlsx o pegue URLs directamente</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* File Upload */}
-                <div className="space-y-4">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".txt,.csv,.xlsx"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    disabled={isProcessing}
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isProcessing}
-                    className="w-full flex flex-col items-center justify-center gap-4 p-8 rounded-xl border-2 border-dashed border-green-500/30 hover:border-green-500 bg-green-500/5 hover:bg-green-500/10 transition-all duration-300 cursor-pointer"
-                  >
-                    {isProcessing ? (
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="w-12 h-12 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin" />
-                        <span className="text-gray-300 font-medium">{processingStep}</span>
-                        <div className="w-64 h-2 bg-gray-800 rounded-full overflow-hidden">
-                          <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${processingProgress}%` }} />
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center hover:bg-green-500/20 transition-colors">
-                          <Upload className="w-10 h-10 text-green-400" />
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xl font-bold text-white">HAGA CLIC PARA SUBIR ARCHIVO</p>
-                          <p className="text-sm text-gray-400 mt-2">Formatos: .txt, .csv, .xlsx (máx. 10MB)</p>
-                        </div>
-                      </>
-                    )}
-                  </button>
-                  <p className="text-xs text-gray-500 text-center">El sistema detecta URLs automáticamente</p>
-                </div>
-
-                {/* Text Paste */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-green-400" />
-                    O pegue URLs directamente
-                  </h3>
-                  <form onSubmit={handleTextPaste} className="space-y-3">
-                    <textarea
-                      placeholder="https://ejemplo.com/malware&#10;http://phishing-site.com&#10;malicious-site.xyz&#10;... (una por línea o separadas por espacio/coma)"
-                      className="w-full h-48 bg-gray-800 border border-gray-700 rounded-lg p-4 text-white placeholder-gray-500 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500"
-                      disabled={isProcessing}
-                    />
-                    <button
-                      type="submit"
-                      disabled={isProcessing}
-                      className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Procesando...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="w-4 h-4" />
-                          Extraer URLs
-                        </>
-                      )}
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-              {/* Services Preview */}
-              <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-                {SERVICE_OPTIONS.map(service => (
-                  <div key={service.id} className="p-4 rounded-lg bg-gray-800/50 border border-gray-700">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-400">
-                        {service.icon}
-                      </div>
-                      <span className="font-semibold text-sm">{service.name}</span>
-                    </div>
-                    <p className="text-sm text-gray-400">{service.description}</p>
-                    {service.requiresApiKey && (
-                      <span className="inline-block mt-2 px-2 py-1 text-xs bg-yellow-500/20 text-yellow-400 rounded">Requiere API Key</span>
-                    )}
+          {/* BATCHES TAB */}
+          {activeTab === 'batches' && (
+            <motion.div key="batches" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 mt-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Lotes de Procesamiento</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Select value={filters.status} onValueChange={v => setFilters({...filters, status: v})}>
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Filtrar por estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Todos</SelectItem>
+                        <SelectItem value="pending">Pendiente</SelectItem>
+                        <SelectItem value="processing">Procesando</SelectItem>
+                        <SelectItem value="completed">Completado</SelectItem>
+                        <SelectItem value="failed">Fallido</SelectItem>
+                        <SelectItem value="queued">Encolado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input placeholder="Buscar..." value={filters.search} onChange={e => setFilters({...filters, search: e.target.value})} className="w-64" />
                   </div>
-                ))}
-              </div>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="max-h-[600px]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Lote</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead className="text-right">URLs</TableHead>
+                          <TableHead className="text-right">Procesadas</TableHead>
+                          <TableHead className="text-right">Éxitos</TableHead>
+                          <TableHead className="text-right">Fallidas</TableHead>
+                          <TableHead>Fingerprint SHA-256</TableHead>
+                          <TableHead>Creado</TableHead>
+                          <TableHead>Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {batches.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                              No hay lotes. Cree uno nuevo para empezar.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          batches.map((batch) => {
+                            const statusConfig = getBatchStatusConfig(batch.status);
+                            const StatusIcon = statusConfig.icon;
+                            return (
+                              <TableRow key={batch.id} className="cursor-pointer hover:bg-muted/50" onClick={() => fetchBatchDetails(batch.id)}>
+                                <TableCell className="font-medium">{batch.name}</TableCell>
+                                <TableCell>
+                                  <Badge className={statusConfig.color}><StatusIcon className="w-3 h-3 mr-1" />{statusConfig.label}</Badge>
+                                </TableCell>
+                                <TableCell className="text-right font-mono">{batch.totalUrls}</TableCell>
+                                <TableCell className="text-right font-mono">{batch.processedUrls}</TableCell>
+                                <TableCell className="text-right font-mono text-emerald-500">{batch.successfulUrls}</TableCell>
+                                <TableCell className="text-right font-mono text-red-500">{batch.failedUrls}</TableCell>
+                                <TableCell className="font-mono text-xs max-w-xs truncate" title={batch.fingerprint}>
+                                  {batch.fingerprint.substring(0, 16)}...
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">{new Date(batch.createdAt).toLocaleString()}</TableCell>
+                                <TableCell>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                                        <MoreHorizontal className="w-4 h-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onClick={() => fetchBatchDetails(batch.id)}>
+                                        <Eye className="w-4 h-4 mr-2" /> Ver Detalle
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleExport(batch.id, 'csv')}>
+                                        <Download className="w-4 h-4 mr-2" /> Exportar CSV
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleExport(batch.id, 'json')}>
+                                        <Download className="w-4 h-4 mr-2" /> Exportar JSON
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleGenerateHtmlReport(batch.id)} className="text-emerald-500">
+                                        <FileJson className="w-4 h-4 mr-2" /> Reporte HTML (SHA-256)
+                                      </DropdownMenuItem>
+                                      {batch.failedUrls > 0 && (
+                                        <DropdownMenuItem onClick={() => handleRetryBatch(batch.id)} className="text-blue-500">
+                                          <RefreshCw className="w-4 h-4 mr-2" /> Reintentar Fallidas
+                                        </DropdownMenuItem>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+
+                  {pagination.totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 mt-4">
+                      <Button variant="outline" size="sm" onClick={() => setPagination(p => ({...p, page: p.page - 1}))} disabled={pagination.page === 1}>
+                        <ChevronUp className="w-4 h-4" />
+                      </Button>
+                      <span className="text-sm font-medium">
+                        Página {pagination.page} de {pagination.totalPages} ({pagination.total} total)
+                      </span>
+                      <Button variant="outline" size="sm" onClick={() => setPagination(p => ({...p, page: p.page + 1}))} disabled={pagination.page === pagination.totalPages}>
+                        <ChevronDown className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </motion.div>
           )}
 
-          {/* STEP 2: REVIEW URLs */}
-          {activeStep === 'review' && (
-            <motion.div key="review" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-              <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
-                <div className="flex items-center justify-between mb-6">
+          {/* REPORTS TAB */}
+          {activeTab === 'reports' && selectedBatch && (
+            <motion.div key="reports" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 mt-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                      <List className="w-6 h-6 text-green-400" />
-                      Paso 2: Revisar URLs Extraídas
-                    </h2>
-                    <p className="text-gray-400 mt-1">
-                      {extractedUrls.length} URLs totales ({validUrls.length} válidas, {invalidUrls.length} inválidas)
-                    </p>
+                    <CardTitle>{selectedBatch.name}</CardTitle>
+                    <CardDescription>
+                      ID: {selectedBatch.id} • {selectedBatch.totalUrls} URLs • Fingerprint: {selectedBatch.fingerprint?.substring(0, 24)}...
+                    </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={toggleSelectAllUrls}
-                      className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm transition-colors flex items-center gap-1"
-                    >
-                      {selectedUrls.size === validUrls.length ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      {selectedUrls.size === validUrls.length ? 'Deseleccionar' : 'Seleccionar'} todas
-                    </button>
-                    <button
-                      onClick={() => setActiveStep('services')}
-                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors flex items-center gap-2"
-                    >
-                      Continuar <ChevronRight className="w-4 h-4" />
-                    </button>
+                    <Button variant="outline" size="sm" onClick={() => handleGenerateHtmlReport(selectedBatch.id)} className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 gap-1">
+                      <FileJson className="w-4 h-4" /> Reporte HTML (SHA-256)
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleExport(selectedBatch.id, 'pdf')}>
+                      <Download className="w-4 h-4 mr-1" /> PDF
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedBatch(null)}>
+                      <ChevronUp className="w-4 h-4 mr-1" /> Volver
+                    </Button>
                   </div>
-                </div>
-
-                {validUrls.length > 0 && (
-                  <div className="max-h-96 overflow-y-auto space-y-2">
-                    {validUrls.map((url, i) => (
-                      <motion.div
-                        key={url}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.03 }}
-                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                          selectedUrls.has(url)
-                            ? 'border-green-500/30 bg-green-500/5'
-                            : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'
-                        }`}
-                        onClick={() => toggleUrlSelection(url)}
-                      >
-                        <div className={`shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                          selectedUrls.has(url)
-                            ? 'border-green-500 bg-green-500'
-                            : 'border-gray-600'
-                        }`}>
-                          {selectedUrls.has(url) && <CheckCircle className="w-3.5 h-3.5 text-gray-900" />}
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Crypto Fingerprint Block */}
+                  <Card className="border-emerald-500/20 bg-emerald-500/5">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-emerald-500">
+                        <Hash className="w-5 h-5" />
+                        Integridad Criptográfica SHA-256
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-3 rounded-lg bg-gray-900 border border-gray-700">
+                          <p className="text-xs text-emerald-400 font-semibold mb-1">Hash del Archivo Original</p>
+                          <p className="font-mono text-xs text-emerald-300 break-all">{selectedBatch.fileHash}</p>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-mono text-white truncate">{url}</p>
+                        <div className="p-3 rounded-lg bg-gray-900 border border-gray-700">
+                          <p className="text-xs text-emerald-400 font-semibold mb-1">Fingerprint del Lote</p>
+                          <p className="font-mono text-xs text-emerald-300 break-all">{selectedBatch.fingerprint}</p>
                         </div>
-                        <span className="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400 border border-green-500/30 shrink-0">
-                          Válida
-                        </span>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-
-                {invalidUrls.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-400 flex items-center gap-1">
-                      <AlertCircle className="w-4 h-4" />
-                      URLs inválidas detectadas ({invalidUrls.length})
-                    </p>
-                    <div className="max-h-40 overflow-y-auto space-y-1">
-                      {invalidUrls.map((url, i) => (
-                        <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                          <XCircle className="w-4 h-4 text-red-500 shrink-0" />
-                          <span className="text-sm font-mono text-red-400 truncate flex-1">{url}</span>
+                        <div className="p-3 rounded-lg bg-gray-900 border border-gray-700">
+                          <p className="text-xs text-emerald-400 font-semibold mb-1">Hash de Ejecución del Reporte</p>
+                          <p className="font-mono text-xs text-emerald-300 break-all">{selectedBatch.reportHash || 'Pendiente'}</p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                        <div className="p-3 rounded-lg bg-gray-900 border border-gray-700">
+                          <p className="text-xs text-emerald-400 font-semibold mb-1">ID de Transacción</p>
+                          <p className="font-mono text-xs text-emerald-300 break-all">{selectedBatch.id}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="border-emerald-500/30 text-emerald-500">
+                          <ShieldCheck className="w-3 h-3 mr-1" /> Verificable
+                        </Badge>
+                        <Button variant="ghost" size="sm" onClick={() => {
+                          navigator.clipboard.writeText(selectedBatch.fingerprint || '');
+                          toast.success('Fingerprint copiado al portapapeles');
+                        }}>
+                          <Copy className="w-3 h-3 mr-1" /> Copiar Fingerprint
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
 
-                {validUrls.length === 0 && (
-                  <div className="text-center py-12 text-gray-400">
-                    <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">No se encontraron URLs válidas</p>
-                    <button
-                      onClick={() => setActiveStep('upload')}
-                      className="mt-4 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
-                    >
-                      Subir otro archivo
-                    </button>
+                  {/* VirusTotal Results */}
+                  {selectedBatch.virustotalResults && selectedBatch.virustotalResults.length > 0 && (
+                    <Card className="border-blue-500/20 bg-blue-500/5">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-blue-500">
+                          <Scan className="w-5 h-5" />
+                          Pre-Check VirusTotal
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>URL</TableHead>
+                              <TableHead>Clasificación</TableHead>
+                              <TableHead>Motores Maliciosos</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedBatch.virustotalResults.map((vt, i) => (
+                              <TableRow key={i}>
+                                <TableCell className="font-mono text-xs">{vt.url}</TableCell>
+                                <TableCell>
+                                  <Badge className={vt.classification === 'CONFIRMED_MALICIOUS' ? 'bg-red-500/20 text-red-500' : vt.classification === 'SUSPICIOUS' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-gray-500/20 text-gray-500'}>
+                                    {vt.classification}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="font-mono">{vt.maliciousEngines}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Service Status Summary */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                    {ALL_SERVICES.map(svc => {
+                      const results = (selectedBatch.serviceResults || []).filter(sr => sr.service === svc.id);
+                      const success = results.filter(r => r.status === 'success').length;
+                      const failed = results.filter(r => r.status === 'failed').length;
+                      const manual = results.filter(r => r.status === 'manual').length;
+                      const total = results.length;
+                      return (
+                        <div key={svc.id} className="p-3 rounded-lg border border-border/50 bg-muted/30">
+                          <div className="text-sm font-medium truncate mb-2">{svc.name}</div>
+                          <div className="flex items-center gap-1 text-xs">
+                            {success > 0 && <Badge variant="secondary" className="gap-1 bg-emerald-500/20 text-emerald-500">✓{success}</Badge>}
+                            {manual > 0 && <Badge variant="secondary" className="gap-1 bg-yellow-500/20 text-yellow-500">M{manual}</Badge>}
+                            {failed > 0 && <Badge variant="secondary" className="gap-1 bg-red-500/20 text-red-500">✗{failed}</Badge>}
+                            {total === 0 && <span className="text-muted-foreground">Sin datos</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => handleGenerateHtmlReport(selectedBatch.id)} className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 gap-1">
+                      <FileJson className="w-4 h-4" /> Generar Reporte HTML (SHA-256)
+                    </Button>
+                    <Button variant="outline" onClick={() => handleExport(selectedBatch.id, 'csv')}>
+                      <Download className="w-4 h-4 mr-1" /> Exportar CSV
+                    </Button>
+                    <Button variant="outline" onClick={() => handleExport(selectedBatch.id, 'json')}>
+                      <Download className="w-4 h-4 mr-1" /> Exportar JSON
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </motion.div>
           )}
 
-          {/* STEP 3: SELECT SERVICES */}
-          {activeStep === 'services' && (
-            <motion.div key="services" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-              <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                      <Settings className="w-6 h-6 text-green-400" />
-                      Paso 3: Seleccionar Servicios de Reporte
-                    </h2>
-                    <p className="text-gray-400 mt-1">
-                      {selectedUrls.size} URL(s) seleccionada(s). Elija a qué servicios enviar el reporte.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setActiveStep('report')}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    Generar Reporte <Send className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  {SERVICE_OPTIONS.map((service) => {
-                    const isSelected = selectedServices.has(service.id);
-                    return (
-                      <button
-                        key={service.id}
-                        onClick={() => toggleServiceSelection(service.id)}
-                        className={`relative p-5 rounded-xl border-2 transition-all flex flex-col gap-3 ${
-                          isSelected
-                            ? 'border-green-500/30 bg-green-500/5 shadow-sm shadow-green-500/5'
-                            : 'border-gray-700 bg-gray-800/50 hover:border-green-500/30 hover:bg-gray-800'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
-                            isSelected ? 'bg-green-500/10 text-green-400' : 'bg-gray-800 text-gray-500'
-                          }`}>
-                            {service.icon}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className={`font-medium ${isSelected ? 'text-white' : 'text-gray-400'}`}>
-                                {service.name}
-                              </span>
-                              {service.requiresApiKey && (
-                                <span className="px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-400 rounded">
-                                  <Key className="w-2.5 h-2.5 mr-1" />
-                                  API Key
-                                </span>
-                              )}
+          {/* SETTINGS TAB */}
+          {activeTab === 'settings' && (
+            <motion.div key="settings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="w-5 h-5" />
+                    Configuración de Servicios (16 Proveedores)
+                  </CardTitle>
+                  <CardDescription>Estado de integración y configuración de cada servicio de reporte</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {ALL_SERVICES.map((svc) => (
+                      <Card key={svc.id} className="border-border/50 hover:border-primary/30 transition-colors">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                              <Shield className="w-5 h-5" />
                             </div>
-                            <p className="text-xs text-gray-500 mt-1">{service.description}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{svc.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {svc.requiresApiKey ? 'Requiere API Key' : 'Disponible'}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className="border-emerald-500/30 text-emerald-500">
+                              <CheckCircle className="w-3 h-3 mr-1" /> Activo
+                            </Badge>
                           </div>
-                        </div>
-                        <div className={`absolute top-3 right-3 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                          isSelected
-                            ? 'border-green-500 bg-green-500'
-                            : 'border-gray-600'
-                        }`}>
-                          {isSelected && <CheckCircle className="w-4 h-4 text-gray-900" />}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {SERVICE_OPTIONS.filter(s => s.requiresApiKey && selectedServices.has(s.id)).length > 0 && (
-                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6">
-                    <h3 className="font-semibold flex items-center gap-2 text-yellow-400 mb-3">
-                      <Key className="w-5 h-5" />
-                      Configuración de API Keys (Opcional)
-                    </h3>
-                    <p className="text-sm text-gray-400 mb-4">
-                      Para reportes automáticos en los servicios seleccionados que requieren API Key. Sin API Key, se generarán enlaces para reporte manual.
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {SERVICE_OPTIONS.filter(s => s.requiresApiKey && selectedServices.has(s.id)).map((service) => (
-                        <div key={service.id} className="space-y-1">
-                          <label className="text-xs text-gray-400 block">{service.name} API Key</label>
-                          <input
-                            type="password"
-                            placeholder={`Ingrese su API Key de ${service.name}`}
-                            value={apiKeys[service.id]}
-                            onChange={(e) => setApiKeys(prev => ({ ...prev, [service.id]: e.target.value }))}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  <label className="text-xs text-gray-400 block">Notas adicionales (opcional)</label>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Información adicional para incluir en los reportes por email (APWG, CISA)..."
-                    className="w-full h-24 bg-gray-800 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500"
-                    rows={3}
-                  />
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* STEP 4: REPORT PROCESSING */}
-          {activeStep === 'report' && (
-            <motion.div key="report" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-              <div className="bg-gray-900 rounded-2xl border border-gray-800 p-8">
-                <h2 className="text-2xl font-bold flex items-center gap-2 mb-2">
-                  <Send className="w-6 h-6 text-green-400" />
-                  Paso 4: Procesando Reportes
-                </h2>
-                <p className="text-gray-400 mb-8">
-                  Enviando {selectedUrls.size} URL(s) a {selectedServices.size} servicio(s)...
-                </p>
-
-                <div className="flex flex-col items-center gap-6 py-8">
-                  <div className="w-20 h-20 border-4 border-gray-700 border-t-green-500 rounded-full animate-spin" />
-                  <div className="text-center">
-                    <p className="text-lg font-medium text-white">{processingStep || 'Iniciando...'}</p>
-                    <div className="w-64 h-3 bg-gray-800 rounded-full overflow-hidden mt-2">
-                      <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${processingProgress}%` }} />
-                    </div>
-                    <p className="text-sm text-gray-400 mt-2">{processingProgress}% completado</p>
-                  </div>
-                </div>
-
-                {reportResult && (
-                  <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle className="w-6 h-6 text-green-500" />
-                      <div>
-                        <p className="font-medium text-green-400">¡Reporte completado exitosamente!</p>
-                        <p className="text-sm text-green-500/80 mt-1">
-                          ID: {reportResult.reportId} | {reportResult.summary.success} exitosos, {reportResult.summary.manual} manuales, {reportResult.summary.failed} fallidos
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-
-          {/* STEP 5: RESULTS */}
-          {reportResult && activeStep !== 'report' && (
-            <motion.div key="result" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-              <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
-                <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                      <CheckCircle className="w-6 h-6 text-green-400" />
-                      Reporte Completado
-                    </h2>
-                    <p className="text-gray-400 mt-1">
-                      ID: {reportResult.reportId} • {new Date(reportResult.timestamp).toLocaleString('es-ES')}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={generateHtmlReport}
-                      className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors flex items-center gap-2"
-                    >
-                      <Eye className="w-4 h-4" />
-                      Ver HTML
-                    </button>
-                    <button
-                      onClick={downloadReport}
-                      className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors flex items-center gap-2"
-                    >
-                      <Download className="w-4 h-4" />
-                      Descargar HTML
-                    </button>
-                    <button
-                      onClick={copyFingerprint}
-                      className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors flex items-center gap-2"
-                    >
-                      <Copy className="w-4 h-4" />
-                      Copiar Fingerprint
-                    </button>
-                  </div>
-                </div>
-
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-                  {[
-                    { label: 'Total', value: reportResult.summary.total, color: 'bg-gray-500' },
-                    { label: 'Éxitos', value: reportResult.summary.success, color: 'bg-green-500' },
-                    { label: 'Manuales', value: reportResult.summary.manual, color: 'bg-blue-500' },
-                    { label: 'Pendientes', value: reportResult.summary.pending, color: 'bg-yellow-500' },
-                    { label: 'Fallidos', value: reportResult.summary.failed, color: 'bg-red-500' },
-                  ].map((stat) => (
-                    <div key={stat.label} className="p-4 rounded-xl text-center" style={{ background: `${stat.color}20`, border: `1px solid ${stat.color}40` }}>
-                      <div className="text-3xl font-bold" style={{ color: stat.color }}>{stat.value}</div>
-                      <div className="text-xs font-medium mt-1" style={{ color: stat.color }}>{stat.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Fingerprint */}
-                <div className="p-4 rounded-lg bg-gray-950 border border-green-500/30 mb-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs text-green-400 flex items-center gap-1">
-                      <Shield className="w-3 h-3" />
-                      Huella Digital SHA-256 (Integridad del Reporte)
-                    </label>
-                    <button
-                      onClick={copyFingerprint}
-                      className="px-3 py-1.5 text-xs text-green-400 hover:text-green-300 transition-colors flex items-center gap-1"
-                    >
-                      <Copy className="w-3 h-3" />
-                      Copiar
-                    </button>
-                  </div>
-                  <code className="font-mono text-xs text-green-300 break-all">{reportResult.fingerprint}</code>
-                  <p className="text-xs text-green-500/60 mt-2">Verifique la integridad de este reporte comparando esta huella digital</p>
-                </div>
-
-                {/* Results Tabs */}
-                <div className="border-t border-gray-800 pt-6">
-                  <div className="flex gap-2 mb-4">
-                    <button className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium">Tabla Consolidada</button>
-                    <button className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg font-medium">Detalle por URL</button>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-800 bg-gray-900">
-                          <th className="p-3 text-left font-medium">Servicio</th>
-                          <th className="p-3 text-left font-medium">URL</th>
-                          <th className="p-3 text-center font-medium">Estado</th>
-                          <th className="p-3 text-left font-medium">Mensaje</th>
-                          <th className="p-3 text-left font-medium">Timestamp</th>
-                          <th className="p-3 text-left font-medium">Ref. ID</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reportResult.results.map((r, i) => {
-                          const config = STATUS_CONFIG[r.status];
-                          const Icon = config.icon;
-                          return (
-                            <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/50">
-                              <td className="p-3 font-medium">{r.service}</td>
-                              <td className="p-3 font-mono text-xs truncate max-w-xs">{r.url}</td>
-                              <td className="p-3 text-center">
-                                <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${config.color}`}>
-                                  <Icon className="w-3 h-3 mr-1 inline-block" />
-                                  {config.label}
-                                </span>
-                              </td>
-                              <td className="p-3 text-gray-400 max-w-md">{r.message}</td>
-                              <td className="p-3 font-mono text-xs text-gray-500">{new Date(r.timestamp).toLocaleString('es-ES')}</td>
-                              <td className="p-3 font-mono text-xs text-gray-500">{r.referenceId || '-'}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Manual Report Links */}
-                <div className="pt-6 border-t border-gray-800">
-                  <h3 className="font-medium mb-4 flex items-center gap-2">
-                    <ExternalLink className="w-4 h-4" />
-                    Enlaces Directos para Reportes Manuales
-                  </h3>
-                  <div className="space-y-3">
-                    {reportResult.urls.map((url, urlIndex) => (
-                      <div key={urlIndex} className="p-4 rounded-lg bg-gray-800/50 border border-gray-700">
-                        <p className="font-mono text-sm text-green-400 mb-3 truncate" title={url}>{url}</p>
-                        <div className="flex flex-wrap gap-2">
-                          <a
-                            href={`https://safebrowsing.google.com/safebrowsing/report_phish/?url=${encodeURIComponent(url)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-blue-600/20 text-blue-400 border border-blue-600/30 hover:bg-blue-600/30 transition-colors"
-                          >
-                            🛡️ Google Safe Browsing
-                          </a>
-                          <a
-                            href="https://www.microsoft.com/wdsi/support/report-unsafe-site"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-blue-700/20 text-blue-300 border border-blue-700/30 hover:bg-blue-700/30 transition-colors"
-                          >
-                            🔷 Microsoft SmartScreen
-                          </a>
-                          <a
-                            href={`https://netcraft.com/report-phishing/?url=${encodeURIComponent(url)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-indigo-600/20 text-indigo-400 border border-indigo-600/30 hover:bg-indigo-600/30 transition-colors"
-                          >
-                            👁️ Netcraft
-                          </a>
-                          <a
-                            href={`https://www.eset.com/us/support/phishing-report?url=${encodeURIComponent(url)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-violet-600/20 text-violet-400 border border-violet-600/30 hover:bg-violet-600/30 transition-colors"
-                          >
-                            🛡️ ESET
-                          </a>
-                          <a
-                            href={`https://www.phishfort.com/report-phishing?url=${encodeURIComponent(url)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-pink-600/20 text-pink-400 border border-pink-600/30 hover:bg-pink-600/30 transition-colors"
-                          >
-                            🛡️ PhishFort
-                          </a>
-                          <a
-                            href={`mailto:report@phishreport.org?subject=Phishing%20Report&body=${encodeURIComponent(`URL: ${url}\n\n${notes || ''}`)}`}
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-red-600/20 text-red-400 border border-red-600/30 hover:bg-red-600/30 transition-colors"
-                          >
-                            📧 PhishReport
-                          </a>
-                          <a
-                            href={`https://www.easydmarc.com/report-phishing?url=${encodeURIComponent(url)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-amber-600/20 text-amber-400 border border-amber-600/30 hover:bg-amber-600/30 transition-colors"
-                          >
-                            📊 EasyDMARC
-                          </a>
-                          <a
-                            href="https://support.norton.com/report-unsafe-site"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-orange-600/20 text-orange-400 border border-orange-600/30 hover:bg-orange-600/30 transition-colors"
-                          >
-                            🛡️ Norton
-                          </a>
-                          <a
-                            href={`https://fortiguard.com/phishing-report?url=${encodeURIComponent(url)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-gray-600/20 text-gray-300 border border-gray-600/30 hover:bg-gray-600/30 transition-colors"
-                          >
-                            🏢 Fortinet
-                          </a>
-                          <a
-                            href="https://support.mcafee.com/report-phishing"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-lime-600/20 text-lime-400 border border-lime-600/30 hover:bg-lime-600/30 transition-colors"
-                          >
-                            🛡️ McAfee
-                          </a>
-                          <a
-                            href="https://threatcenter.crdf.org/report"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-teal-600/20 text-teal-400 border border-teal-600/30 hover:bg-teal-600/30 transition-colors"
-                          >
-                            📋 CRDF
-                          </a>
-                          <a
-                            href={`https://phishtank.org/reportphish?url=${encodeURIComponent(url)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-purple-600/20 text-purple-400 border border-purple-600/30 hover:bg-purple-600/30 transition-colors"
-                          >
-                            🦠 PhishTank
-                          </a>
-                          <a
-                            href="https://antiphishing.ch/report/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-cyan-600/20 text-cyan-400 border border-cyan-600/30 hover:bg-cyan-600/30 transition-colors"
-                          >
-                            🌐 antiphishing.ch
-                          </a>
-                          <a
-                            href={`https://www.virustotal.com/gui/url/${Buffer.from(url).toString('base64').replace(/=+$/, '')}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-purple-600/20 text-purple-400 border border-purple-600/30 hover:bg-purple-600/30 transition-colors"
-                          >
-                            🦠 VirusTotal
-                          </a>
-                          <a
-                            href={`mailto:reportphishing@apwg.org?subject=Phishing%20Report&body=${encodeURIComponent(`URL: ${url}\n\n${notes || ''}`)}`}
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-red-600/20 text-red-400 border border-red-600/30 hover:bg-red-600/30 transition-colors"
-                          >
-                            📧 APWG
-                          </a>
-                          <a
-                            href={`mailto:phishing-report@us-cert.gov?subject=Phishing%20Report&body=${encodeURIComponent(`URL: ${url}\n\n${notes || ''}`)}`}
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 transition-colors"
-                          >
-                            🇺🇸 CISA/US-CERT
-                          </a>
-                        </div>
-                      </div>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </Tabs>
+
+      {/* NEW BATCH DIALOG */}
+      <Dialog open={showNewBatch} onOpenChange={setShowNewBatch}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nuevo Lote de URLs</DialogTitle>
+            <CardDescription>
+              Arrastre y suelte un archivo .txt, .csv o .xlsx, o use la pestaña "Texto" para pegar URLs. Se calculará automáticamente el hash SHA-256 y se realizará pre-check con VirusTotal.
+            </CardDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleBatchSubmit} className="space-y-4 p-4">
+            {/* Drag and Drop Zone */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                isDragOver ? 'border-green-500 bg-green-500/10' : 'border-gray-600 hover:border-gray-500'
+              }`}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.csv,.xlsx"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              {isDragOver ? (
+                <div>
+                  <FolderOpen className="w-12 h-12 text-green-400 mx-auto mb-4" />
+                  <p className="text-green-400 font-semibold">¡Suelte el archivo aquí!</p>
+                </div>
+              ) : uploadProgress > 0 ? (
+                <div>
+                  <FileText className="w-12 h-12 text-primary mx-auto mb-4" />
+                  <p className="font-medium">{uploadFile?.name || 'Procesando...'}</p>
+                  <Progress value={uploadProgress} className="h-2 mt-2" />
+                  <p className="text-xs text-muted-foreground mt-2">{uploadStep}</p>
+                  {fileResult && (
+                    <div className="mt-3 flex items-center justify-center gap-4 text-sm">
+                      <Badge variant="secondary">{fileResult.validUrls.length} URLs válidas</Badge>
+                      <Badge variant="outline">{fileResult.fileHash?.substring(0, 12)}... SHA-256</Badge>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="font-semibold mb-2">Arrastre y suelte aquí</p>
+                  <p className="text-sm text-muted-foreground">Formatos: .txt, .csv, .xlsx (máx. 10MB)</p>
+                  <p className="text-xs text-muted-foreground mt-1">Se calculará SHA-256 automáticamente</p>
+                </div>
+              )}
+            </div>
+
+            {/* File info after upload */}
+            {fileResult && (
+              <Card className="border-green-500/20 bg-green-500/5">
+                <CardContent className="p-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Archivo:</span>
+                      <p className="font-medium">{fileResult.fileName}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Hash SHA-256:</span>
+                      <p className="font-mono text-xs break-all">{fileResult.fileHash}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">URLs Válidas:</span>
+                      <p className="font-medium">{fileResult.validUrls.length}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Inválidas:</span>
+                      <p className="font-medium">{fileResult.invalidUrls.length}</p>
+                    </div>
+                  </div>
+
+                  {/* Interactive Validation Table */}
+                  <div className="mt-4">
+                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4" />
+                      Tabla de Validación ({fileResult.validUrls.length} URLs)
+                    </h4>
+                    <ScrollArea className="max-h-[200px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>URL Original</TableHead>
+                            <TableHead>Defanged</TableHead>
+                            <TableHead>SHA-256 Hash</TableHead>
+                            <TableHead>VirusTotal</TableHead>
+                            <TableHead>Seleccionado</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {fileResult.validUrls.slice(0, 50).map((u, i) => (
+                            <TableRow key={i} className={u.selected ? 'bg-green-500/5' : ''}>
+                              <TableCell className="font-mono text-xs">{u.url}</TableCell>
+                              <TableCell className="font-mono text-xs text-red-400">{u.defangedUrl}</TableCell>
+                              <TableCell className="font-mono text-xs text-gray-400 max-w-[120px] truncate">{u.hash?.substring(0, 12)}...</TableCell>
+                              <TableCell>
+                                {u.virustotalClassification ? (
+                                  <Badge className={u.virustotalClassification === 'CONFIRMED_MALICIOUS' ? 'bg-red-500/20 text-red-500' : u.virustotalClassification === 'SUSPICIOUS' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-gray-500/20 text-gray-500'}>
+                                    {u.virustotalClassification} ({u.virustotalMaliciousEngines || 0})
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <input
+                                  type="checkbox"
+                                  checked={u.selected}
+                                  onChange={() => {
+                                    const updated = [...fileResult.validUrls];
+                                    updated[i] = { ...updated[i], selected: !updated[i].selected };
+                                    setFileResult({ ...fileResult, validUrls: updated });
+                                  }}
+                                  className="rounded border-border"
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Virustotal API Key */}
+            <div className="space-y-2">
+              <Label>VirusTotal API Key (para pre-check)</Label>
+              <Input
+                type="password"
+                placeholder="VT_API_KEY"
+                value={batchForm.virustotalApiKey}
+                onChange={e => setBatchForm({...batchForm, virustotalApiKey: e.target.value})}
+                className="font-mono"
+              />
+            </div>
+
+            {/* Batch Name & Notes */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nombre del lote (opcional)</Label>
+                <Input
+                  placeholder="Lote Phishing - Septiembre 2026"
+                  value={batchForm.batchName}
+                  onChange={e => setBatchForm({...batchForm, batchName: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Límite de URLs por lote</Label>
+                <Input
+                  type="number"
+                  min="1" max="5000"
+                  value={batchForm.maxUrlsPerBatch}
+                  onChange={e => setBatchForm({...batchForm, maxUrlsPerBatch: parseInt(e.target.value) || 500})}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Notas (opcional)</Label>
+              <Textarea
+                value={batchForm.notes}
+                onChange={e => setBatchForm({...batchForm, notes: e.target.value})}
+                placeholder="Información adicional..."
+                rows={2}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Servicios (vacío = todos los 16)</Label>
+              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                {ALL_SERVICES.map(svc => (
+                  <label key={svc.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={batchForm.services.includes(svc.id)}
+                      onChange={e => setBatchForm({
+                        ...batchForm,
+                        services: e.target.checked
+                          ? [...batchForm.services, svc.id]
+                          : batchForm.services.filter(s => s !== svc.id)
+                      })}
+                      className="rounded border-border"
+                    />
+                    <span className="text-sm">{svc.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="async" checked={batchForm.async}
+                onChange={e => setBatchForm({...batchForm, async: e.target.checked})}
+                className="rounded border-border" />
+              <Label htmlFor="async" className="text-sm cursor-pointer">Procesamiento asíncrono (cola BullMQ)</Label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={() => setShowNewBatch(false)}>Cancelar</Button>
+              <Button type="submit" disabled={submitting || (!fileResult && !uploadFile)}>
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                {submitting ? 'Enviando...' : 'Crear Lote'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* SINGLE URL DIALOG */}
+      <Dialog open={showSingleUrl} onOpenChange={setShowSingleUrl}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Reportar URL Individual</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSingleUrlSubmit} className="space-y-4 p-4">
+            <div className="space-y-2">
+              <Label>URL a reportar</Label>
+              <Input
+                type="url"
+                placeholder="https://ejemplo-malicioso.com"
+                value={singleUrlForm.url}
+                onChange={e => setSingleUrlForm({...singleUrlForm, url: e.target.value})}
+                required
+              />
+            </div>
+
+            {/* VirusTotal Pre-Check Toggle */}
+            <div className="flex items-center gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <input
+                type="checkbox"
+                id="vtPreCheck"
+                checked={singleUrlForm.virustotalPreCheck}
+                onChange={e => setSingleUrlForm({...singleUrlForm, virustotalPreCheck: e.target.checked})}
+                className="rounded border-border"
+              />
+              <Label htmlFor="vtPreCheck" className="text-sm cursor-pointer flex items-center gap-1">
+                <Scan className="w-4 h-4 text-blue-500" />
+                Ejecutar pre-check VirusTotal antes de reportar
+              </Label>
+            </div>
+
+            {/* VirusTotal Result */}
+            {virustotalResults.length > 0 && (
+              <Card className="border-blue-500/20 bg-blue-500/5">
+                <CardContent className="p-4">
+                  <h4 className="text-sm font-semibold text-blue-500 mb-2">Resultado VirusTotal</h4>
+                  {virustotalResults.map((vt, i) => (
+                    <div key={i} className="flex items-center gap-3 text-sm">
+                      <code className="font-mono text-xs">{vt.url}</code>
+                      <Badge className={vt.classification === 'CONFIRMED_MALICIOUS' ? 'bg-red-500/20 text-red-500' : vt.classification === 'SUSPICIOUS' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-gray-500/20 text-gray-500'}>
+                        {vt.classification}
+                      </Badge>
+                      <span className="text-muted-foreground">{vt.maliciousEngines} motores maliciosos</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="space-y-2">
+              <Label>Servicios</Label>
+              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                {ALL_SERVICES.map(svc => (
+                  <label key={svc.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={singleUrlForm.services.includes(svc.id)}
+                      onChange={e => setSingleUrlForm({
+                        ...singleUrlForm,
+                        services: e.target.checked
+                          ? [...singleUrlForm.services, svc.id]
+                          : singleUrlForm.services.filter(s => s !== svc.id)
+                      })}
+                      className="rounded border-border"
+                    />
+                    <span className="text-sm">{svc.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Notas (para APWG / CISA email)</Label>
+              <Textarea
+                value={singleUrlForm.notes}
+                onChange={e => setSingleUrlForm({...singleUrlForm, notes: e.target.value})}
+                placeholder="Información adicional para enviar por correo a APWG y CISA..."
+                rows={3}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={() => setShowSingleUrl(false)}>Cancelar</Button>
+              <Button type="submit" disabled={submitting || !singleUrlForm.url.trim()}>
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                {submitting ? 'Enviando...' : 'Enviar Reporte'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* PROCESSING RESULT DIALOG */}
+      <AnimatePresence>
+        {processingResult && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          >
+            <Card className="max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto border-emerald-500/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-emerald-500">
+                  <CheckCircle className="w-5 h-5" />
+                  Reporte de TakeDown Completado
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 rounded-lg bg-gray-900 border border-gray-700">
+                    <p className="text-xs text-emerald-400 font-semibold">Fingerprint SHA-256</p>
+                    <p className="font-mono text-xs text-emerald-300 break-all">{processingResult.fingerprint}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-gray-900 border border-gray-700">
+                    <p className="text-xs text-emerald-400 font-semibold">Hash del Reporte</p>
+                    <p className="font-mono text-xs text-emerald-300 break-all">{processingResult.reportHash}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="p-3 rounded-lg bg-gray-800 text-center">
+                    <div className="text-2xl font-bold">{processingResult.totalUrls}</div>
+                    <div className="text-xs text-muted-foreground">Total URLs</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-emerald-500/20 text-center">
+                    <div className="text-2xl font-bold text-emerald-400">{processingResult.successfulUrls}</div>
+                    <div className="text-xs text-muted-foreground">Exitosos</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-red-500/20 text-center">
+                    <div className="text-2xl font-bold text-red-400">{processingResult.failedUrls}</div>
+                    <div className="text-xs text-muted-foreground">Fallidos</div>
+                  </div>
+                </div>
+
+                <Button onClick={() => setProcessingResult(null)}>Cerrar</Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
-
-export default TakeDownPanel;

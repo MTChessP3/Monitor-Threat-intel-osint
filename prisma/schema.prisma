@@ -95,3 +95,71 @@ model FamilyMember {
   // Relation to Executive
   executive           Executive @relation(fields: [executiveId], references: [id])
 }
+
+model TakeDownBatch {
+  id            String   @id @default(cuid())
+  name          String
+  status        String   @default("pending")
+  totalUrls     Int      @default(0)
+  processedUrls Int      @default(0)
+  successfulUrls Int     @default(0)
+  failedUrls    Int      @default(0)
+  userId        String
+  notes         String?
+  fingerprint   String?
+  fileHash      String?
+  reportHash    String?
+  services      String?
+  virustotalResults String? @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  completedAt   DateTime?
+  reports       TakeDownReport[]
+  serviceResults ServiceResult[]
+}
+
+model TakeDownReport {
+  id              String   @id @default(cuid())
+  batchId         String
+  url             String
+  originalUrl     String?
+  status          String   @default("pending")
+  fingerprint     String?
+  virustotalClassification String?
+  virustotalMaliciousEngines Int @default(0)
+  notes           String?
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+  batch           TakeDownBatch @relation(fields: [batchId], references: [id])
+  serviceResults  ServiceResult[]
+}
+
+model ServiceResult {
+  id              String   @id @default(cuid())
+  batchId         String
+  reportId        String?
+  service         String
+  serviceName     String
+  url             String
+  status          String
+  message         String?
+  referenceId     String?
+  requestPayload  String?
+  responsePayload String?
+  errorDetails    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  batch           TakeDownBatch @relation(fields: [batchId], references: [id])
+}
+
+model EmailLog {
+  id            String   @id @default(cuid())
+  type          String
+  recipient     String
+  batchId       String?
+  referenceId   String?
+  status        String
+  payload       String?
+  errorDetails  String?
+  createdAt     DateTime @default(now())
+}

@@ -1,111 +1,116 @@
 import { NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
-import { parse } from 'csv-parse/sync';
+import { parseFile } from '@/lib/takedown/fileParser';
+import { generateTransactionId, sha256File, computeBatchHash } from '@/lib/takedown/hashGenerator';
+import { virustotalPreCheckBatch } from '@/lib/takedown/virustotal';
 
-const URL_REGEX = /(?:https?:\/\/)?(?:www\.)?[\w-]+(?:\.[\w-]+)+(?:[\w.,@?^=%&:/~+#-]*[\w@?^=%&/~+#-])?/gi;
-
-function extractUrlsFromText(text: string): string[] {
-  const urls = text.match(URL_REGEX) || [];
-  const normalized = urls.map(u => {
-    if (!u.startsWith('http://') && !u.startsWith('https://')) {
-      return 'https://' + u;
-    }
-    return u;
-  });
-  return [...new Set(normalized)];
-}
-
-function parseTxt(content: string): string[] {
-  return extractUrlsFromText(content);
-}
-
-function parseCsv(content: string): string[] {
-  try {
-    const records = parse(content, {
-      columns: false,
-      skip_empty_lines: true,
-      trim: true,
-    });
-    const allText = records.flat().join(' ');
-    return extractUrlsFromText(allText);
-  } catch {
-    return extractUrlsFromText(content);
-  }
-}
-
-function parseXlsx(buffer: Buffer): string[] {
-  try {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
-    let allText = '';
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName];
-      const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-      for (const row of json as string[][]) {
-        allText += row.join(' ') + ' ';
-      }
-    }
-    return extractUrlsFromText(allText);
-  } catch {
-    return [];
-  }
-}
+export const runtime = 'edge';
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const file = formData.get('file') as File;
+    const file = formData.get('file') as File | null;
+    const services = formData.get('services') ? JSON.parse(formData.get('services') as string) : null;
+    const notes = (formData.get('notes') as string) || '';
+    const batchName = (formData.get('batchName') as string) || '';
+    const maxUrlsPerBatch = parseInt(formData.get('maxUrlsPerBatch') as string) || 500;
+    const virustotalApiKey = (formData.get('virustotalApiKey') as string) || process.env.VIRUSTOTAL_API_KEY || '';
 
     if (!file) {
-      return NextResponse.json({ error: 'No se proporcionó ningún archivo' }, { status: 400 });
+      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    const validExtensions = ['.txt', '.csv', '.xlsx'];
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-    
-    if (!validExtensions.includes(ext)) {
-      return NextResponse.json(
-        { error: 'Formato no soportado. Use .txt, .csv o .xlsx' },
-        { status: 400 }
-      );
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const fileHash = sha256File(buffer);
+
+    let parseResult;
+    try {
+      parseResult = await parseFile(buffer, file.name);
+    } catch (error) {
+      return NextResponse.json({
+        error: error instanceof Error ? error.message : 'Error parsing file',
+      }, { status: 400 });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    let urls: string[] = [];
+    const { validUrls, invalidUrls } = parseResult;
+    const urlsToProcess = validUrls.slice(0, maxUrlsPerBatch);
 
-    switch (ext) {
-      case '.txt':
-        urls = parseTxt(buffer.toString('utf-8'));
-        break;
-      case '.csv':
-        urls = parseCsv(buffer.toString('utf-8'));
-        break;
-      case '.xlsx':
-        urls = parseXlsx(buffer);
-        break;
-    }
+    const batchId = generateTransactionId();
+    const timestamp = new Date().toISOString();
+    const selectedServices = services || [
+      'google', 'microsoft', 'netcraft', 'eset', 'phishfort',
+      'phishreport', 'easydmarc', 'norton', 'fortinet', 'mcafee',
+      'crdf', 'phishtank', 'antiphishing_ch', 'virustotal', 'apwg', 'cisa'
+    ];
 
-    // Validate URLs
-    const validUrls = urls.filter(url => {
+    const { fileHash: hashFile, urlsHash, batchHash } = computeBatchHash(buffer, urlsToProcess, selectedServices);
+    const fingerprint = sha256File(Buffer.from(`${batchId}-${batchHash}-${timestamp}`));
+
+    let virustotalResults = [];
+    if (virustotalApiKey && urlsToProcess.length > 0) {
       try {
-        new URL(url);
-        return true;
+        virustotalResults = await virustotalPreCheckBatch(urlsToProcess, virustotalApiKey);
       } catch {
-        return false;
+        virustotalResults = urlsToProcess.map(url => ({
+          url,
+          classification: 'NO_RECORD',
+          maliciousEngines: 0,
+        }));
       }
+    }
+
+    const db = (await import('@/lib/db')).db;
+
+    await db.takeDownBatch.create({
+      data: {
+        id: batchId,
+        name: batchName || `Batch ${batchId.substring(0, 8)}`,
+        status: 'queued',
+        totalUrls: urlsToProcess.length,
+        processedUrls: 0,
+        successfulUrls: 0,
+        failedUrls: 0,
+        userId: 'system',
+        notes,
+        fingerprint,
+        fileHash,
+        services: JSON.stringify(selectedServices),
+        virustotalResults: JSON.stringify(virustotalResults),
+      },
     });
+
+    for (const url of urlsToProcess) {
+      await db.takeDownReport.create({
+        data: {
+          id: generateTransactionId(),
+          batchId,
+          url: defangUrl(url),
+          originalUrl: url,
+          status: 'pending',
+          virustotalClassification: virustotalResults.find(v => v.url === url)?.classification,
+          virustotalMaliciousEngines: virustotalResults.find(v => v.url === url)?.maliciousEngines || 0,
+        },
+      });
+    }
 
     return NextResponse.json({
-      fileName: file.name,
-      fileSize: file.size,
-      extension: ext,
-      totalUrlsFound: urls.length,
-      validUrls: validUrls,
-      validCount: validUrls.length,
+      batchId,
+      fingerprint,
+      totalUrlsSubmitted: urlsToProcess.length,
+      validUrls: urlsToProcess.length,
+      invalidUrls: invalidUrls.length,
+      fileHash,
+      virustotalPreCheck: virustotalResults,
+      timestamp,
+      status: 'queued',
     });
-  } catch (error: unknown) {
-    console.error('Error processing file:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Error al procesar el archivo';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  } catch (error) {
+    console.error('Upload error:', error);
+    return NextResponse.json({ error: 'Error processing upload' }, { status: 500 });
   }
+}
+
+function defangUrl(url: string): string {
+  return url
+    .replace(/^https?:\/\//i, 'hxxps://')
+    .replace(/\./g, '[.]');
 }

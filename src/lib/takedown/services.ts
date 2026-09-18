@@ -174,6 +174,17 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     manualUrl: 'https://antiphishing.ch/report/',
     manualInstructions: 'Submit via antiphishing.ch report form',
   },
+  virustotal: {
+    service: 'virustotal',
+    serviceName: 'VirusTotal',
+    enabled: true,
+    apiEndpoint: 'https://www.virustotal.com/api/v3',
+    timeout: 30000,
+    isManual: false,
+    manualUrl: 'https://www.virustotal.com/gui/url/',
+    manualInstructions: 'Submit via VirusTotal web interface',
+    retryPolicy: { maxRetries: 3, backoffMs: 5000 },
+  },
 };
 
 function getConfig(service: string): ServiceConfig {
