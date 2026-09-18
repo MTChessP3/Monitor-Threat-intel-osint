@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { parseFile } from '@/lib/takedown/fileParser';
-import { generateTransactionId, sha256File, computeBatchHash } from '@/lib/takedown/hashGenerator';
+import { generateTransactionId, sha256OfFile, computeBatchHash } from '@/lib/takedown/hashGenerator';
 import { virustotalPreCheckBatch } from '@/lib/takedown/virustotal';
-
-export const runtime = 'edge';
 
 export async function POST(request: Request) {
   try {
@@ -19,9 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const fileHash = sha256File(buffer);
-
+    const buffer = Buffer.from(arrayBuffer);
     let parseResult;
     try {
       parseResult = await parseFile(buffer, file.name);
@@ -43,7 +39,7 @@ export async function POST(request: Request) {
     ];
 
     const { fileHash: hashFile, urlsHash, batchHash } = computeBatchHash(buffer, urlsToProcess, selectedServices);
-    const fingerprint = sha256File(Buffer.from(`${batchId}-${batchHash}-${timestamp}`));
+    const fingerprint = await sha256(`${batchId}-${batchHash}-${timestamp}`);
 
     let virustotalResults = [];
     if (virustotalApiKey && urlsToProcess.length > 0) {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, ensureDatabaseInitialized } from '@/lib/db';
-import { generateTransactionId, sha256File, computeBatchHash } from '@/lib/takedown/hashGenerator';
+import { generateTransactionId, sha256OfFile, computeBatchHash } from '@/lib/takedown/hashGenerator';
 import { virustotalPreCheckBatch } from '@/lib/takedown/virustotal';
 import { extractUrlsFromText, normalizeUrl, isValidUrl } from '@/lib/takedown/defang';
 
@@ -30,9 +30,9 @@ export async function POST(request: Request) {
       'crdf', 'phishtank', 'antiphishing_ch', 'virustotal', 'apwg', 'cisa'
     ];
 
-    const fileHash = sha256File(Buffer.from(normalizedUrls.join('\n')));
-    const { batchHash } = computeBatchHash(Buffer.from(normalizedUrls.join('\n')), normalizedUrls, selectedServices);
-    const fingerprint = sha256File(Buffer.from(`${batchId}-${batchHash}-${timestamp}`));
+    const fileHash = await sha256(normalizedUrls.join('\n'));
+    const { batchHash } = computeBatchHash(new TextEncoder().encode(normalizedUrls.join('\n')).buffer, normalizedUrls, selectedServices);
+    const fingerprint = await sha256(`${batchId}-${batchHash}-${timestamp}`);
 
     let virustotalResults = [];
     if (virustotalApiKey && normalizedUrls.length > 0) {

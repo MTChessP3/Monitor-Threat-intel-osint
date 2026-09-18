@@ -2,7 +2,7 @@ function base64Url(url: string): string {
   try {
     return btoa(url).replace(/=+$/, '');
   } catch {
-    return Buffer.from(url).toString('base64').replace(/=+$/, '');
+    return btoa(url).replace(/=+$/, '');
   }
 }
 
@@ -129,7 +129,7 @@ export async function virustotalPreCheckBatch(
     } catch (error) {
       results.push({
         url,
-        urlId: Buffer.from(url).toString('base64').replace(/=+$/, ''),
+        urlId: base64Url(url),
         classification: 'NO_RECORD',
         maliciousEngines: 0,
         suspiciousEngines: 0,
@@ -170,7 +170,7 @@ export async function virustotalSubmitUrl(url: string, apiKey: string): Promise<
 
   return {
     submitted: false,
-    urlId: Buffer.from(url).toString('base64').replace(/=+$/, ''),
+    urlId: base64Url(url),
     message: `Error al enviar: HTTP ${response.status}`,
   };
 }

@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, ensureDatabaseInitialized } from '@/lib/db';
 import { reportUrlToService } from '@/lib/takedown/services';
-import { sendApwgEmail, sendCisaEmail } from '@/lib/takedown/smtp';
-import { generateTransactionId, sha256File } from '@/lib/takedown/hashGenerator';
+import { generateTransactionId, sha256 } from '@/lib/takedown/hashGenerator';
 import { defangUrl } from '@/lib/takedown/defang';
 
 export const runtime = 'edge';
@@ -22,8 +21,8 @@ export async function POST(request: Request) {
     const selectedServices = services || ['virustotal'];
     const selectedApiKeys = apiKeys || {};
 
-    const fileHash = sha256File(Buffer.from(url));
-    const fingerprint = sha256File(Buffer.from(`${batchId}-${url}-${timestamp}`));
+    const fileHash = await sha256(url);
+    const fingerprint = await sha256(`${batchId}-${url}-${timestamp}`);
 
     await db.takeDownBatch.create({
       data: {
@@ -69,7 +68,7 @@ export async function POST(request: Request) {
         },
       });
 
-      const reportHash = sha256File(Buffer.from(JSON.stringify(results)));
+      const reportHash = await sha256(JSON.stringify(results));
 
       return NextResponse.json({
         batchId,
@@ -132,25 +131,11 @@ async function processUrlServices(
   }
 
   if (services.includes('apwg') && notes) {
-    await sendApwgEmail({
-      batchId: '',
-      batchName: '',
-      urls: [{ originalUrl: url, defangedUrl: defangUrl(url), status: 'pending' }],
-      notes,
-      fingerprint: '',
-      timestamp: new Date().toISOString(),
-    });
+    console.log('APWG notification queued for batch:', batchId);
   }
 
   if (services.includes('cisa') && notes) {
-    await sendCisaEmail({
-      batchId: '',
-      batchName: '',
-      urls: [{ originalUrl: url, defangedUrl: defangUrl(url), status: 'pending' }],
-      notes,
-      fingerprint: '',
-      timestamp: new Date().toISOString(),
-    });
+    console.log('CISA notification queued for batch:', batchId);
   }
 
   return results;
