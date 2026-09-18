@@ -260,11 +260,11 @@ function generateHTMLReport(data: HTMLReportRequest): string {
           <div style="padding: 16px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
             <div style="font-family: monospace; font-size: 13px; color: #1e3a8a; margin-bottom: 12px; word-break: break-all;">${url}</div>
             <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-              <a href="https://safebrowsing.google.com/safebrowsing/report_phish/?url=${encodeURIComponent(url)}" target="_blank" style="padding: 8px 16px; background: #1e3a8a; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🛡️ Google Safe Browsing</a>
-              <a href="https://www.microsoft.com/wdsi/support/report-unsafe-site" target="_blank" style="padding: 8px 16px; background: #0067b8; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🔷 Microsoft SmartScreen</a>
+              <a href="https://safebrowsing.google.com/safebrowsing/report_phish/?url=${encodeURIComponent(url)}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #1e3a8a; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🛡️ Google Safe Browsing</a>
+              <a href="https://www.microsoft.com/wdsi/support/report-unsafe-site" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #0067b8; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🔷 Microsoft SmartScreen</a>
               <a href="mailto:reportphishing@apwg.org?subject=Phishing%20Report&body=${encodeURIComponent(`URL: ${url}\n\n${notes || ''}`)}" style="padding: 8px 16px; background: #dc2626; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">📧 APWG</a>
               <a href="mailto:phishing-report@us-cert.gov?subject=Phishing%20Report&body=${encodeURIComponent(`URL: ${url}\n\n${notes || ''}`)}" style="padding: 8px 16px; background: #002b5c; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🇺🇸 CISA/US-CERT</a>
-              <a href="https://www.virustotal.com/gui/url/${Buffer.from(url).toString('base64').replace(/=+$/, '')}" target="_blank" style="padding: 8px 16px; background: #7c3aed; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🦠 VirusTotal</a>
+              <a href="https://www.virustotal.com/gui/url/${Buffer.from(url).toString('base64').replace(/=+$/, '')}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #7c3aed; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 500;">🦠 VirusTotal</a>
             </div>
           </div>
         `).join('')}

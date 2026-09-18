@@ -30,6 +30,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+<<<<<<< HEAD
 # env files (contains secrets - NEVER commit)
 .env
 .env.local
@@ -38,6 +39,15 @@ yarn-error.log*
 
 # Allow .env.example to be committed
 !.env.example
+=======
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+>>>>>>> 50e5c38fb5b2a482b6f45bd773eecb02f4a5bdac
 
 # vercel
 .vercel
@@ -46,6 +56,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+<<<<<<< HEAD
 # Z AI config (contains API keys)
 .z-ai-config
 
@@ -95,3 +106,39 @@ worklog.md
 /examples/
 db/custom.db
 .env*
+=======
+# Logs
+*.log
+dev.log
+dev.out.log
+server.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temp files
+tmp/
+temp/
+download/
+upload/
+tool-results/
+forensics-results/
+mobile-analysis/
+
+# Z-AI specific
+.z-ai-config
+.claude
+worklog.md
+reference_site.json
+
+# Build artifacts
+dist/
+>>>>>>> 50e5c38fb5b2a482b6f45bd773eecb02f4a5bdac

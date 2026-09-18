@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { Toaster } from "@/components/ui/toaster";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,38 +14,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VIP-Intelligence — Protección Digital de Ejecutivos",
-  description: "Plataforma corporativa de inteligencia y protección ejecutiva VIP. Análisis de amenazas, informes ejecutivos y gestión de fuentes de inteligencia.",
+  title: "MONITOR-THREAT | Cyber Threat Intelligence Platform",
+  description: "Professional OSINT threat intelligence platform for cybersecurity analysis, IP geolocation, CVE tracking, and executive reporting.",
+  keywords: ["OSINT", "Threat Intelligence", "Cybersecurity", "CVE", "IP Geolocation", "Malware Analysis", "APT Tracking"],
+  authors: [{ name: "MONITOR-THREAT Team" }],
   icons: {
-    icon: [
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/logo.svg", type: "image/svg+xml" },
-    ],
-    apple: "/apple-touch-icon.png",
+    icon: "/logo.svg",
+  },
+  openGraph: {
+    title: "MONITOR-THREAT - Cyber Threat Intelligence Platform",
+    description: "Professional-grade threat intelligence for security operations",
+    type: "website",
   },
 };
-
-/**
- * Inline script to prevent theme flash on page load.
- * Runs before React hydrates, reading from localStorage.
- * Default theme is "dim" (midnight) for new users.
- */
-const themeScript = `
-(function() {
-  try {
-    var theme = localStorage.getItem('actortrace-theme');
-    if (theme !== 'light' && theme !== 'dim' && theme !== 'dark') theme = 'dim';
-    var html = document.documentElement;
-    html.classList.remove('light', 'dim', 'dark');
-    html.classList.add(theme);
-    html.setAttribute('data-theme', theme);
-    var themeColor = theme === 'light' ? '#f7f8fa' : theme === 'dim' ? '#1a1f2e' : '#0d1117';
-    var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', themeColor);
-  } catch(e) {}
-})();
-`;
 
 export default function RootLayout({
   children,
@@ -54,18 +34,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <meta name="theme-color" content="#1a1f2e" />
-      </head>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white`}
       >
-        <ThemeProvider>
-          {children}
-          <Toaster richColors position="top-right" />
-        </ThemeProvider>
+        {children}
+        <Toaster />
       </body>
     </html>
   );

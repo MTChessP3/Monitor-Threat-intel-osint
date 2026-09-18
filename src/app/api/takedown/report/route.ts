@@ -21,8 +21,11 @@ interface ServiceReportResult {
 }
 
 const GOOGLE_SAFE_BROWSING_API = 'https://safebrowsing.googleapis.com/v4/threatMatches:find';
-const MICROSOFT_SMARTSCREEN_API = 'https://api.smartscreen.microsoft.com/report';
 const VIRUSTOTAL_API = 'https://www.virustotal.com/api/v3';
+
+const MAX_URLS_PER_REQUEST = 50;
+const CONCURRENCY_LIMIT = 5;
+const API_TIMEOUT_MS = 8000;
 
 function generateFingerprint(data: string): string {
   return createHash('sha256').update(data).digest('hex').toUpperCase();
@@ -32,38 +35,52 @@ function generateReportId(): string {
   return 'TD-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function reportToGoogleSafeBrowsing(url: string, apiKey?: string): Promise<ServiceReportResult> {
   if (!apiKey) {
     return {
       service: 'Google Safe Browsing',
       url,
       status: 'manual',
-      message: 'Requiere API Key. Reporte manual en: https://safebrowsing.google.com/safebrowsing/report_phish/',
+      message: 'Reporte manual en: https://safebrowsing.google.com/safebrowsing/report_phish/',
       timestamp: new Date().toISOString(),
     };
   }
 
   try {
-    const response = await fetch(`${GOOGLE_SAFE_BROWSING_API}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client: { clientId: 'takedown-module', clientVersion: '1.0' },
-        threatInfo: {
-          threatTypes: ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'POTENTIALLY_HARMFUL_APPLICATION'],
-          platformTypes: ['ANY_PLATFORM'],
-          threatEntryTypes: ['URL'],
-          threatEntries: [{ url }],
-        },
-      }),
-    });
+    const response = await fetchWithTimeout(
+      `${GOOGLE_SAFE_BROWSING_API}?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client: { clientId: 'takedown-module', clientVersion: '1.0' },
+          threatInfo: {
+            threatTypes: ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'POTENTIALLY_HARMFUL_APPLICATION'],
+            platformTypes: ['ANY_PLATFORM'],
+            threatEntryTypes: ['URL'],
+            threatEntries: [{ url }],
+          },
+        }),
+      },
+      API_TIMEOUT_MS
+    );
 
     if (response.ok) {
       const data = await response.json();
       return {
         service: 'Google Safe Browsing',
         url,
-        status: data.matches ? 'success' : 'success',
+        status: 'success',
         message: data.matches ? 'URL detectada como amenaza' : 'URL enviada para análisis',
         timestamp: new Date().toISOString(),
         referenceId: 'GSB-' + Date.now().toString(36).toUpperCase(),
@@ -82,7 +99,7 @@ async function reportToGoogleSafeBrowsing(url: string, apiKey?: string): Promise
       service: 'Google Safe Browsing',
       url,
       status: 'failed',
-      message: error instanceof Error ? error.message : 'Error de conexión',
+      message: error instanceof Error ? (error.name === 'AbortError' ? 'Timeout (8s)' : error.message) : 'Error de conexión',
       timestamp: new Date().toISOString(),
     };
   }
@@ -93,7 +110,7 @@ async function reportToMicrosoftSmartScreen(url: string): Promise<ServiceReportR
     service: 'Microsoft SmartScreen',
     url,
     status: 'manual',
-    message: 'Reporte manual requerido. Envíe a: https://www.microsoft.com/wdsi/support/report-unsafe-site',
+    message: 'Reporte manual en: https://www.microsoft.com/wdsi/support/report-unsafe-site',
     timestamp: new Date().toISOString(),
   };
 }
@@ -124,7 +141,7 @@ async function analyzeWithVirusTotal(url: string, apiKey?: string): Promise<Serv
       service: 'VirusTotal',
       url,
       status: 'manual',
-      message: 'Requiere API Key. Analice manualmente en: https://www.virustotal.com/gui/url/' + Buffer.from(url).toString('base64'),
+      message: 'Análisis manual en: https://www.virustotal.com/gui/url/' + Buffer.from(url).toString('base64'),
       timestamp: new Date().toISOString(),
     };
   }
@@ -146,7 +163,7 @@ async function analyzeWithVirusTotal(url: string, apiKey?: string): Promise<Serv
         service: 'VirusTotal',
         url,
         status: 'success',
-        message: `Análisis completado: ${malicious} maliciosos, ${suspicious} sospechosos de ${total} motores`,
+        message: `Análisis: ${malicious} maliciosos, ${suspicious} sospechosos de ${total} motores`,
         timestamp: new Date().toISOString(),
         referenceId: data.data?.id,
       };
@@ -164,7 +181,7 @@ async function analyzeWithVirusTotal(url: string, apiKey?: string): Promise<Serv
           service: 'VirusTotal',
           url,
           status: 'pending',
-          message: 'URL enviada para análisis. Resultados disponibles en unos minutos.',
+          message: 'URL enviada para análisis. Resultados en unos minutos.',
           timestamp: new Date().toISOString(),
         };
       }
@@ -190,49 +207,100 @@ async function analyzeWithVirusTotal(url: string, apiKey?: string): Promise<Serv
 
 export async function POST(request: Request) {
   try {
-    const body: ReportRequest = await request.json();
+    const body = await request.json();
     const { urls, services, notes, apiKeys } = body;
 
     if (!urls || urls.length === 0) {
       return NextResponse.json({ error: 'No se proporcionaron URLs' }, { status: 400 });
     }
 
-    const reportId = generateReportId();
-    const timestamp = new Date().toISOString();
-    const results: ServiceReportResult[] = [];
+    if (urls.length > 50) {
+      return NextResponse.json({
+        error: `Demasiadas URLs. Máximo 50 por reporte. Recibidas: ${urls.length}. Divida en varios reportes.`,
+        maxAllowed: 50,
+        received: urls.length,
+      }, { status: 400 });
+    }
 
     const googleApiKey = apiKeys?.google || process.env.GOOGLE_SAFE_BROWSING_API_KEY;
     const vtApiKey = apiKeys?.virustotal || process.env.VIRUSTOTAL_API_KEY;
 
+    const tasks: Array<() => Promise<ServiceReportResult>> = [];
+
     for (const url of urls) {
       for (const service of services) {
-        let result: ServiceReportResult;
-
-        switch (service) {
-          case 'google':
-            result = await reportToGoogleSafeBrowsing(url, googleApiKey);
-            break;
-          case 'microsoft':
-            result = await reportToMicrosoftSmartScreen(url);
-            break;
-          case 'apwg':
-            result = await reportToAPWG(url, notes);
-            break;
-          case 'cisa':
-            result = await reportToCISA(url, notes);
-            break;
-          case 'virustotal':
-            result = await analyzeWithVirusTotal(url, vtApiKey);
-            break;
-          default:
-            continue;
-        }
-
-        results.push(result);
+        const task = async () => {
+          switch (service) {
+            case 'google':
+              return await reportToGoogleSafeBrowsing(url, googleApiKey);
+            case 'microsoft':
+              return await (async () => ({
+                service: 'Microsoft SmartScreen',
+                url,
+                status: 'manual' as const,
+                message: 'Reporte manual en: https://www.microsoft.com/wdsi/support/report-unsafe-site',
+                timestamp: new Date().toISOString(),
+              }))();
+            case 'apwg':
+              return await (async () => ({
+                service: 'APWG (Anti-Phishing Working Group)',
+                url,
+                status: 'manual' as const,
+                message: `Enviar correo a reportphishing@apwg.org con la URL: ${url}${notes ? '\nNotas: ' + notes : ''}`,
+                timestamp: new Date().toISOString(),
+              }))();
+            case 'cisa':
+              return await (async () => ({
+                service: 'CISA / US-CERT',
+                url,
+                status: 'manual' as const,
+                message: `Enviar correo a phishing-report@us-cert.gov con la URL: ${url}${notes ? '\nNotas: ' + notes : ''}`,
+                timestamp: new Date().toISOString(),
+              }))();
+            case 'virustotal':
+              return await analyzeWithVirusTotal(url, vtApiKey);
+            default:
+              return {
+                service,
+                url,
+                status: 'failed' as const,
+                message: 'Servicio desconocido',
+                timestamp: new Date().toISOString(),
+              };
+          }
+        };
+        tasks.push(task);
       }
     }
 
-    const fingerprint = generateFingerprint(JSON.stringify({ reportId, urls, services, timestamp, results }));
+    // Process with controlled concurrency
+    const reportId = 'TD-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const timestamp = new Date().toISOString();
+    const results: ServiceReportResult[] = [];
+    const queue = [...tasks];
+    const maxConcurrent = Math.min(5, tasks.length);
+
+    async function processNext(): Promise<void> {
+      if (queue.length === 0) return;
+      const task = queue.shift()!;
+      try {
+        const result = await task();
+        results.push(result);
+      } catch (error) {
+        // Error already handled in each task
+      }
+      if (queue.length > 0) {
+        await processNext();
+      }
+    }
+
+    const workers = Array(Math.min(5, tasks.length))
+      .fill(null)
+      .map(() => processNext());
+
+    await Promise.all(workers);
+
+    const fingerprint = createHash('sha256').update(JSON.stringify({ reportId, urls, services, timestamp, results })).digest('hex').toUpperCase();
 
     return NextResponse.json({
       reportId,
