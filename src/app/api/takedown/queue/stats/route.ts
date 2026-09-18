@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getQueueStats } from '@/lib/takedownQueue';
 
-export const runtime = 'edge';
-
 export async function GET() {
   try {
     const stats = await getQueueStats();

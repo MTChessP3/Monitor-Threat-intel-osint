@@ -310,13 +310,13 @@ export default function TakeDownDashboard() {
       setUploadProgress(70);
       setUploadStep('Procesando resultados...');
 
-      const validUrls: ExtractedUrl[] = data.validUrls.map((url: string) => ({
+      const validUrls: ExtractedUrl[] = await Promise.all(data.validUrls.map(async (url: string) => ({
         url,
         defangedUrl: defangUrl(url),
         valid: true,
         selected: true,
         hash: await sha256(url),
-      }));
+      })));
 
       setUploadProgress(90);
       setUploadStep('Generando huella digital SHA-256...');

@@ -185,7 +185,7 @@ function computeAbuseBreakdown(apiData: any): AbuseFactor[] {
     factors.push({ key: 'dnsbl', label: 'DNS Blacklists', points: Math.min(listed.length * 12, 60), detail: `${listed.length} list(s): ${listed.map((d: any) => d.name).join(', ')}`, section: 'ip-reputation' });
   }
   if (apiData?.reputation?.torExit) {
-    factors.push({ key: 'tor', label: 'Tor exit node', points: 25, detail: 'Known anonymization — traffic origin masked.', section: 'ip-reputation' });
+    factors.push({ key: 'tor', label: 'Tor exit node', points: 25, detail: 'Known anonymization ΓÇö traffic origin masked.', section: 'ip-reputation' });
   }
   const urlCount = apiData?.reputation?.urlhaus?.urlCount || 0;
   if (urlCount > 0) {
@@ -196,20 +196,20 @@ function computeAbuseBreakdown(apiData: any): AbuseFactor[] {
     factors.push({ key: 'ports', label: 'Exposed services', points: Math.min(open.length * 3, 15), detail: `Open ports: ${open.map((p: any) => `${p.port} ${p.service}`).join(', ')}`, section: 'ip-scan' });
   }
   if (apiData?.data?.proxy) {
-    factors.push({ key: 'proxy', label: 'Proxy / VPN', points: 10, detail: 'Tunneled traffic — hides the true origin.', section: null });
+    factors.push({ key: 'proxy', label: 'Proxy / VPN', points: 10, detail: 'Tunneled traffic ΓÇö hides the true origin.', section: null });
   }
   if (apiData?.data?.hosting) {
-    factors.push({ key: 'hosting', label: 'Hosting / Cloud', points: 5, detail: 'Datacenter range — common for C2 and bulk attacks.', section: null });
+    factors.push({ key: 'hosting', label: 'Hosting / Cloud', points: 5, detail: 'Datacenter range ΓÇö common for C2 and bulk attacks.', section: null });
   }
   return factors;
 }
 
 function riskVerdict(sev: Severity): string {
   switch (sev) {
-    case 'CRITICAL': return 'Critical — multiple independent sources flag this IP; treat it as actively hostile.';
-    case 'HIGH': return 'High — confirmed blacklists and/or anonymization; block at the perimeter.';
-    case 'MEDIUM': return 'Medium — some indicators present; verify before taking action.';
-    default: return 'Low — no significant threat signals detected.';
+    case 'CRITICAL': return 'Critical ΓÇö multiple independent sources flag this IP; treat it as actively hostile.';
+    case 'HIGH': return 'High ΓÇö confirmed blacklists and/or anonymization; block at the perimeter.';
+    case 'MEDIUM': return 'Medium ΓÇö some indicators present; verify before taking action.';
+    default: return 'Low ΓÇö no significant threat signals detected.';
   }
 }
 
@@ -253,771 +253,8 @@ function buildQueueEntry(apiData: any): IpQueueEntry {
       ...(apiData?.reputation?.torExit ? ['tor-exit'] : []),
       ...(urlCount > 0 ? [`urlhaus:${urlCount}`] : []),
     ],
-    description: `IP ${ip} — DNSBL: ${listed.map((d: any) => `${d.name}(${d.records.join(',')})`).join(', ') || 'clean'}${apiData?.reputation?.torExit ? ', Tor exit' : ''}${urlCount > 0 ? `, URLhaus: ${urlCount}` : ''}`,
+    description: `IP ${ip} ΓÇö DNSBL: ${listed.map((d: any) => `${d.name}(${d.records.join(',')})`).join(', ') || 'clean'}${apiData?.reputation?.torExit ? ', Tor exit' : ''}${urlCount > 0 ? `, URLhaus: ${urlCount}` : ''}`,
   };
-}
-
-// ==================== PRINT REPORT UTILITY ====================
-function generatePrintableReport(tab: TabType, data: any, inputValue: string): string {
-  const timestamp = new Date().toLocaleString('es-ES', { 
-    dateStyle: 'full', 
-    timeStyle: 'short' 
-  });
-  const tabLabels: Record<TabType, string> = {
-    dashboard: 'Dashboard', ip: 'IP Intel', domain: 'Domain Intel', forensics: 'Web Forensics',
-    dnsdump: 'DNS Dump', url: 'URL Scanner', hash: 'Hash Lookup', cve: 'CVE Database',
-    ai: 'AI Analyst', darkweb: 'Deep & Dark Web', mobile: 'Mobile Security',
-    threats: 'Threat Feeds', iocs: 'IOC Manager', export: 'Export Data', reports: 'Reports',
-    sources: 'Intelligence Sources', brand: 'Brand Protection', sandbox: 'URL Sandbox',
-    dnsdump: 'DNS Dump', social: 'Telegram & Discord', exec: 'Executive OSINT',
-    fakeapp: 'Fake App Scanner', takedown: 'TakeDown URL', url: 'URL Scanner', sandbox: 'URL Sandbox',
-  };
-
-  const tabLabel = tabLabels[tab] || tab;
-  const reportData = JSON.stringify(data, null, 2).slice(0, 50000);
-  const inputDisplay = inputValue || 'N/A';
-
-  // Helper function for Domain Intel report
-  const generateDomainIntelReport = (data: any, intel: any, risk: any, virusTotal: any) => {
-    if (!intel) return '';
-    
-    const formatDate = (iso: string | null) => {
-      if (!iso) return '—';
-      const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10);
-    };
-
-    const getRiskClass = (level: string) => {
-      switch (level.toUpperCase()) {
-        case 'CRITICAL': return 'badge-critical';
-        case 'HIGH': return 'badge-elevated';
-        default: return 'badge-normal';
-      }
-    };
-
-    const escapeHtml = (text: string) => text
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"')
-      .replace(/'/g, '&#039;');
-
-    // Build DNS Records section
-    const buildDnsRecords = (records: any) => {
-      if (!records) return '<p class="data-value">No data</p>';
-      const types = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA', 'CAA'];
-      return types.map(type => {
-        const recs = records[type as keyof typeof records] || [];
-        if (recs.length === 0) return '';
-        return `
-          <div class="data-card">
-            <div class="data-label">${type} Records (${recs.length})</div>
-            <div class="data-value">${recs.slice(0, 5).map(r => escapeHtml(r.data || r.value || '')).join('<br>')}${recs.length > 5 ? `<br>... and ${recs.length - 5} more` : ''}</div>
-          </div>
-        `;
-      }).join('');
-    };
-
-    // Build subdomains section
-    const buildSubdomains = (subs: any[]) => {
-      if (!subs || subs.length === 0) return '<p class="data-value">No subdomains found</p>';
-      return subs.slice(0, 20).map(s => `
-        <div class="data-card">
-          <div class="data-label">${escapeHtml(s.name)}</div>
-          <div class="data-value">${s.ips.length > 0 ? s.ips.join(', ') : (s.cname ? `CNAME: ${s.cname}` : 'No A record')}</div>
-          <div class="data-label">Source: ${s.source === 'ct' ? 'Certificate Transparency' : 'Brute Force'}</div>
-        </div>
-      `).join('');
-    };
-
-    // Build IP/ASN infrastructure
-    const buildIpAsn = (ips: any[]) => {
-      if (!ips || ips.length === 0) return '<p class="data-value">No IP data</p>';
-      return ips.slice(0, 15).map(ip => `
-        <div class="data-card">
-          <div class="data-label">${ip.ip}</div>
-          <div class="data-value">Geo: ${ip.country} ${ip.city ? `(${ip.city})` : ''} ${ip.flag || ''}</div>
-          <div class="data-label">ASN: ${ip.asn || '—'}</div>
-          <div class="data-value">${ip.asname || ''}</div>
-          <div class="data-label">ISP: ${ip.isp}</div>
-          <div class="data-label">Flags: ${ip.hosting ? 'hosting ' : ''}${ip.proxy ? 'proxy ' : ''}${ip.tor ? 'tor ' : ''}</div>
-        </div>
-      `).join('');
-    };
-
-    // Build email security
-    const buildEmailSecurity = (es: any) => {
-      if (!es) return '<p class="data-value">No data</p>';
-      return `
-        <div class="data-grid">
-          <div class="data-card">
-            <div class="data-label">SPF</div>
-            <div class="data-value">${es.hasSPF ? '✓ Present' : '✗ Missing'} ${es.spfHardFail ? ' (hard fail -all)' : ''}</div>
-          </div>
-          <div class="data-card">
-            <div class="data-label">DMARC</div>
-            <div class="data-value">${es.hasDMARC ? '✓ Present' : '✗ Missing'} ${es.dmarcPolicy ? ` (policy: ${es.dmarcPolicy})` : ''}</div>
-          </div>
-          <div class="data-card">
-            <div class="data-label">DKIM</div>
-            <div class="data-value">${es.hasDKIM ? '✓ Present' : '✗ Missing'} ${es.dkimSelectors?.join(', ') || ''}</div>
-          </div>
-          <div class="data-card">
-            <div class="data-label">Risk Level</div>
-            <div class="data-value">${es.riskLevel}</div>
-          </div>
-        </div>
-        ${es.findings?.length > 0 ? `
-          <div class="section">
-            <div class="section-title">⚠️ Findings</div>
-            <ul>${es.findings.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
-          </div>
-        ` : ''}
-      `;
-    };
-
-    // Build WHOIS
-    const buildWhois = (whois: any) => {
-      if (!whois) return '<p class="data-value">WHOIS data not available</p>';
-      return `
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">Registrar</div><div class="data-value">${escapeHtml(whois.registrar || '—')}</div></div>
-          <div class="data-card"><div class="data-label">Created</div><div class="data-value">${formatDate(whois.created)}</div></div>
-          <div class="data-card"><div class="data-label">Updated</div><div class="data-value">${formatDate(whois.updated)}</div></div>
-          <div class="data-card"><div class="data-label">Expires</div><div class="data-value">${formatDate(whois.expires)}</div></div>
-          <div class="data-card"><div class="data-label">Registrant Org</div><div class="data-value">${escapeHtml(whois.registrantOrg || '—')}</div></div>
-          <div class="data-card"><div class="data-label">Country</div><div class="data-value">${escapeHtml(whois.registrantCountry || '—')}</div></div>
-        </div>
-        ${whois.nameservers?.length > 0 ? `
-          <div class="section">
-            <div class="section-title">📡 Nameservers</div>
-            <div class="data-grid">
-              ${whois.nameservers.map(ns => `<div class="data-card"><div class="data-value">${escapeHtml(ns)}</div></div>`).join('')}
-            </div>
-          </div>
-        ` : ''}
-      `;
-    };
-
-    // Build VirusTotal section for IP Intel
-    const buildVT = (vt: any) => {
-      if (!vt || !vt.analyzed) return '';
-      const stats = vt.lastAnalysisStats || { malicious: 0, suspicious: 0, harmless: 0, undetected: 0, timeout: 0 };
-      const total = vt.totalEngines || Object.values(stats).reduce((a: number, b: number) => a + b, 0);
-      return `
-        <div class="section">
-          <div class="section-title">🛡️ VirusTotal Analysis</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Verdict</div><div class="data-value"><span class="badge ${getVerdictClass(vt.verdict)}">${vt.verdict}</span></div></div>
-            <div class="data-card"><div class="data-label">Detection</div><div class="data-value">${stats.malicious}/${total} engines</div></div>
-            <div class="data-card"><div class="data-label">Reputation</div><div class="data-value">${vt.reputation}</div></div>
-            <div class="data-card"><div class="data-label">Last Analysis</div><div class="data-value">${vt.lastAnalysisDate ? formatDate(vt.lastAnalysisDate) : 'N/A'}</div></div>
-          </div>
-          <div class="section">
-            <div class="section-title">📊 Detection Breakdown</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-label">Malicious</div><div class="data-value">${stats.malicious || 0}</div></div>
-              <div class="data-card"><div class="data-label">Suspicious</div><div class="data-value">${stats.suspicious || 0}</div></div>
-              <div class="data-card"><div class="data-label">Undetected</div><div class="data-value">${stats.undetected || 0}</div></div>
-              <div class="data-card"><div class="data-label">Harmless</div><div class="data-value">${stats.harmless || 0}</div></div>
-              <div class="data-card"><div class="data-label">Timeout</div><div class="data-value">${stats.timeout || 0}</div></div>
-              <div class="data-card"><div class="data-label">Total Engines</div><div class="data-value">${total}</div></div>
-            </div>
-          </div>
-          <div class="section">
-            <div class="section-title">📋 Additional Info</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-label">ASN</div><div class="data-value">${vt.asn || 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">Country</div><div class="data-value">${vt.country || 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">First Seen</div><div class="data-value">${vt.firstSeen ? formatDate(vt.firstSeen) : 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">Last Seen</div><div class="data-value">${vt.lastSeen ? formatDate(vt.lastSeen) : 'N/A'}</div></div>
-            </div>
-          </div>
-          <div class="section">
-            <div class="section-title">🔗 VirusTotal Link</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-value"><a href="${vt.url}" target="_blank" style="color: #059669;">View on VirusTotal</a></div></div>
-            </div>
-          </div>
-        `;
-    };
-
-    // Build Relationship Graph explanation
-    const buildGraphExplanation = (graph: any) => {
-      if (!graph || !graph.nodes || graph.nodes.length === 0) {
-        return '<p class="data-value">No relationship graph data available</p>';
-      }
-      const nodeTypes: Record<string, number> = {};
-      graph.nodes.forEach((n: any) => {
-        nodeTypes[n.kind] = (nodeTypes[n.kind] || 0) + 1;
-      });
-      const edgeCount = graph.edges?.length || 0;
-      
-      return `
-        <div class="section">
-          <div class="section-title">🕸️ Relationship Graph — Topology Analysis</div>
-          <div class="section">
-            <h4>Graph Overview</h4>
-            <p>The relationship graph maps the domain's infrastructure topology using a radial layout:</p>
-            <ul>
-              <li><strong>Center (Ring 0):</strong> Primary domain (${escapeHtml(inputDisplay)})</li>
-              <li><strong>Ring 1 (92px):</strong> Subdomains, MX hosts, Nameservers</li>
-              <li><strong>Ring 2 (178px):</strong> Resolved IP addresses</li>
-              <li><strong>Ring 3 (262px):</strong> ASN/ISP organizations</li>
-            </ul>
-            <h4>Graph Statistics</h4>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-label">Total Nodes</div><div class="data-value">${graph.nodes.length}</div></div>
-              <div class="data-card"><div class="data-label">Total Edges</div><div class="data-value">${edgeCount}</div></div>
-              <div class="data-card"><div class="data-label">Node Types</div><div class="data-value">${Object.entries(nodeTypes).map(([k, v]) => `${k}: ${v}`).join(', ')}</div></div>
-            </div>
-            <h4>Graph Legend</h4>
-            <ul>
-              <li>🟣 <strong>Purple (Domain):</strong> Primary domain being analyzed</li>
-              <li>🔵 <strong>Blue (Subdomain):</strong> Discovered subdomains</li>
-              <li>🟢 <strong>Green (IP):</strong> Resolved IP addresses</li>
-              <li>🩷 <strong>Pink (MX):</strong> Mail exchange hosts</li>
-              <li>🟡 <strong>Yellow (ASN):</strong> Autonomous System Numbers / ISPs</li>
-              <li>🔘 <strong>Gray (NS):</strong> Authoritative nameservers</li>
-            </ul>
-            <h4>Graph Interpretation Guide</h4>
-            <ul>
-              <li><strong>Hubs (high-degree nodes):</strong> Nodes with many connections often indicate shared infrastructure (e.g., shared hosting, CDN, mail provider)</li>
-              <li><strong>Star topology:</strong> Single IP serving many subdomains → shared hosting / CDN</li>
-              <li><strong>Multiple ASNs:</strong> Infrastructure spans multiple providers (cloud, CDN, corporate)</li>
-              <li><strong>Orphaned nodes:</strong> Subdomains without resolution may indicate dangling records</li>
-              <li><strong>MX → IP chains:</strong> Trace mail flow; multiple MX pointing to same IP = single mail server</li>
-            </ul>
-          </div>
-        `;
-    };
-
-    // Build recommendations
-    const buildRecommendations = (recs: string[]) => {
-      if (!recs || recs.length === 0) return '<p class="data-value">No specific recommendations</p>';
-      return `
-        <div class="section">
-          <div class="section-title">🛡️ Recommendations</div>
-          <ol>${recs.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ol>
-        </div>
-      `;
-    };
-
-    // Main Domain Intel Report
-    return `
-      <div class="section">
-        <div class="section-title">🌐 Domain Intelligence Report</div>
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">Domain</div><div class="data-value">${escapeHtml(intel.domain)}</div></div>
-          <div class="data-card"><div class="data-label">Analysis Date</div><div class="data-value">${formatDate(intel.timestamp)}</div></div>
-          <div class="data-card"><div class="data-label">Source</div><div class="data-value">${intel.source}</div></div>
-          <div class="data-card"><div class="data-label">Live</div><div class="data-value">${intel.live ? 'Yes' : 'No'}</div></div>
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">⚠️ Risk Assessment</div>
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">Risk Score</div><div class="data-value">${risk?.score || 0}/100</div></div>
-          <div class="data-card"><div class="data-label">Risk Level</div><div class="data-value"><span class="badge ${getRiskClass(risk?.level || 'LOW')}">${risk?.level || 'LOW'}</div></div></div>
-        </div>
-        <div class="section">
-          <h4>Verdict</h4>
-          <p>${escapeHtml(risk?.verdict || 'No verdict')}</p>
-        </div>
-        ${risk?.signals?.length > 0 ? `
-          <div class="section">
-            <h4>Risk Signals</h4>
-            <div class="data-grid">
-              ${risk.signals.map(s => `<div class="data-card"><div class="data-label">${escapeHtml(s.label)}</div><div class="data-value">${s.points > 0 ? '+' : ''}${s.points} pts - ${escapeHtml(s.detail)}</div></div>`).join('')}
-            </div>
-          </div>
-        ` : ''}
-        ${buildRecommendations(risk?.recommendations || [])}
-      </div>
-
-      ${buildVT(virusTotal)}
-
-      <div class="section">
-        <div class="section-title">📊 Quick Statistics</div>
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">A Records</div><div class="data-value">${intel.records?.A?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">AAAA Records</div><div class="data-value">${intel.records?.AAAA?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">CNAME Records</div><div class="data-value">${intel.records?.CNAME?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">MX Records</div><div class="data-value">${intel.records?.MX?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">NS Records</div><div class="data-value">${intel.records?.NS?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">TXT Records</div><div class="data-value">${intel.records?.TXT?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">Subdomains</div><div class="data-value">${intel.subdomains?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">IP Addresses</div><div class="data-value">${intel.ips?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">MX Hosts</div><div class="data-value">${intel.mxHosts?.length || 0}</div></div>
-        </div>
-      </div>
-
-      ${buildEmailSecurity(intel.emailSecurity)}
-      ${buildWhois(intel.whois)}
-      ${buildGraphExplanation(intel.graph)}
-      ${buildDnsRecords(intel.records)}
-      ${buildSubdomains(intel.subdomains)}
-      ${buildIpAsn(intel.ips)}
-      ${intel.mxHosts?.length > 0 ? `
-        <div class="section">
-          <div class="section-title">📧 MX Hosts</div>
-          <div class="data-grid">
-            ${intel.mxHosts.slice(0, 10).map(mx => `
-              <div class="data-card">
-                <div class="data-label">${escapeHtml(mx.host)} (priority ${mx.priority})</div>
-                <div class="data-value">IP: ${mx.ip || '—'}</div>
-                <div class="data-label">ASN: ${mx.asn || '—'}</div>
-                <div class="data-value">${escapeHtml(mx.asname || '—')}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      ` : ''}
-      ${buildRecommendations(risk?.recommendations || [])}
-    `;
-  };
-
-  // Helper function for IP Intel printable report
-  const generateIpIntelReport = (data: any, inputValue: string) => {
-    if (!data) return '';
-    
-    const ip = data.data?.query || data.data?.ip || inputValue;
-    const vt = data.reputation?.virusTotal;
-    const reputation = data.reputation;
-    const scan = data.scan;
-    const pivot = data.pivot;
-    const rdap = data.data?.rdap;
-    const http = data.data?.http;
-    const tls = data.data?.tls;
-    const content = data.data?.content;
-    const redirects = data.data?.redirects;
-    const staticFlags = data.data?.staticFlags;
-    const verdict = data.analysis?.threatLevel || 'NORMAL';
-    const recommendations = data.analysis?.recommendations || [];
-    
-    const formatDate = (iso: string | null) => {
-      if (!iso) return '—';
-      const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10);
-    };
-    
-    const escapeHtml = (text: string) => text
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"')
-      .replace(/'/g, '&#039;');
-    
-    const getVerdictClass = (level: string) => {
-      switch (level) {
-        case 'MALICIOUS': return 'badge-critical';
-        case 'SUSPICIOUS': return 'badge-elevated';
-        case 'CLEAN': return 'badge-normal';
-        default: return 'badge-normal';
-      }
-    };
-    
-    // Build VirusTotal section
-    const buildVT = (vt: any) => {
-      if (!vt || !vt.analyzed) return '';
-      const stats = vt.lastAnalysisStats || { malicious: 0, suspicious: 0, harmless: 0, undetected: 0, timeout: 0 };
-      const total = vt.totalEngines || Object.values(stats).reduce((a: number, b: number) => a + b, 0);
-      return `
-        <div class="section">
-          <div class="section-title">🛡️ VirusTotal Analysis</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Verdict</div><div class="data-value"><span class="badge ${getVerdictClass(vt.verdict)}">${vt.verdict}</span></div></div>
-            <div class="data-card"><div class="data-label">Detection</div><div class="data-value">${stats.malicious}/${total} engines</div></div>
-            <div class="data-card"><div class="data-label">Reputation</div><div class="data-value">${vt.reputation}</div></div>
-            <div class="data-card"><div class="data-label">Last Analysis</div><div class="data-value">${vt.lastAnalysisDate ? formatDate(vt.lastAnalysisDate) : 'N/A'}</div></div>
-          </div>
-          <div class="section">
-            <div class="section-title">📊 Detection Breakdown</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-label">Malicious</div><div class="data-value">${stats.malicious || 0}</div></div>
-              <div class="data-card"><div class="data-label">Suspicious</div><div class="data-value">${stats.suspicious || 0}</div></div>
-              <div class="data-card"><div class="data-label">Undetected</div><div class="data-value">${stats.undetected || 0}</div></div>
-              <div class="data-card"><div class="data-label">Harmless</div><div class="data-value">${stats.harmless || 0}</div></div>
-              <div class="data-card"><div class="data-label">Timeout</div><div class="data-value">${stats.timeout || 0}</div></div>
-              <div class="data-card"><div class="data-label">Total Engines</div><div class="data-value">${total}</div></div>
-            </div>
-          </div>
-          ${vt.categories?.length > 0 ? `
-            <div class="section">
-              <div class="section-title">📂 Categories</div>
-              <div class="data-grid">
-                ${vt.categories.map(c => `<div class="data-card"><div class="data-value">${escapeHtml(c)}</div></div>`).join('')}
-              </div>
-            </div>
-          ` : ''}
-          ${vt.tags?.length > 0 ? `
-            <div class="section">
-              <div class="section-title">🏷️ Tags</div>
-              <div class="data-grid">
-                ${vt.tags.slice(0, 12).map(t => `<div class="data-card"><div class="data-value">#${escapeHtml(t)}</div></div>`).join('')}
-              </div>
-            </div>
-          ` : ''}
-          <div class="section">
-            <div class="section-title">📋 Additional Info</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-label">ASN</div><div class="data-value">${vt.asn || 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">Country</div><div class="data-value">${vt.country || 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">First Seen</div><div class="data-value">${vt.firstSeen ? formatDate(vt.firstSeen) : 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">Last Seen</div><div class="data-value">${vt.lastSeen ? formatDate(vt.lastSeen) : 'N/A'}</div></div>
-            </div>
-          </div>
-          <div class="section">
-            <div class="section-title">🔗 VirusTotal Link</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-value"><a href="${vt.url}" target="_blank" style="color: #059669;">View on VirusTotal</a></div></div>
-            </div>
-          </div>
-        `;
-    };
-    
-    // Build reputation section
-    const buildReputation = (rep: any) => {
-      if (!rep) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🎯 Reputation & Infrastructure</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">IP</div><div class="data-value">${reputation?.ip || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Geo</div><div class="data-value">${rep.geo || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">ASN</div><div class="data-value">${rep.asn || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">ISP</div><div class="data-value">${rep.isp || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">DNSBL Listed</div><div class="data-value">${rep.dnsblListed || 0}</div></div>
-            <div class="data-card"><div class="data-label">DNSBL Blocked</div><div class="data-value">${rep.dnsblBlocked || 0}</div></div>
-            <div class="data-card"><div class="data-label">Tor Exit</div><div class="data-value">${rep.torExit ? 'Yes' : 'No'}</div></div>
-            <div class="data-card"><div class="data-label">URLhaus Count</div><div class="data-value">${rep.urlhausCount || 0}</div></div>
-            <div class="data-card"><div class="data-label">Hosting</div><div class="data-value">${rep.hosting ? 'Yes' : 'No'}</div></div>
-            <div class="data-card"><div class="data-label">Proxy</div><div class="data-value">${rep.proxy ? 'Yes' : 'No'}</div></div>
-            <div class="data-card"><div class="data-label">WHOIS Created</div><div class="data-value">${formatDate(rep.whoisCreated) || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Domain Age</div><div class="data-value">${rep.domainAgeDays ? `${rep.domainAgeDays} days` : 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Domain Expires</div><div class="data-value">${formatDate(rep.domainExpires) || 'N/A'}</div></div>
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build scan results
-    const buildScan = (scan: any) => {
-      if (!scan) return '';
-      const openPorts = scan.ports?.filter((p: any) => p.state === 'open') || [];
-      return `
-        <div class="section">
-          <div class="section-title">🔍 Port Scan Results</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">OS Fingerprint</div><div class="data-value">${scan.os || 'Unknown'}</div></div>
-            <div class="data-card"><div class="data-label">Open Ports</div><div class="data-value">${openPorts.length}</div></div>
-          </div>
-          ${openPorts.length > 0 ? `
-            <div class="section">
-              <h4>Open Ports</h4>
-              <div class="data-grid">
-                ${openPorts.map((p: any) => `
-                  <div class="data-card">
-                    <div class="data-label">Port ${p.port}</div>
-                    <div class="data-value">${p.service} (${p.state})</div>
-                    <div class="data-label">Banner: ${escapeHtml(p.banner || '—')}</div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          ` : ''}
-        </div>
-      `;
-    };
-    
-    // Build RDAP
-    const buildRdap = (rdap: any) => {
-      if (!rdap) return '';
-      return `
-        <div class="section">
-          <div class="section-title">📋 RDAP / WHOIS</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Handle</div><div class="data-value">${escapeHtml(rdap.handle || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Name</div><div class="data-value">${escapeHtml(rdap.name || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Type</div><div class="data-value">${escapeHtml(rdap.type || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Country</div><div class="data-value">${escapeHtml(rdap.country || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Start Address</div><div class="data-value">${escapeHtml(rdap.startAddress || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">End Address</div><div class="data-value">${escapeHtml(rdap.endAddress || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Entities</div><div class="data-value">${rdap.entities?.join(', ') || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Abuse Contacts</div><div class="data-value">${rdap.abuseContacts?.join(', ') || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Status</div><div class="data-value">${rdap.status?.join(', ') || 'N/A'}</div></div>
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build HTTP
-    const buildHttp = (http: any) => {
-      if (!http) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🌐 HTTP Fingerprint</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Final URL</div><div class="data-value">${escapeHtml(http.finalUrl || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Status</div><div class="data-value">${http.status} ${http.statusText}</div></div>
-            <div class="data-card"><div class="data-label">Protocol</div><div class="data-value">${http.protocol}</div></div>
-            <div class="data-card"><div class="data-label">Server</div><div class="data-value">${escapeHtml(http.server || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Content-Type</div><div class="data-value">${escapeHtml(http.contentType || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">TTFB</div><div class="data-value">${http.timings?.ttfbMs} ms</div></div>
-            <div class="data-card"><div class="data-label">Total Time</div><div class="data-value">${http.timings?.totalMs} ms</div></div>
-          </div>
-          ${http.headers ? `
-            <div class="section">
-              <h4>Headers</h4>
-              <div class="json-block">${JSON.stringify(http.headers, null, 2)}</div>
-            </div>
-          ` : ''}
-        </div>
-      `;
-    };
-    
-    // Build TLS
-    const buildTls = (tls: any) => {
-      if (!tls) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🔒 TLS Certificate</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Protocol</div><div class="data-value">${tls.protocol}</div></div>
-            <div class="data-card"><div class="data-label">Cipher</div><div class="data-value">${escapeHtml(tls.cipher)}</div></div>
-            <div class="data-card"><div class="data-label">Subject CN</div><div class="data-value">${escapeHtml(tls.subjectCn || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Issuer CN</div><div class="data-value">${escapeHtml(tls.issuerCn || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Valid From</div><div class="data-value">${formatDate(tls.validFrom)}</div></div>
-            <div class="data-card"><div class="data-label">Valid To</div><div class="data-value">${formatDate(tls.validTo)}</div></div>
-            <div class="data-card"><div class="data-label">Status</div><div class="data-value">${tls.expired ? 'EXPIRED' : tls.selfSigned ? 'SELF-SIGNED' : tls.hostnameMismatch ? 'MISMATCH' : 'VALID'}</div></div>
-            <div class="data-card"><div class="data-label">SAN</div><div class="data-value">${tls.san?.join(', ') || 'N/A'}</div></div>
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build content analysis
-    const buildContent = (content: any) => {
-      if (!content) return '';
-      return `
-        <div class="section">
-          <div class="section-title">📄 Content Analysis</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Title</div><div class="data-value">${escapeHtml(content.title || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Description</div><div class="data-value">${escapeHtml(content.description || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Language</div><div class="data-value">${content.lang || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Favicon</div><div class="data-value">${content.favicon || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Forms</div><div class="data-value">${content.forms?.length || 0}</div></div>
-            <div class="data-card"><div class="data-label">Iframes</div><div class="data-value">${content.iframes?.length || 0}</div></div>
-            <div class="data-card"><div class="data-label">Meta Refresh</div><div class="data-value">${content.metaRefresh ? 'Yes' : 'No'}</div></div>
-            <div class="data-card"><div class="data-label">Obfuscated JS</div><div class="data-value">${content.obfuscatedJs ? 'Yes' : 'No'}</div></div>
-            <div class="data-card"><div class="data-label">Inline JS Bytes</div><div class="data-value">${content.inlineJsBytes || 0}</div></div>
-            <div class="data-card"><div class="data-label">Scripts</div><div class="data-value">${content.scripts?.length || 0}</div></div>
-            <div class="data-card"><div class="data-label">Emails</div><div class="data-value">${content.emails?.join(', ') || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Telegram Tokens</div><div class="data-value">${content.telegramTokens?.join(', ') || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Telegram Chat IDs</div><div class="data-value">${content.telegramChatIds?.join(', ') || 'N/A'}</div></div>
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build redirects
-    const buildRedirects = (redirects: any[]) => {
-      if (!redirects || redirects.length === 0) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🔄 Redirect Chain</div>
-          <div class="data-grid">
-            ${redirects.map((r, i) => `
-              <div class="data-card">
-                <div class="data-label">Step ${r.index || i + 1}</div>
-                <div class="data-value">${escapeHtml(r.url)}</div>
-                <div class="data-label">Status: ${r.status || 'N/A'}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build static flags
-    const buildStaticFlags = (flags: any[]) => {
-      if (!flags || flags.length === 0) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🚩 Static Flags</div>
-          <div class="data-grid">
-            ${flags.map(f => `
-              <div class="data-card">
-                <div class="data-label">${escapeHtml(f.label)}</div>
-                <div class="data-value">Weight: ${f.weight} · Category: ${f.category}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build screenshot
-    const buildScreenshot = (screenshotUrl: string) => {
-      if (!screenshotUrl) return '';
-      return `
-        <div class="section">
-          <div class="section-title">📸 Screenshot</div>
-          <div class="data-grid">
-            <div class="data-card">
-              <a href="${screenshotUrl}" target="_blank" style="color: #059669;">View Screenshot</a>
-            </div>
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build recommendations
-    const buildRecommendations = (recs: string[]) => {
-      if (!recs || recs.length === 0) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🛡️ Recommendations</div>
-          <ol>${recs.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ol>
-        </div>
-      `;
-    };
-    
-    // Build the complete IP Intel report
-    return `
-      <div class="section">
-        <div class="section-title">🔍 IP Intelligence Report</div>
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">IP Address</div><div class="data-value">${escapeHtml(ip)}</div></div>
-          <div class="data-card"><div class="data-label">Analysis Date</div><div class="data-value">${formatDate(new Date().toISOString())}</div></div>
-          <div class="data-card"><div class="data-label">Source</div><div class="data-value">NEXUS Real Sandbox</div></div>
-        </div>
-      </div>
-      
-      ${vt ? `<div class="section"><div class="section-title">🛡️ VirusTotal Analysis</div>${buildVT(vt)}` : ''}
-      
-      <div class="section">
-        <div class="section-title">⚠️ Threat Assessment</div>
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">Threat Level</div><div class="data-value">${verdict}</div></div>
-        </div>
-        <div class="section">
-          <h4>Recommendations</h4>
-          <ul>${recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
-        </div>
-      </div>
-      
-      ${buildReputation(data.reputation)}
-      ${buildScan(data.scan)}
-      ${buildVT(data.reputation?.virusTotal)}
-      ${buildRdap(data.data?.rdap)}
-      ${buildHttp(data.data?.http)}
-      ${buildTls(data.data?.tls)}
-      ${buildRedirects(data.data?.redirects)}
-      ${buildContent(data.data?.content)}
-      ${buildStaticFlags(data.data?.staticFlags)}
-      ${data.data?.screenshotUrl ? buildScreenshot(data.data.screenshotUrl) : ''}
-      ${buildRecommendations(data.analysis?.recommendations || [])}
-    `;
-  };
-
-  // Generate IP Intel specific report if tab is ip
-  let ipIntelHtml = '';
-  if (tab === 'ip' && data) {
-    ipIntelHtml = generateIpIntelReport(data, inputValue);
-  }
-
-  // Build the final HTML content based on tab
-  let contentHtml = '';
-  if (tab === 'domain' && domainIntelHtml) {
-    contentHtml = domainIntelHtml;
-  } else if (tab === 'ip' && ipIntelHtml) {
-    contentHtml = ipIntelHtml;
-  } else if (data) {
-    contentHtml = `
-      <div class="section">
-        <div class="section-title">📊 Datos de Análisis</div>
-        <div class="json-block">${reportData}</div>
-      </div>
-    `;
-  }
-
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${tabLabel} - Informe Imprimible | NEXUS-INTEL</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; background: #fff; color: #1f2937; line-height: 1.6; }
-    .header { border-bottom: 3px solid #059669; padding-bottom: 20px; margin-bottom: 30px; text-align: center; }
-    .logo { font-size: 24px; font-weight: 800; color: #059669; margin-bottom: 8px; }
-    .title { font-size: 28px; font-weight: 700; color: #111827; margin-bottom: 4px; }
-    .subtitle { color: #6b7280; font-size: 14px; }
-    .meta { display: flex; justify-content: center; gap: 20px; margin-top: 16px; flex-wrap: wrap; font-size: 13px; color: #6b7280; }
-    .section { margin-bottom: 30px; }
-    .section-title { font-size: 18px; font-weight: 700; color: #111827; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-    .data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-    .data-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; }
-    .data-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px; }
-    .data-value { font-weight: 600; color: #111827; word-break: break-word; font-family: monospace; font-size: 13px; }
-    .json-block { background: #111827; color: #10b981; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-    .badge-normal { background: #dcfce7; color: #166534; }
-    .badge-elevated { background: #fef3c7; color: #92400e; }
-    .badge-critical { background: #fee2e2; color: #991b1b; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; }
-    @media print { .no-print { display: none; } body { padding: 0; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="logo">🛡️ NEXUS-INTEL</div>
-    <div class="title">Informe de Inteligencia: ${tabLabel}</div>
-    <div class="subtitle">Plataforma de Inteligencia de Amenazas y Protección Ejecutiva</div>
-    <div class="meta">
-      <span>📅 Generado: ${timestamp}</span>
-      <span>🎯 Objetivo: ${inputDisplay}</span>
-      <span>🔍 Módulo: ${tabLabel}</span>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">📋 Resumen Ejecutivo</div>
-    <div class="data-grid">
-      <div class="data-card"><div class="data-label">Módulo</div><div class="data-value">${tabLabel}</div></div>
-      <div class="data-card"><div class="data-label">Fecha/Hora</div><div class="data-value">${timestamp}</div></div>
-      <div class="data-card"><div class="data-label">Objetivo Analizado</div><div class="data-value">${inputDisplay}</div></div>
-      <div class="data-card"><div class="data-label">Estado</div><div class="data-value"><span class="badge badge-normal">Completado</span></div></div>
-    </div>
-  </div>
-
-  ${contentHtml}
-
-  <div class="footer">
-    <p>Generado por NEXUS-INTEL — Plataforma de Inteligencia de Amenazas y Protección Ejecutiva</p>
-    <p>Este informe se generó automáticamente. Verifique los datos antes de tomar decisiones operacionales.</p>
-  </div>
-
-  <script>
-    window.onload = () => { window.print(); }
-  </script>
-</body>
-</html>`;
-}
-
-function openPrintReport(tab: TabType, data: any, inputValue: string) {
-  const html = generatePrintableReport(tab, data, inputValue);
-  const win = window.open('', '_blank');
-  if (win) {
-    win.document.write(html);
-    win.document.close();
-  } else {
-    alert('Permita ventanas emergentes para generar el informe imprimible.');
-  }
 }
 
 // ==================== FORENSIC ARTIFACTS ====================
@@ -1131,13 +368,13 @@ interface VulnProfile {
 const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
   21: {
     risk: 'HIGH',
-    title: 'FTP — cleartext + anonymous access',
+    title: 'FTP ΓÇö cleartext + anonymous access',
     desc: 'FTP transmits credentials in cleartext. Misconfigurations commonly allow anonymous logon, and older servers (vsftpd 2.3.4) contain a remote backdoor.',
     cves: ['CVE-2011-2523'],
     vector: 'Network: TCP/21 reachable without source restrictions. Credentials are sniffable in transit; anonymous mode needs no credentials.',
     steps: [
       'Enumerate: nmap -p21 --script ftp-anon,ftp-vsftpd-backdoor <ip>',
-      'Test anonymous logon: ftp <ip>  (user: anonymous, pass: any) → if logged in, check for writable directories',
+      'Test anonymous logon: ftp <ip>  (user: anonymous, pass: any) ΓåÆ if logged in, check for writable directories',
       'Capture cleartext creds with a passive sniffer (tcpdump/wireshark) on the segment',
       'If banner is vsftpd 2.3.4: attempt the backdoor on TCP/6200 (msf: exploit/unix/ftp/vsftpd_234_backdoor)',
       'Escalate: upload a webshell to a served FTP root or abuse writable shares',
@@ -1145,13 +382,13 @@ const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
   },
   22: {
     risk: 'HIGH',
-    title: 'SSH — brute force / weak credentials',
+    title: 'SSH ΓÇö brute force / weak credentials',
     desc: 'An exposed SSH service is a primary brute-force and credential-stuffing target. Weak passwords and old OpenSSH versions enable user enumeration and auth bypass.',
     cves: ['CVE-2018-15473', 'CVE-2024-6387'],
     vector: 'Network: TCP/22 open to the Internet. Relies on password auth; no rate limiting or fail2ban present.',
     steps: [
       'Enumerate users: nmap -p22 --script ssh2-enum-algos,ssh-hostkey <ip>',
-      'Version check: ssh -V + banner; if OpenSSH <9.8 → check regreSSHion CVE-2024-6387',
+      'Version check: ssh -V + banner; if OpenSSH <9.8 ΓåÆ check regreSSHion CVE-2024-6387',
       'User enumeration: nmap --script ssh-auth-methods <ip>',
       'Credential attack: hydra -L users.txt -P pass.txt ssh://<ip> (use only on owned/authorized targets)',
       'If weak creds found: log in, escalate privileges with local enumeration (linpeas / winPEAS)',
@@ -1159,48 +396,48 @@ const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
   },
   23: {
     risk: 'CRITICAL',
-    title: 'Telnet — unencrypted legacy remote access',
+    title: 'Telnet ΓÇö unencrypted legacy remote access',
     desc: 'Telnet sends all traffic in cleartext and often runs with default/weak credentials on network devices and IoT equipment. Trivially sniffable.',
     cves: ['CVE-2005-2011', 'CVE-1999-0619'],
     vector: 'Network: TCP/23 exposed; sessions are plaintext, credentials are captured in transit.',
     steps: [
-      'Sniff the session: tcpdump -i eth0 port 23 → credentials appear in cleartext',
+      'Sniff the session: tcpdump -i eth0 port 23 ΓåÆ credentials appear in cleartext',
       'Test default creds on common devices (admin/admin, root/root, cisco/cisco)',
-      'Banner grab: nc -nv <ip> 23 → identify device model / firmware',
+      'Banner grab: nc -nv <ip> 23 ΓåÆ identify device model / firmware',
       'After access: enumerate config, SNMP communities, and management VLANs',
     ],
   },
   25: {
     risk: 'MEDIUM',
-    title: 'SMTP — open relay / user enumeration',
+    title: 'SMTP ΓÇö open relay / user enumeration',
     desc: 'Open SMTP relays are abused to send spam; misconfigured servers also allow user enumeration and mail spoofing for phishing.',
     cves: ['CVE-1999-0521', 'CWE-1389'],
     vector: 'Network: TCP/25 open, no sender/recipient validation.',
     steps: [
       'Banner: nc -nv <ip> 25',
-      'Test open relay: MAIL FROM:<a@b.com> / RCPT TO:<c@d.com> → if accepted for foreign domains, it is an open relay',
-      'User enumeration: VRFY root / EXPN root → confirms valid accounts',
+      'Test open relay: MAIL FROM:<a@b.com> / RCPT TO:<c@d.com> ΓåÆ if accepted for foreign domains, it is an open relay',
+      'User enumeration: VRFY root / EXPN root ΓåÆ confirms valid accounts',
       'SPF/DMARC check for spoofing feasibility: dig TXT <domain>',
       'Block inbound spoofing by enforcing SPF/DKIM/DMARC + relay restrictions',
     ],
   },
   445: {
     risk: 'CRITICAL',
-    title: 'SMB — EternalBlue / SMBv1 / anonymous shares',
+    title: 'SMB ΓÇö EternalBlue / SMBv1 / anonymous shares',
     desc: 'Windows file sharing exposed on the Internet. SMBv1 and unpatched versions are remotely exploitable for RCE (EternalBlue chain) and anonymous shares leak data.',
     cves: ['CVE-2017-0143', 'CVE-2017-0144', 'CVE-2020-0796'],
     vector: 'Network: TCP/445 open; authenticated or anonymous access to SMB shares and SMBv1 protocol handling.',
     steps: [
       'Vuln scan: nmap -p445 --script smb-vuln-ms17-010,smb-vuln-ms10-061,smb-enum-shares <ip>',
       'SMBv1 detection: nmap --script smb-protocols <ip>',
-      'Anonymous share enum: smbclient -L //<ip> -N → check for open/print/IPC shares',
+      'Anonymous share enum: smbclient -L //<ip> -N ΓåÆ check for open/print/IPC shares',
       'If MS17-010 confirmed: msf exploit/windows/smb/ms17_010_eternalblue (authorized tests only)',
       'Remediate: disable SMBv1, patch, restrict 445/139 to trusted networks',
     ],
   },
   3306: {
     risk: 'HIGH',
-    title: 'MySQL — exposed database',
+    title: 'MySQL ΓÇö exposed database',
     desc: 'A database port reachable from the Internet is a prime target for credential attacks and known auth-bypass/overflow exploits in older versions.',
     cves: ['CVE-2012-2122', 'CVE-2016-6662'],
     vector: 'Network: TCP/3306 open; brute-forceable credentials, direct queries once authenticated.',
@@ -1214,7 +451,7 @@ const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
   },
   3389: {
     risk: 'CRITICAL',
-    title: 'RDP — BlueKeep / brute force',
+    title: 'RDP ΓÇö BlueKeep / brute force',
     desc: 'Remote Desktop exposed to the Internet. Unpatched versions are remotely exploitable pre-auth (BlueKeep); others are relentlessly brute-forced.',
     cves: ['CVE-2019-0708', 'CVE-2023-35332'],
     vector: 'Network: TCP/3389 open; pre-auth code path (BlueKeep) or weak RDP credentials.',
@@ -1222,12 +459,12 @@ const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
       'NLA check: nmap -p3389 --script rdp-ntlm-info <ip>',
       'BlueKeep probe: msf auxiliary/scanner/rdp/cve_2019_0708_bluekeep',
       'Credential attack: hydra -s 3389 rdp://<ip> -L users.txt -P pass.txt (authorized only)',
-      'If RDP open but not exploitable → still a high-value brute-force target: require NLA + strong creds + account lockout',
+      'If RDP open but not exploitable ΓåÆ still a high-value brute-force target: require NLA + strong creds + account lockout',
     ],
   },
   5432: {
     risk: 'HIGH',
-    title: 'PostgreSQL — exposed database',
+    title: 'PostgreSQL ΓÇö exposed database',
     desc: 'Internet-exposed PostgreSQL allows credential attacks and known extensions/version-specific exploits leading to RCE.',
     cves: ['CVE-2018-1058', 'CVE-2020-25695'],
     vector: 'Network: TCP/5432 open; weak superuser credentials or insecure pg_hba.conf entries.',
@@ -1240,12 +477,12 @@ const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
   },
   5900: {
     risk: 'HIGH',
-    title: 'VNC — no/weak authentication',
+    title: 'VNC ΓÇö no/weak authentication',
     desc: 'VNC servers frequently run with no password or with weak shared passwords; compromised sessions give full remote GUI control.',
     cves: ['CVE-2006-2369', 'CVE-2019-17270'],
     vector: 'Network: TCP/5900 open; empty or brute-forceable VNC password, unencrypted session.',
     steps: [
-      'Auth check: vncinfo / vncviewer <ip>:5900 → prompts for password?',
+      'Auth check: vncinfo / vncviewer <ip>:5900 ΓåÆ prompts for password?',
       'Brute force: hydra vnc://<ip> -P pass.txt',
       'Exploit realVNC/UltraVNC known CVEs based on version banner',
       'Remediate: require strong VNC password + tunnel over SSH/VPN, restrict sources',
@@ -1253,26 +490,26 @@ const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
   },
   6379: {
     risk: 'CRITICAL',
-    title: 'Redis — unauthenticated RCE',
+    title: 'Redis ΓÇö unauthenticated RCE',
     desc: 'Redis exposed without authentication lets attackers write SSH keys, cron jobs, or webshells, and chain known CVEs for remote code execution.',
     cves: ['CVE-2022-0543', 'CVE-2015-4335', 'CVE-2022-24735'],
-    vector: 'Network: TCP/6379 open, no requirepass configured → direct redis-cli commands.',
+    vector: 'Network: TCP/6379 open, no requirepass configured ΓåÆ direct redis-cli commands.',
     steps: [
       'Test unauthenticated access: redis-cli -h <ip> info server',
-      'Write SSH key: SET \'cron\' ... config set dir /root/.ssh → set filename authorized_keys',
+      'Write SSH key: SET \'cron\' ... config set dir /root/.ssh ΓåÆ set filename authorized_keys',
       'Webshell: config set dir /var/www/html; set + dbfilename shell.php',
-      'Cron RCE: config set dir /var/spool/cron; set filename root → reverse shell via cron',
+      'Cron RCE: config set dir /var/spool/cron; set filename root ΓåÆ reverse shell via cron',
       'Remediate: requirepass, bind 127.0.0.1, disable CONFIG (rename-command)',
     ],
   },
   8080: {
     risk: 'MEDIUM',
-    title: 'HTTP-Alt — admin panels / default credentials',
+    title: 'HTTP-Alt ΓÇö admin panels / default credentials',
     desc: 'Alternate HTTP ports frequently host admin consoles, APIs, or proxied apps with default credentials and unpatched web CVEs.',
     cves: ['CWE-798', 'CVE-2023-48795'],
     vector: 'Network: TCP/8080 open; web application reachable directly.',
     steps: [
-      'Identify app: curl -sI http://<ip>:8080 → grab Server header and redirects',
+      'Identify app: curl -sI http://<ip>:8080 ΓåÆ grab Server header and redirects',
       'Directory scan: gobuster dir -u http://<ip>:8080 -w wordlist.txt (look for /admin, /manager, /console)',
       'Default creds: test common combos on login panels',
       'Version-specific CVEs via banner/technology fingerprinting (whatweb, wappalyzer)',
@@ -1280,12 +517,12 @@ const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
   },
   9090: {
     risk: 'MEDIUM',
-    title: 'Web-Admin — exposed management interface',
+    title: 'Web-Admin ΓÇö exposed management interface',
     desc: 'Management consoles (e.g. monitoring, container tools) on TCP/9090 often ship with default credentials or known CVEs.',
     cves: ['CWE-798', 'CVE-2017-12617'],
     vector: 'Network: TCP/9090 open; administrative interface reachable.',
     steps: [
-      'Fingerprint: curl -sI http://<ip>:9090 → Server header / login page',
+      'Fingerprint: curl -sI http://<ip>:9090 ΓåÆ Server header / login page',
       'Search for default credentials for the identified product',
       'If it exposes an API: enumerate /api with unauth probes',
       'Restrict management ports to trusted networks',
@@ -1293,26 +530,26 @@ const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
   },
   53: {
     risk: 'MEDIUM',
-    title: 'DNS — open recursive resolver (amplification)',
+    title: 'DNS ΓÇö open recursive resolver (amplification)',
     desc: 'An open recursive resolver on the public Internet is abused for DNS amplification DDoS and domain data disclosure. It should only be reachable by its own clients.',
     cves: ['CVE-1999-0532', 'CWE-918'],
     vector: 'Network: TCP/UDP 53 open and accepting recursive queries from arbitrary hosts.',
     steps: [
-      'Test recursion: dig @<ip> google.com A → if it answers for external names, it is an open resolver',
-      'Amplification check: dig @<ip> any . TXT +dnssec → measure response size vs query',
+      'Test recursion: dig @<ip> google.com A ΓåÆ if it answers for external names, it is an open resolver',
+      'Amplification check: dig @<ip> any . TXT +dnssec ΓåÆ measure response size vs query',
       'Enumerate domain data: axfr zone transfer attempt (dig @<ip> <domain> axfr)',
       'Remediate: restrict recursion to internal clients, enable RRL, block zone transfers',
     ],
   },
   80: {
     risk: 'MEDIUM',
-    title: 'HTTP — exposed web service',
+    title: 'HTTP ΓÇö exposed web service',
     desc: 'Public web services frequently run outdated software, default admin panels, or exposed debug endpoints.',
     cves: ['CWE-798', 'CWE-79'],
     vector: 'Network: TCP/80 open; application served without TLS, credentials and data in cleartext.',
     steps: [
-      'Fingerprint: curl -sI http://<ip>/ → Server, X-Powered-By, redirects',
-      'Directory scan: gobuster dir -u http://<ip>/ -w wordlist.txt → /admin, /wp-login.php, /.git, /backup',
+      'Fingerprint: curl -sI http://<ip>/ ΓåÆ Server, X-Powered-By, redirects',
+      'Directory scan: gobuster dir -u http://<ip>/ -w wordlist.txt ΓåÆ /admin, /wp-login.php, /.git, /backup',
       'Technology + CVE mapping: whatweb / wappalyzer, then search CVEs for the version',
       'If WordPress: wpscan --url http://<ip>/ to enumerate plugins/themes with known vulnerabilities',
       'Harden: patch software, disable dir listing, enforce HTTPS (see port 443)',
@@ -1320,25 +557,25 @@ const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
   },
   110: {
     risk: 'MEDIUM',
-    title: 'POP3 — cleartext mail retrieval',
+    title: 'POP3 ΓÇö cleartext mail retrieval',
     desc: 'POP3 retrieves mail without encryption; credentials and message content are sniffable. Older servers expose user enumeration.',
     cves: ['CVE-1999-0619', 'CWE-319'],
     vector: 'Network: TCP/110 open; mail session in cleartext.',
     steps: [
-      'Banner: nc -nv <ip> 110 → +OK banner identifies server/version',
-      'User enumeration: USER <name> → observe OK/ERR responses for valid accounts',
+      'Banner: nc -nv <ip> 110 ΓåÆ +OK banner identifies server/version',
+      'User enumeration: USER <name> ΓåÆ observe OK/ERR responses for valid accounts',
       'Sniff the session to capture credentials (must be on-path/authorized)',
       'Check STARTTLS availability; if unsupported, migrate clients to 995 (POP3S)',
     ],
   },
   115: {
     risk: 'HIGH',
-    title: 'SFTP (SSH) — exposed file transfer',
+    title: 'SFTP (SSH) ΓÇö exposed file transfer',
     desc: 'SFTP runs over SSH, so the exposure mirrors port 22: brute-forceable credentials and OpenSSH CVEs. It often sits on file servers storing sensitive data.',
     cves: ['CVE-2024-6387', 'CVE-2018-15473'],
     vector: 'Network: TCP/115 open; SSH-based file transfer reachable, password auth enabled.',
     steps: [
-      'Version: ssh-keyscan -p 115 <ip> → banner; if OpenSSH <9.8 check regreSSHion (CVE-2024-6387)',
+      'Version: ssh-keyscan -p 115 <ip> ΓåÆ banner; if OpenSSH <9.8 check regreSSHion (CVE-2024-6387)',
       'User enum: ssh2-enum-algos / ssh-auth-methods via nmap',
       'Weak creds: hydra -s 115 -L users.txt -P pass.txt ssh://<ip> (authorized targets only)',
       'Once in: extract files, ssh keys, and configs; check for writable upload dirs',
@@ -1346,52 +583,52 @@ const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
   },
   135: {
     risk: 'CRITICAL',
-    title: 'MSRPC — DCOM / RPC exposure',
+    title: 'MSRPC ΓÇö DCOM / RPC exposure',
     desc: 'Microsoft RPC (135/TCP) exposed publicly is the entry point for DCOM object attacks and is part of the EternalBlue/remote management attack chains.',
     cves: ['CVE-2008-4250', 'CVE-2017-0143', 'CVE-2021-1675'],
     vector: 'Network: TCP/135 open; DCOM/RPC endpoints reachable from the Internet.',
     steps: [
-      'Endpoint enum: rpcdump.py <ip> (Impacket) → list RPC interfaces and bindings',
+      'Endpoint enum: rpcdump.py <ip> (Impacket) ΓåÆ list RPC interfaces and bindings',
       'Vuln scan: nmap -p135 --script msrpc-enum,ms-sql-info <ip>',
       'PrintNightmare check (CVE-2021-1675) if Print Spooler RPC endpoint exposed',
-      'If combined with SMB (445) → assess EternalBlue chain for full RCE',
+      'If combined with SMB (445) ΓåÆ assess EternalBlue chain for full RCE',
       'Remediate: block 135/139/445 at the edge; patch MS17-010-class vulnerabilities',
     ],
   },
   139: {
     risk: 'HIGH',
-    title: 'NetBIOS — SMB session services',
+    title: 'NetBIOS ΓÇö SMB session services',
     desc: 'NetBIOS-SSN exposes legacy SMB session services used by Windows file sharing; it leaks hostnames, shares and enables SMBv1-era exploits.',
     cves: ['CVE-2017-0143', 'CVE-2017-0144'],
     vector: 'Network: TCP/139 open; NBT session service reachable, anonymous enumeration possible.',
     steps: [
-      'Enumeration: nmap -p139 --script nbstat.nse <ip> → NetBIOS name table (hostname, logged-in users)',
-      'Share enum: smbclient -L //<ip> -N → list available shares',
+      'Enumeration: nmap -p139 --script nbstat.nse <ip> ΓåÆ NetBIOS name table (hostname, logged-in users)',
+      'Share enum: smbclient -L //<ip> -N ΓåÆ list available shares',
       'SMBv1/EternalBlue assessment if SMB protocol negotiation succeeds',
       'Remediate: disable NetBIOS over TCP/IP (WINS), block 139 at edge, patch SMB',
     ],
   },
   143: {
     risk: 'MEDIUM',
-    title: 'IMAP — cleartext mail retrieval',
+    title: 'IMAP ΓÇö cleartext mail retrieval',
     desc: 'IMAP without TLS exposes credentials and mail in transit; vulnerable/legacy servers have memory-overflow and DoS CVEs.',
     cves: ['CVE-1999-0619', 'CWE-319', 'CVE-2004-2650'],
     vector: 'Network: TCP/143 open; cleartext mail session and STARTTLS negotiation.',
     steps: [
-      'Banner: nc -nv <ip> 143 → server version',
-      'Auth probe: a001 LOGIN user pass → test default/weak creds on own tenants',
+      'Banner: nc -nv <ip> 143 ΓåÆ server version',
+      'Auth probe: a001 LOGIN user pass ΓåÆ test default/weak creds on own tenants',
       'Check STARTTLS: if unsupported, credential sniffing is trivial on-path',
       'Migrate to 993 (IMAPS) and require TLS 1.2+',
     ],
   },
   194: {
     risk: 'MEDIUM',
-    title: 'IRC — cleartext chat / botnet C2',
+    title: 'IRC ΓÇö cleartext chat / botnet C2',
     desc: 'IRC serves as botnet command-and-control and leaks channel/operator metadata. Open IRC servers are abused for DDoS bot networks and credential dumping.',
     cves: ['CWE-319', 'CVE-2005-3557'],
     vector: 'Network: TCP/194 open; IRC session reachable without transport encryption.',
     steps: [
-      'Probe: nc -nv <ip> 194 → 020 banner reveals server software (e.g. InspIRCd, UnrealIRCd)',
+      'Probe: nc -nv <ip> 194 ΓåÆ 020 banner reveals server software (e.g. InspIRCd, UnrealIRCd)',
       'Version CVEs: UnrealIRCd pre-3.2.8.1 backdoor (CVE-2010-2075), InspIRCd flaws',
       'Monitor channel/oper activity for C2 indicators (nick patterns, topic updates)',
       'Check for unauthenticated channel access and excessive connection flood',
@@ -1399,53 +636,53 @@ const VULNERABLE_SERVICES: Record<number, VulnProfile> = {
   },
   443: {
     risk: 'MEDIUM',
-    title: 'SSL/HTTPS — exposed web service',
+    title: 'SSL/HTTPS ΓÇö exposed web service',
     desc: 'TLS services hide admin panels, APIs and vulnerable apps; weak TLS configs and exposed login endpoints are prime attack surface.',
     cves: ['CWE-798', 'CVE-2023-48795', 'CWE-295'],
     vector: 'Network: TCP/443 open; TLS service reachable from the Internet.',
     steps: [
-      'TLS audit: nmap -p443 --script ssl-enum-ciphers <ip> → weak ciphers/protocols',
-      'Scanning: testssl.sh <ip>:443 → protocol/cipher weaknesses',
-      'App discovery: curl -skI https://<ip>/ → Server header, login paths (/admin, /login, /api)',
-      'Certificate info: openssl s_client -connect <ip>:443 → check expiry, SANs, issuer (pivot data)',
+      'TLS audit: nmap -p443 --script ssl-enum-ciphers <ip> ΓåÆ weak ciphers/protocols',
+      'Scanning: testssl.sh <ip>:443 ΓåÆ protocol/cipher weaknesses',
+      'App discovery: curl -skI https://<ip>/ ΓåÆ Server header, login paths (/admin, /login, /api)',
+      'Certificate info: openssl s_client -connect <ip>:443 ΓåÆ check expiry, SANs, issuer (pivot data)',
       'Harden: modern TLS config, HSTS, patch app, restrict admin routes',
     ],
   },
   1433: {
     risk: 'CRITICAL',
-    title: 'MSSQL — exposed database / sa brute force',
+    title: 'MSSQL ΓÇö exposed database / sa brute force',
     desc: 'SQL Server on the public Internet with a weak or empty sa password is an instant database takeover; older versions have remote RCE CVEs.',
     cves: ['CVE-2019-1068', 'CVE-2020-0618', 'CVE-2008-5416'],
     vector: 'Network: TCP/1433 open; TDS protocol reachable, sa credentials brute-forceable.',
     steps: [
-      'Probe: nmap -p1433 --script ms-sql-info,ms-sql-ntlm-info <ip> → instance, version, patch level',
+      'Probe: nmap -p1433 --script ms-sql-info,ms-sql-ntlm-info <ip> ΓåÆ instance, version, patch level',
       'Default sa password test (only on owned/authorized targets): sqlcmd -S <ip> -U sa -P \'sa\' / empty',
       'Brute force: msf auxiliary/scanner/mssql/mssql_login with common passwords',
-      'If compromised: xp_cmdshell RCE → take over the OS account running SQL Server',
+      'If compromised: xp_cmdshell RCE ΓåÆ take over the OS account running SQL Server',
       'Lock down: strong sa password, Windows Auth, restrict 1433 to app networks',
     ],
   },
   5632: {
     risk: 'HIGH',
-    title: 'PCAnywhere — legacy remote control',
+    title: 'PCAnywhere ΓÇö legacy remote control',
     desc: 'Symantec pcAnywhere is legacy remote-control software with known authentication-bypass and default-credential CVEs; long unsupported.',
     cves: ['CVE-2006-4048', 'CVE-2007-3612'],
     vector: 'Network: TCP/5632 open; remote-control service with weak/known auth reachable.',
     steps: [
-      'Banner: nc -nv <ip> 5632 → version fingerprint',
-      'Default password test (authorized only) → pcAnywhere host passwords are commonly left default',
+      'Banner: nc -nv <ip> 5632 ΓåÆ version fingerprint',
+      'Default password test (authorized only) ΓåÆ pcAnywhere host passwords are commonly left default',
       'Known auth-bypass assessment per version banner (CVE-2006-4048)',
       'Remediate: uninstall pcAnywhere, replace with a modern patched remote-control solution',
     ],
   },
   25565: {
     risk: 'MEDIUM',
-    title: 'Minecraft — game server exposed',
+    title: 'Minecraft ΓÇö game server exposed',
     desc: 'Public Minecraft servers can leak player data, are brute-forced for admin accounts, and vulnerable plugin stacks expose RCE/DoS.',
     cves: ['CVE-2021-3854', 'CWE-798', 'CWE-400'],
     vector: 'Network: TCP/25565 open; Minecraft protocol reachable, RCON/admin brute-forceable.',
     steps: [
-      'Handshake: python or mcstatus to query server → version, MOTD, player list, mods',
+      'Handshake: python or mcstatus to query server ΓåÆ version, MOTD, player list, mods',
       'RCON check: if RCON enabled (default port 25575), brute-force admin password (authorized only)',
       'Plugin/version CVEs: map the modpack/plugin list to known CVEs (Log4Shell family)',
       'Look for console exposure and offline-mode (cracked) servers leaking identities',
@@ -1497,37 +734,37 @@ interface NavCategory { name: string; emoji: string; items: NavItem[]; }
 
 const NAV_CATEGORIES: NavCategory[] = [
   {
-    name: 'Infrastructure & Network', emoji: '🌐',
+    name: 'Infrastructure & Network', emoji: '≡ƒîÉ',
     items: [
       { id: 'ip', label: 'IP Intel', icon: Globe, color: 'text-green-400' },
       { id: 'domain', label: 'Domain Intel', icon: Server, color: 'text-purple-400' },
-      { id: 'forensics', label: 'Domain Forensics', icon: Camera, color: 'text-red-400' },
-      { id: 'dnsdump', label: 'DNS Dump', icon: Network, color: 'text-teal-400' },
+      { id: 'forensics', label: 'Domain Forensics', icon: Camera, color: 'text-red-400', badge: 'NEW' },
+      { id: 'dnsdump', label: 'DNS Dump', icon: Network, color: 'text-teal-400', badge: 'NEW' },
       { id: 'url', label: 'URL Scanner', icon: ExternalLink, color: 'text-yellow-400' },
-      { id: 'sandbox', label: 'URL Sandbox', icon: Zap, color: 'text-lime-400' },
-      { id: 'takedown', label: 'TakeDown URL', icon: Send, color: 'text-orange-400' },
+      { id: 'sandbox', label: 'URL Sandbox', icon: Zap, color: 'text-lime-400', badge: 'NEW' },
+      { id: 'takedown', label: 'TakeDown URL', icon: Send, color: 'text-orange-400', badge: 'NEW' },
     ],
   },
   {
-    name: 'OSINT & Surface Monitoring', emoji: '🕵️',
+    name: 'OSINT & Surface Monitoring', emoji: '≡ƒò╡∩╕Å',
     items: [
-      { id: 'darkweb', label: 'Deep & Dark Web', icon: Skull, color: 'text-red-500' },
-      { id: 'social', label: 'Telegram & Discord Monitor', icon: MessageSquare, color: 'text-blue-400' },
-      { id: 'exec', label: 'Executive OSINT', icon: ShieldUser, color: 'text-amber-400' },
-      { id: 'brand', label: 'Brand Protection', icon: ShieldAlert, color: 'text-rose-400' },
-      { id: 'fakeapp', label: 'Fake App Scanner', icon: Smartphone, color: 'text-fuchsia-400' },
+      { id: 'darkweb', label: 'Deep & Dark Web', icon: Skull, color: 'text-red-500', badge: 'NEW' },
+      { id: 'social', label: 'Telegram & Discord Monitor', icon: MessageSquare, color: 'text-blue-400', badge: 'NEW' },
+      { id: 'exec', label: 'Executive OSINT', icon: ShieldUser, color: 'text-amber-400', badge: 'NEW' },
+      { id: 'brand', label: 'Brand Protection', icon: ShieldAlert, color: 'text-rose-400', badge: 'NEW' },
+      { id: 'fakeapp', label: 'Fake App Scanner', icon: Smartphone, color: 'text-fuchsia-400', badge: 'NEW' },
     ],
   },
   {
-    name: 'Technical Analysis & Vulnerabilities', emoji: '🔬',
+    name: 'Technical Analysis & Vulnerabilities', emoji: '≡ƒö¼',
     items: [
       { id: 'hash', label: 'Hash Lookup', icon: Fingerprint, color: 'text-cyan-400' },
       { id: 'cve', label: 'CVE Database', icon: Shield, color: 'text-orange-400' },
-      { id: 'mobile', label: 'Mobile Security', icon: Smartphone, color: 'text-indigo-400' },
+      { id: 'mobile', label: 'Mobile Security', icon: Smartphone, color: 'text-indigo-400', badge: 'NEW' },
     ],
   },
   {
-    name: 'Threat Intelligence & AI', emoji: '⚡',
+    name: 'Threat Intelligence & AI', emoji: 'ΓÜí',
     items: [
       { id: 'threats', label: 'Threat Feeds', icon: AlertTriangle, color: 'text-amber-400' },
       { id: 'iocs', label: 'IOC Manager', icon: Database, color: 'text-emerald-400' },
@@ -1536,7 +773,7 @@ const NAV_CATEGORIES: NavCategory[] = [
     ],
   },
   {
-    name: 'Reporting & Exports', emoji: '📊',
+    name: 'Reporting & Exports', emoji: '≡ƒôè',
     items: [
       { id: 'reports', label: 'Reports', icon: FileText, color: 'text-violet-400' },
       { id: 'export', label: 'Export Data', icon: Download, color: 'text-teal-400' },
@@ -1560,17 +797,12 @@ export default function OSINTPlatform() {
   const [searchTerms, setSearchTerms] = useState<Record<string, string>>({});
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [ipQueue, setIpQueue] = useState<IpQueueEntry[]>([]);
-
-  // Clear apiData when switching tabs to prevent cross-module data leakage
-  useEffect(() => {
-    setApiData(null);
-  }, [activeTab]);
   const [selectedQueue, setSelectedQueue] = useState<Set<string>>(new Set());
   const [showDnsblDetail, setShowDnsblDetail] = useState(false);
   const [showEnrichment, setShowEnrichment] = useState(false);
   const [openArtifact, setOpenArtifact] = useState<string | null>('timestamps');
   
-  // Input State — isolated per module (activeTab), reset after execution
+  // Input State ΓÇö isolated per module (activeTab), reset after execution
   const inputValue = searchTerms[activeTab] ?? '';
   const setInputValue = (v: string) => setSearchTerms((t) => ({ ...t, [activeTab]: v }));
   const searchQuery = searchTerms.iocs ?? '';
@@ -1592,14 +824,8 @@ export default function OSINTPlatform() {
   // Sidebar Category State (collapsed by default except the active category)
   const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
 
-  const isCatCollapsed = (cat: NavCategory) => {
-    // If user explicitly toggled this category, respect that choice
-    if (cat.name in collapsedCats) {
-      return collapsedCats[cat.name];
-    }
-    // Default: expand if active tab is in this category, otherwise collapsed
-    return cat.items.some((i) => i.id === activeTab) ? false : true;
-  };
+  const isCatCollapsed = (cat: NavCategory) =>
+    cat.items.some((i) => i.id === activeTab) ? false : collapsedCats[cat.name] ?? true;
 
   const toggleCat = (cat: NavCategory) =>
     setCollapsedCats((prev) => ({ ...prev, [cat.name]: !isCatCollapsed(cat) }));
@@ -1696,7 +922,7 @@ export default function OSINTPlatform() {
 
   const handleForensicReport = async () => {
     const data = apiData?.data;
-    if (!data) { showFeedback('Sin datos de análisis para exportar', 'error'); return; }
+    if (!data) { showFeedback('Sin datos de an├ílisis para exportar', 'error'); return; }
     showFeedback('Generando informe imprimible...', 'info');
     try {
       const res = await fetch('/api/osint/forensics/report', {
@@ -1712,54 +938,6 @@ export default function OSINTPlatform() {
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       showFeedback('Informe forense descargado', 'success');
-    } catch {
-      showFeedback('Error generando el informe', 'error');
-    }
-  };
-
-  // ==================== DOMAIN REPORT ====================
-  const handleDomainReport = async () => {
-    const data = apiData?.domainIntel || apiData?.data;
-    if (!data) { showFeedback('Sin datos de análisis de dominio para exportar', 'error'); return; }
-    showFeedback('Generando informe imprimible...', 'info');
-    try {
-      const res = await fetch('/api/osint/domain/report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain: data.domain || inputValue, data, module: 'domain' }),
-      });
-      if (!res.ok) { showFeedback('Error generando el informe', 'error'); return; }
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `informe_domain_${data.domain || inputValue}`.replace(/[^a-zA-Z0-9._-]/g, '_') + '.html';
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-      showFeedback('Informe de Dominio descargado', 'success');
-    } catch {
-      showFeedback('Error generando el informe', 'error');
-    }
-  };
-
-  // ==================== IP REPORT ====================
-  const handleIPReport = async () => {
-    const data = apiData?.data;
-    if (!data) { showFeedback('Sin datos de análisis IP para exportar', 'error'); return; }
-    showFeedback('Generando informe imprimible...', 'info');
-    try {
-      const res = await fetch('/api/osint/ip/report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip: data.data?.query || data.data?.ip || inputValue, data, module: 'ip' }),
-      });
-      if (!res.ok) { showFeedback('Error generando el informe', 'error'); return; }
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `informe_ip_${data.data?.query || data.data?.ip || inputValue}`.replace(/[^a-zA-Z0-9._:]/g, '_') + '.html';
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-      showFeedback('Informe IP descargado', 'success');
     } catch {
       showFeedback('Error generando el informe', 'error');
     }
@@ -1793,7 +971,7 @@ export default function OSINTPlatform() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        showFeedback(err?.error || 'Generación ZIP fallida', 'error');
+        showFeedback(err?.error || 'Generaci├│n ZIP fallida', 'error');
         return;
       }
       const blob = await res.blob();
@@ -1804,7 +982,7 @@ export default function OSINTPlatform() {
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       showFeedback(`ZIP descargado (${(blob.size / 1024).toFixed(1)} KB)`, 'success');
     } catch {
-      showFeedback('Generación ZIP fallida', 'error');
+      showFeedback('Generaci├│n ZIP fallida', 'error');
     } finally {
       setWgetZipLoading(false);
     }
@@ -2014,7 +1192,7 @@ export default function OSINTPlatform() {
         setForensicsHistory(merged);
         return;
       }
-    } catch { /* backend unavailable — local only */ }
+    } catch { /* backend unavailable ΓÇö local only */ }
     setForensicsHistory(localRows);
   };
 
@@ -2089,10 +1267,10 @@ export default function OSINTPlatform() {
     });
   };
 
-  // Dark Web Search Handler — búsqueda real en deep/dark web vía API IntelX
+  // Dark Web Search Handler ΓÇö b├║squeda real en deep/dark web v├¡a API IntelX
   const handleDarkWebSearch = async () => {
     const query = (inputValue || '').trim().slice(0, 200);
-    if (!query) { showFeedback('Introduce un dominio, email, IP o dirección BTC', 'error'); return; }
+    if (!query) { showFeedback('Introduce un dominio, email, IP o direcci├│n BTC', 'error'); return; }
     setLoading(true);
     setError(null);
     showFeedback(`Buscando en deep/dark web (IntelligenceX): ${query}...`, 'info');
@@ -2287,7 +1465,7 @@ export default function OSINTPlatform() {
 
   const handleSandboxReport = async () => {
     const data = apiData?.data;
-    if (!data) { showFeedback('Sin datos de detonación para exportar', 'error'); return; }
+    if (!data) { showFeedback('Sin datos de detonaci├│n para exportar', 'error'); return; }
     showFeedback('Generando informe imprimible...', 'info');
     try {
       const res = await fetch('/api/osint/sandbox/report', {
@@ -2357,7 +1535,7 @@ export default function OSINTPlatform() {
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const analysis = await analyzeApkBytes(bytes, { apkUrl: 'upload://' + file.name, fileName: file.name });
-      setApiData({ success: true, source: 'Fake-App-Scanner (client-side static analysis)', data: analysis as any, message: `Client-side analysis done — ${analysis.verdict} (${analysis.score}/100). Syncing with CVE correlation...` });
+      setApiData({ success: true, source: 'Fake-App-Scanner (client-side static analysis)', data: analysis as any, message: `Client-side analysis done ΓÇö ${analysis.verdict} (${analysis.score}/100). Syncing with CVE correlation...` });
       showFeedback(`Client-side analysis complete: ${analysis.verdict} (${analysis.score}/100). Syncing report...`, 'success');
       await callAPI('/api/osint/fakeapp', { method: 'POST', body: JSON.stringify({ action: 'analyze-upload', report: analysis }) });
     } catch (err) {
@@ -2394,7 +1572,7 @@ export default function OSINTPlatform() {
       : detected === 'ip' ? 'IP'
       : 'DOMAIN';
     if (!target) {
-      showFeedback('No result to add — run an analysis first', 'error');
+      showFeedback('No result to add ΓÇö run an analysis first', 'error');
       return;
     }
 
@@ -2415,7 +1593,7 @@ export default function OSINTPlatform() {
       if (torExit) tags.push('tor-exit');
       if (urlCount > 0) tags.push(`urlhaus:${urlCount}`);
       const marks = listed.map((d: any) => `${d.name}(${d.records.join(',')})`).join(', ') || 'clean';
-      description = `IP ${target} — DNSBL: ${marks}${torExit ? ', Tor exit' : ''}${urlCount > 0 ? `, URLhaus: ${urlCount}` : ''} (multirbl.valli.org check)`;
+      description = `IP ${target} ΓÇö DNSBL: ${marks}${torExit ? ', Tor exit' : ''}${urlCount > 0 ? `, URLhaus: ${urlCount}` : ''} (multirbl.valli.org check)`;
     }
 
     showFeedback(`Adding ${iocType}: ${target} to IOCs...`, 'info');
@@ -2475,7 +1653,7 @@ export default function OSINTPlatform() {
 
   const exportIpQueue = (format: 'csv' | 'json') => {
     if (ipQueue.length === 0) {
-      showFeedback('Queue is empty — nothing to export', 'error');
+      showFeedback('Queue is empty ΓÇö nothing to export', 'error');
       return;
     }
     const filename = `ip-ioc-queue-${new Date().toISOString().slice(0, 10)}`;
@@ -2775,7 +1953,7 @@ export default function OSINTPlatform() {
                 <h1 className="text-xl font-bold bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 bg-clip-text text-transparent">
                   MONITOR-THREAT-v2
                 </h1>
-                <p className="text-xs text-gray-400">Brand Protection • URL Sandbox • Social Monitoring • Executive OSINT</p>
+                <p className="text-xs text-gray-400">Brand Protection ΓÇó URL Sandbox ΓÇó Social Monitoring ΓÇó Executive OSINT</p>
               </div>
             </div>
             
@@ -2815,7 +1993,7 @@ export default function OSINTPlatform() {
         {/* Sidebar Navigation */}
         <nav className="w-64 min-h-screen bg-gray-900 border-r border-gray-800 p-4 sticky top-[65px] h-[calc(100vh-65px)] overflow-y-auto">
           <div className="space-y-1">
-            {/* Dashboard — always visible */}
+            {/* Dashboard ΓÇö always visible */}
             <button
               onClick={() => { setActiveTab('dashboard'); showFeedback('Loaded Dashboard'); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative ${
@@ -3135,19 +2313,9 @@ export default function OSINTPlatform() {
           {/* ==================== IP INTEL TAB ==================== */}
           {activeTab === 'ip' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Globe className="w-7 h-7 text-green-400" /> IP Intelligence
-                </h2>
-                <button
-                  onClick={handleIPReport}
-                  className="px-4 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-300 border border-green-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Globe className="w-7 h-7 text-green-400" /> IP Intelligence
+              </h2>
               
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="flex gap-4">
@@ -3216,7 +2384,7 @@ export default function OSINTPlatform() {
                               </div>
                               <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
                                 <span><span className="text-gray-300 font-medium">{top.abuseScore}%</span> abuse</span>
-                                <span>{top.blacklistCount} blacklisted{top.blockedCount ? ` · ${top.blockedCount} blocked` : ''}</span>
+                                <span>{top.blacklistCount} blacklisted{top.blockedCount ? ` ┬╖ ${top.blockedCount} blocked` : ''}</span>
                                 <span>{top.torExit ? 'Tor exit' : 'No Tor'}</span>
                                 <span>URLhaus: {top.urlhausCount}</span>
                                 {top.malware && <span className="text-red-300">{top.malware}</span>}
@@ -3295,7 +2463,7 @@ export default function OSINTPlatform() {
                     {showDnsblDetail && apiData.reputation && (
                       <div className="mb-4 p-3 bg-gray-900/60 rounded-lg border border-gray-700">
                         <div className="flex items-center justify-between mb-2">
-                          <p className="text-xs text-gray-400 font-medium">DNSBL detail — {apiData.reputation.dnsbl.length} zones checked</p>
+                          <p className="text-xs text-gray-400 font-medium">DNSBL detail ΓÇö {apiData.reputation.dnsbl.length} zones checked</p>
                           <button onClick={() => setShowDnsblDetail(false)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
                         </div>
                         {(() => {
@@ -3336,7 +2504,7 @@ export default function OSINTPlatform() {
                           <InfoCard label="Continent" value={`${apiData.data.continent || 'N/A'} (${apiData.data.continentCode || ''})`} icon={<Globe2 className="w-4 h-4" />} />
                           <InfoCard label="ISP" value={apiData.data.isp || 'N/A'} icon={<Wifi className="w-4 h-4" />} />
                           <InfoCard label="Organization" value={apiData.data.org || 'N/A'} icon={<Database className="w-4 h-4" />} />
-                          <InfoCard label="ASN" value={`${apiData.data.as || 'N/A'}${apiData.data.asname ? ` — ${apiData.data.asname}` : ''}`} icon={<Radar className="w-4 h-4" />} />
+                          <InfoCard label="ASN" value={`${apiData.data.as || 'N/A'}${apiData.data.asname ? ` ΓÇö ${apiData.data.asname}` : ''}`} icon={<Radar className="w-4 h-4" />} />
                           <InfoCard label="Latitude" value={apiData.data.lat || 'N/A'} icon={<Target className="w-4 h-4" />} />
                           <InfoCard label="Longitude" value={apiData.data.lon || 'N/A'} icon={<Target className="w-4 h-4" />} />
                           <InfoCard label="Timezone" value={apiData.data.timezone || 'N/A'} icon={<Clock className="w-4 h-4" />} />
@@ -3373,7 +2541,7 @@ export default function OSINTPlatform() {
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                           {apiData.data.rdap.name && <div><span className="text-gray-400">Network:</span> <span className="font-mono">{apiData.data.rdap.name}</span></div>}
-                          {apiData.data.rdap.startAddress && apiData.data.rdap.endAddress && <div><span className="text-gray-400">Range:</span> <span className="font-mono">{apiData.data.rdap.startAddress} — {apiData.data.rdap.endAddress}</span></div>}
+                          {apiData.data.rdap.startAddress && apiData.data.rdap.endAddress && <div><span className="text-gray-400">Range:</span> <span className="font-mono">{apiData.data.rdap.startAddress} ΓÇö {apiData.data.rdap.endAddress}</span></div>}
                           {apiData.data.rdap.entities?.length > 0 && <div><span className="text-gray-400">Registrant:</span> <span>{apiData.data.rdap.entities.join(', ')}</span></div>}
                           {apiData.data.rdap.country && <div><span className="text-gray-400">Registry Country:</span> <span>{apiData.data.rdap.country}</span></div>}
                           {apiData.data.rdap.status?.length > 0 && <div><span className="text-gray-400">Status:</span> <span>{apiData.data.rdap.status.join(', ')}</span></div>}
@@ -3388,57 +2556,13 @@ export default function OSINTPlatform() {
                         <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
                           <ShieldAlert className="w-4 h-4 text-red-400" /> Reputation & Threat Intelligence
                         </h4>
-                        {/* VirusTotal Classification */}
-                        {apiData.reputation?.virusTotal && apiData.reputation.virusTotal.analyzed && (
-                          <div className="mt-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
-                            <h5 className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-2">
-                              <Shield className="w-3.5 h-3.5 text-orange-400" /> VirusTotal Classification
-                            </h5>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Verdict</div>
-                                <div className="font-bold text-lg flex items-center gap-2">
-                                  <span className={`px-2 py-0.5 rounded text-xs ${
-                                    apiData.reputation.virusTotal.verdict === 'MALICIOUS' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
-                                    apiData.reputation.virusTotal.verdict === 'SUSPICIOUS' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
-                                    apiData.reputation.virusTotal.verdict === 'CLEAN' ? 'bg-green-500/20 text-green-400 border border-green-500/40' :
-                                    'bg-gray-700 text-gray-300 border border-gray-600'
-                                  }`}>
-                                    {apiData.reputation.virusTotal.verdict}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Detection</div>
-                                <div className="font-bold text-lg">
-                                  {apiData.reputation.virusTotal.lastAnalysisStats?.malicious || 0} / {apiData.reputation.virusTotal.totalEngines || 0} engines
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Reputation Score</div>
-                                <div className="font-bold text-lg">{apiData.reputation.virusTotal.reputation || 0}</div>
-                              </div>
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Last Analysis</div>
-                                <div className="font-bold text-lg">
-                                  {apiData.reputation.virusTotal.lastAnalysisDate ? new Date(apiData.reputation.virusTotal.lastAnalysisDate).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A'}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-2">
-                              <a href={apiData.reputation.virusTotal.url} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
-                                <ExternalLink className="w-3 h-3" />
-                                View on VirusTotal
-                              </a>
-                            </div>
-                          </div>
-                        )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <p className="text-xs text-gray-400 mb-1">DNS Blacklists (DNSBL)</p>
-                            {(() => {
+                            {apiData.reputation.dnsbl.length === 0 ? (
+                              <p className="text-xs text-gray-500">Not applicable (IPv6 / unavailable)</p>
+                            ) : (
+                              (() => {
                                 const dnsbl: any[] = apiData.reputation.dnsbl || [];
                                 const listed = dnsbl.filter((d: any) => d.listed);
                                 const blocked = dnsbl.filter((d: any) => d.blocked);
@@ -3487,157 +2611,7 @@ export default function OSINTPlatform() {
                                   </div>
                                 );
                               })()
-                            }
-                          </div>
-                          {/* VirusTotal Classification */}
-                          {apiData.reputation?.virusTotal && apiData.reputation.virusTotal.analyzed && (
-                            <div className="mt-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
-                              <h5 className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-2">
-                                <Shield className="w-3.5 h-3.5 text-orange-400" /> VirusTotal Classification
-                              </h5>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                  <div className="text-xs text-gray-500 mb-1">Verdict</div>
-                                  <div className="font-bold text-lg flex items-center gap-2">
-                                    <span className={`px-2 py-0.5 rounded text-xs ${
-                                      apiData.reputation.virusTotal.verdict === 'MALICIOUS' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
-                                      apiData.reputation.virusTotal.verdict === 'SUSPICIOUS' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
-                                      apiData.reputation.virusTotal.verdict === 'CLEAN' ? 'bg-green-500/20 text-green-400 border border-green-500/40' :
-                                      'bg-gray-700 text-gray-300 border border-gray-600'
-                                    }`}>
-                                      {apiData.reputation.virusTotal.verdict}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                  <div className="text-xs text-gray-500 mb-1">Detection</div>
-                                  <div className="font-bold text-lg">
-                                    {apiData.reputation.virusTotal.lastAnalysisStats?.malicious || 0} / {apiData.reputation.virusTotal.totalEngines || 0} engines
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                  <div className="text-xs text-gray-500 mb-1">Reputation Score</div>
-                                  <div className="font-bold text-lg">{apiData.reputation.virusTotal.reputation || 0}</div>
-                                </div>
-                                <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                  <div className="text-xs text-gray-500 mb-1">Last Analysis</div>
-                                  <div className="font-bold text-lg">
-                                    {apiData.reputation.virusTotal.lastAnalysisDate ? new Date(apiData.reputation.virusTotal.lastAnalysisDate).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A'}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="mt-2">
-                                <a href={apiData.reputation.virusTotal.url} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
-                                  <ExternalLink className="w-3 h-3" />
-                                  View on VirusTotal
-                                </a>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                          </div>
-                        )}
-                        {/* VirusTotal Classification */}
-                        {apiData.reputation?.virusTotal && apiData.reputation.virusTotal.analyzed && (
-                          <div className="mt-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
-                            <h5 className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-2">
-                              <Shield className="w-3.5 h-3.5 text-orange-400" /> VirusTotal Classification
-                            </h5>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Verdict</div>
-                                <div className="font-bold text-lg flex items-center gap-2">
-                                  <span className={`px-2 py-0.5 rounded text-xs ${
-                                    apiData.reputation.virusTotal.verdict === 'MALICIOUS' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
-                                    apiData.reputation.virusTotal.verdict === 'SUSPICIOUS' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
-                                    apiData.reputation.virusTotal.verdict === 'CLEAN' ? 'bg-green-500/20 text-green-400 border border-green-500/40' :
-                                    'bg-gray-700 text-gray-300 border border-gray-600'
-                                  }`}>
-                                    {apiData.reputation.virusTotal.verdict}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Detection</div>
-                                <div className="font-bold text-lg">
-                                  {apiData.reputation.virusTotal.lastAnalysisStats?.malicious || 0} / {apiData.reputation.virusTotal.totalEngines || 0} engines
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Reputation Score</div>
-                                <div className="font-bold text-lg">{apiData.reputation.virusTotal.reputation || 0}</div>
-                              </div>
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Last Analysis</div>
-                                <div className="font-bold text-lg">
-                                  {apiData.reputation.virusTotal.lastAnalysisDate ? new Date(apiData.reputation.virusTotal.lastAnalysisDate).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A'}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-2">
-                              <a href={apiData.reputation.virusTotal.url} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
-                                <ExternalLink className="w-3 h-3" />
-                                View on VirusTotal
-                              </a>
-                            </div>
-                          </div>
-                        )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-xs text-gray-400 mb-1">DNS Blacklists (DNSBL)</p>
-                            {(() => {
-                                const dnsbl: any[] = apiData.reputation.dnsbl || [];
-                                const listed = dnsbl.filter((d: any) => d.listed);
-                                const blocked = dnsbl.filter((d: any) => d.blocked);
-                                const clean = dnsbl.filter((d: any) => !d.listed && !d.blocked);
-                                const groups: string[] = Array.from(new Set(clean.map((d: any) => d.group))).sort();
-                                return (
-                                  <div className="space-y-2">
-                                    <div className="flex flex-wrap gap-1 text-[11px]">
-                                      <span className={`px-2 py-0.5 rounded border ${listed.length ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{listed.length} listed</span>
-                                      <span className={`px-2 py-0.5 rounded border ${blocked.length ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{blocked.length} blocked</span>
-                                      <span className="px-2 py-0.5 rounded bg-gray-900 text-gray-400 border border-gray-700">{dnsbl.length} lists checked</span>
-                                    </div>
-                                    {listed.length === 0 && blocked.length === 0 && (
-                                      <p className="text-xs text-green-400">No blacklist hits across {dnsbl.length} DNSBL zones.</p>
-                                    )}
-                                    {(listed.length > 0 || blocked.length > 0) && (
-                                      <ul className="space-y-1">
-                                        {[...listed, ...blocked].map((d: any) => (
-                                          <li key={d.zone} className={`flex flex-col text-xs px-2 py-1 rounded ${d.listed ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/30'}`}>
-                                            <span className="flex items-center justify-between gap-2">
-                                              <span className="font-medium">{d.name} <span className="text-gray-500 font-normal">[{d.group}]</span></span>
-                                              <span className="font-mono shrink-0">{d.listed ? `LISTED ${d.records.join(',')}` : 'BLOCKED (resolver)'}</span>
-                                            </span>
-                                            {d.listed && d.message && (
-                                              <span className="text-[10px] text-gray-400 break-all mt-0.5">{d.message}</span>
-                                            )}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    )}
-                                    <details className="text-xs">
-                                      <summary className="cursor-pointer text-gray-400 hover:text-gray-300">Show all clean lists ({clean.length})</summary>
-                                      <div className="mt-1.5 space-y-1.5">
-                                        {groups.map((g: string) => (
-                                          <div key={g}>
-                                            <p className="text-[10px] uppercase tracking-wide text-gray-500">{g}</p>
-                                            <div className="flex flex-wrap gap-1">
-                                              {clean.filter((d: any) => d.group === g).map((d: any) => (
-                                                <span key={d.zone} className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 text-[11px]">{d.name}</span>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </details>
-                                  </div>
-                                );
-                              })()
+                            )}
                           </div>
                           <div>
                             <p className="text-xs text-gray-400 mb-1">Malicious URL History (URLhaus)</p>
@@ -3647,7 +2621,7 @@ export default function OSINTPlatform() {
                                 <ul className="space-y-1 max-h-32 overflow-y-auto">
                                   {apiData.reputation.urlhaus.urls.slice(0, 10).map((u: any, i: number) => (
                                     <li key={i} className="text-xs font-mono text-red-300 bg-gray-900 rounded px-2 py-1 break-all">
-                                      {u.url} <span className="text-gray-500">[{u.threat} · {u.dateAdded}]</span>
+                                      {u.url} <span className="text-gray-500">[{u.threat} ┬╖ {u.dateAdded}]</span>
                                     </li>
                                   ))}
                                 </ul>
@@ -3670,8 +2644,8 @@ export default function OSINTPlatform() {
                           {apiData.pivot.certificates.slice(0, 25).map((c: any, i: number) => (
                             <li key={i} className="text-xs px-2 py-1 bg-gray-900 rounded">
                               <span className="font-mono text-blue-300">{c.nameValue}</span>
-                              {c.issuerName && <span className="text-gray-500"> · {c.issuerName}</span>}
-                              {c.notBefore && <span className="text-gray-600"> · valid from {c.notBefore.slice(0, 10)}</span>}
+                              {c.issuerName && <span className="text-gray-500"> ┬╖ {c.issuerName}</span>}
+                              {c.notBefore && <span className="text-gray-600"> ┬╖ valid from {c.notBefore.slice(0, 10)}</span>}
                             </li>
                           ))}
                         </ul>
@@ -3682,7 +2656,7 @@ export default function OSINTPlatform() {
                     {apiData.scan?.ports?.length > 0 && (
                       <div id="ip-scan" className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 scroll-mt-4">
                         <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <Terminal className="w-4 h-4 text-purple-400" /> Active Scan — Exposed Services
+                          <Terminal className="w-4 h-4 text-purple-400" /> Active Scan ΓÇö Exposed Services
                         </h4>
                         <p className="text-xs text-gray-400 mb-2">Estimated OS: <span className="text-purple-300 font-medium">{apiData.scan.os}</span></p>
                         {(() => {
@@ -3744,7 +2718,7 @@ export default function OSINTPlatform() {
                                         <div key={p.port} className="flex items-center gap-2 text-xs px-2 py-1 rounded bg-orange-500/10 text-orange-300 border border-orange-500/30">
                                           <span className="font-mono w-14 font-bold">{p.port}</span>
                                           <span className="w-20">{p.service}</span>
-                                          <span className="font-medium text-orange-300">OPEN — no known vuln profile in this build</span>
+                                          <span className="font-medium text-orange-300">OPEN ΓÇö no known vuln profile in this build</span>
                                           {p.banner && <span className="text-gray-400 truncate flex-1" title={p.banner}>{p.banner}</span>}
                                         </div>
                                       );
@@ -3758,7 +2732,7 @@ export default function OSINTPlatform() {
                       </div>
                     )}
 
-                    {/* Forensic artifacts guidance — interactive */}
+                    {/* Forensic artifacts guidance ΓÇö interactive */}
                     <div className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                         <h4 className="text-sm font-medium flex items-center gap-2">
@@ -3824,7 +2798,7 @@ export default function OSINTPlatform() {
                       </div>
                     </div>
 
-                    {/* Threat Assessment — summarized, click to expand */}
+                    {/* Threat Assessment ΓÇö summarized, click to expand */}
                     {apiData.data && (
                       <div className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
                         {(() => {
@@ -3837,11 +2811,11 @@ export default function OSINTPlatform() {
                           const open = (apiData.scan?.ports || []).filter((p: any) => p.state === 'open');
                           const sevClass = severity === 'CRITICAL' ? 'bg-red-600/30 text-red-300 border-red-500/60' : severity === 'HIGH' ? 'bg-orange-500/20 text-orange-300 border-orange-500/40' : severity === 'MEDIUM' ? 'bg-yellow-500/15 text-yellow-300 border-yellow-500/40' : 'bg-green-500/15 text-green-300 border-green-500/40';
                           const summaryText = [
-                            `Threat Assessment — ${apiData.data.query || apiData.data.ip}`,
-                            `Risk: ${severity} · Abuse confidence: ${abuseScore}%`,
+                            `Threat Assessment ΓÇö ${apiData.data.query || apiData.data.ip}`,
+                            `Risk: ${severity} ┬╖ Abuse confidence: ${abuseScore}%`,
                             factors.length ? `Signals: ${factors.map((f) => `${f.label} (+${f.points})`).join(', ')}` : 'Signals: none',
                             `Geolocation: ${getFlagEmoji(apiData.data.countryCode)} ${apiData.data.country || 'N/A'}${apiData.data.city ? ` (${apiData.data.city})` : ''}`,
-                            `ASN & ISP: ${apiData.data.as ? `AS${apiData.data.as}` : 'AS?'}${apiData.data.asname ? ` (${apiData.data.asname})` : ''} — ${apiData.data.isp || apiData.data.org || 'N/A'}`,
+                            `ASN & ISP: ${apiData.data.as ? `AS${apiData.data.as}` : 'AS?'}${apiData.data.asname ? ` (${apiData.data.asname})` : ''} ΓÇö ${apiData.data.isp || apiData.data.org || 'N/A'}`,
                             `Open ports: ${open.length ? open.map((p: any) => `${p.port} ${p.service}`).join(', ') : 'none'}`,
                             `Malware/C2: ${malware || 'none'}`,
                             `Last seen: ${lastDate ? timeAgo(lastDate) : 'no recent malicious activity'}`,
@@ -3877,7 +2851,7 @@ export default function OSINTPlatform() {
                                   <div>
                                     <p className="text-gray-400 text-xs font-medium mb-1">What drives the score</p>
                                     {factors.length === 0 ? (
-                                      <p className="text-xs text-green-400">Clean on all checked sources — score stays low.</p>
+                                      <p className="text-xs text-green-400">Clean on all checked sources ΓÇö score stays low.</p>
                                     ) : (
                                       <ul className="space-y-1">
                                         {factors.map((f) => {
@@ -3888,7 +2862,7 @@ export default function OSINTPlatform() {
                                               <span className="font-medium">{f.label}</span>
                                               <span className="text-gray-400 truncate flex-1 min-w-0">{f.detail}</span>
                                               {section && (
-                                                <button onClick={() => scrollToSection(section)} className="px-1.5 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-blue-300 text-[10px] shrink-0">View detail ▸</button>
+                                                <button onClick={() => scrollToSection(section)} className="px-1.5 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-blue-300 text-[10px] shrink-0">View detail Γû╕</button>
                                               )}
                                             </li>
                                           );
@@ -3899,7 +2873,7 @@ export default function OSINTPlatform() {
                                   <div>
                                     <p className="text-gray-400 text-xs font-medium mb-1">Additional context</p>
                                     <ul className="space-y-1 text-xs text-gray-300">
-                                      <li><span className="text-gray-400">ASN & ISP:</span> {apiData.data.as ? `AS${apiData.data.as}` : 'AS?'}{apiData.data.asname ? ` (${apiData.data.asname})` : ''} — {apiData.data.isp || apiData.data.org || 'N/A'}</li>
+                                      <li><span className="text-gray-400">ASN & ISP:</span> {apiData.data.as ? `AS${apiData.data.as}` : 'AS?'}{apiData.data.asname ? ` (${apiData.data.asname})` : ''} ΓÇö {apiData.data.isp || apiData.data.org || 'N/A'}</li>
                                       <li><span className="text-gray-400">Geolocation:</span> {getFlagEmoji(apiData.data.countryCode)} {apiData.data.country || 'N/A'}{apiData.data.city ? ` (${apiData.data.city})` : ''}</li>
                                       <li><span className="text-gray-400">Malware / C2:</span> {malware || 'No known association'}</li>
                                       <li><span className="text-gray-400">Last seen:</span> {lastDate ? `${timeAgo(lastDate)} via URLhaus (${lastDate.slice(0, 10)})` : 'No recent malicious activity'}</li>
@@ -3944,20 +2918,10 @@ export default function OSINTPlatform() {
           {/* ==================== DOMAIN INTEL TAB ==================== */}
           {activeTab === 'domain' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Server className="w-7 h-7 text-purple-400" /> Domain Intel
-                  <span className="text-sm font-normal text-gray-400">passive recon · DNS · WHOIS · subdomains · infra graph</span>
-                </h2>
-                <button
-                  onClick={handleDomainReport}
-                  className="px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Server className="w-7 h-7 text-purple-400" /> Domain Intel
+                <span className="text-sm font-normal text-gray-400">passive recon ┬╖ DNS ┬╖ WHOIS ┬╖ subdomains ┬╖ infra graph</span>
+              </h2>
               <DomainIntelPanel
                 intel={apiData?.domainIntel || null}
                 virusTotal={apiData?.virusTotal || null}
@@ -3972,7 +2936,6 @@ export default function OSINTPlatform() {
                   showFeedback(`Launching full web forensics for ${domain}...`, 'info');
                   setTimeout(() => handleForensicAnalysis(domain), 250);
                 }}
-                onReport={handleDomainReport}
               />
             </div>
           )}
@@ -3983,16 +2946,8 @@ export default function OSINTPlatform() {
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold flex items-center gap-3">
                   <Camera className="w-7 h-7 text-red-400" /> Web Forensic Analysis
-                  <span className="text-sm font-normal text-gray-400">DNS recon · fuzzing tree · phishing kits · databases · attribution</span>
+                  <span className="text-sm font-normal text-gray-400">DNS recon ┬╖ fuzzing tree ┬╖ phishing kits ┬╖ databases ┬╖ attribution</span>
                 </h2>
-                <button
-                  onClick={() => openPrintReport('forensics', apiData?.forensics || apiData, inputValue)}
-                  className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
               </div>
 
               <div className="bg-gray-900 border border-red-500/30 rounded-xl p-6">
@@ -4037,12 +2992,12 @@ export default function OSINTPlatform() {
                             onClick={getStorageHealth}
                             title={storageHealth.backend === 'vercel-kv'
                               ? (storageHealth.message || 'Vercel KV conectado')
-                              : 'Historial del servidor en memoria efímera (se reinicia por invocación). Para persistencia real: Vercel → Storage → Create Database → KV → Redeploy. El historial igual funciona vía localStorage del navegador.'}
+                              : 'Historial del servidor en memoria ef├¡mera (se reinicia por invocaci├│n). Para persistencia real: Vercel ΓåÆ Storage ΓåÆ Create Database ΓåÆ KV ΓåÆ Redeploy. El historial igual funciona v├¡a localStorage del navegador.'}
                             className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1 ${
                               storageHealth.backend === 'vercel-kv' ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'
                             }`}
                           >
-                            ● {storageHealth.backend === 'vercel-kv' ? 'KV conectado' : 'Memoria efímera'}
+                            ΓùÅ {storageHealth.backend === 'vercel-kv' ? 'KV conectado' : 'Memoria ef├¡mera'}
                           </button>
                         )}
                         <button onClick={loadForensicsHistory} className="text-xs text-gray-400 hover:text-gray-200 flex items-center gap-1">
@@ -4066,11 +3021,11 @@ export default function OSINTPlatform() {
                       <tbody>
                         {forensicsHistory.slice(0, 10).map((analysis: any, idx: number) => {
                           const isCurrentlyLoaded = selectedForensics?.id === analysis.id || selectedForensics?.name === analysis.name;
-                          const displayName = analysis.domain || analysis.name?.split('_')[1] || '—';
+                          const displayName = analysis.domain || analysis.name?.split('_')[1] || 'ΓÇö';
                           return (
                             <tr key={idx} className={`border-b border-gray-800/50 ${isCurrentlyLoaded ? 'bg-blue-500/10' : 'hover:bg-gray-800/40'}`}>
                               <td className="py-2 pr-3 font-mono text-red-300">{displayName}</td>
-                              <td className="py-2 pr-3 font-mono text-xs text-gray-400">{analysis.ip || '—'}</td>
+                              <td className="py-2 pr-3 font-mono text-xs text-gray-400">{analysis.ip || 'ΓÇö'}</td>
                               <td className="py-2 pr-3 text-xs text-gray-400">{new Date(analysis.created).toLocaleString()}</td>
                               <td className="py-2 pr-3">
                                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${
@@ -4211,9 +3166,9 @@ export default function OSINTPlatform() {
                               <Download className="w-3 h-3" /> Informe imprimible (HTML)
                             </button>
                             <div className="text-right text-xs text-gray-400">
-                              <div>IP: <span className="font-mono">{apiData.data.ip || '—'}</span></div>
-                              <div className="mt-1">ASN: <span className="font-mono">{apiData.data.asn || '—'}</span></div>
-                              <div className="mt-1">ISP: <span className="font-mono">{apiData.data.isp || '—'}</span></div>
+                              <div>IP: <span className="font-mono">{apiData.data.ip || 'ΓÇö'}</span></div>
+                              <div className="mt-1">ASN: <span className="font-mono">{apiData.data.asn || 'ΓÇö'}</span></div>
+                              <div className="mt-1">ISP: <span className="font-mono">{apiData.data.isp || 'ΓÇö'}</span></div>
                               <div className="mt-1">Resource: <span className="font-mono">{apiData.data.name}</span></div>
                               <div className="mt-1">{new Date(apiData.data.timestamp).toLocaleString()}</div>
                             </div>
@@ -4227,7 +3182,7 @@ export default function OSINTPlatform() {
                        {/* Evidencias completas del Web Forensic Analysis */}
                        <details className="mt-4">
                          <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-200 flex items-center gap-1.5 select-none">
-                           <ChevronDown className="w-3.5 h-3.5" /> Análisis completo — todas las evidencias del módulo (clic para desplegar)
+                           <ChevronDown className="w-3.5 h-3.5" /> An├ílisis completo ΓÇö todas las evidencias del m├│dulo (clic para desplegar)
                          </summary>
                          <div className="mt-4 space-y-5">
 
@@ -4237,19 +3192,19 @@ export default function OSINTPlatform() {
                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                <div className="p-2 bg-gray-900 rounded-lg">
                                  <div className="text-[10px] uppercase text-gray-500">IP</div>
-                                 <div className="text-xs font-mono break-all">{apiData.data.ip || '—'}</div>
+                                 <div className="text-xs font-mono break-all">{apiData.data.ip || 'ΓÇö'}</div>
                                </div>
                                <div className="p-2 bg-gray-900 rounded-lg">
                                  <div className="text-[10px] uppercase text-gray-500">ASN</div>
-                                 <div className="text-xs font-mono">{apiData.data.asn || '—'}</div>
+                                 <div className="text-xs font-mono">{apiData.data.asn || 'ΓÇö'}</div>
                                </div>
                                <div className="p-2 bg-gray-900 rounded-lg">
                                  <div className="text-[10px] uppercase text-gray-500">ISP</div>
-                                 <div className="text-xs">{apiData.data.isp || '—'}</div>
+                                 <div className="text-xs">{apiData.data.isp || 'ΓÇö'}</div>
                                </div>
                                <div className="p-2 bg-gray-900 rounded-lg">
                                  <div className="text-[10px] uppercase text-gray-500">Geo</div>
-                                 <div className="text-xs">{apiData.data.geo ? `${apiData.data.geo.country || ''}${apiData.data.geo.city ? ' / ' + apiData.data.geo.city : ''}` : '—'}</div>
+                                 <div className="text-xs">{apiData.data.geo ? `${apiData.data.geo.country || ''}${apiData.data.geo.city ? ' / ' + apiData.data.geo.city : ''}` : 'ΓÇö'}</div>
                                </div>
                                <div className="p-2 bg-gray-900 rounded-lg">
                                  <div className="text-[10px] uppercase text-gray-500">SSL/TLS</div>
@@ -4260,15 +3215,15 @@ export default function OSINTPlatform() {
                                </div>
                                <div className="p-2 bg-gray-900 rounded-lg">
                                  <div className="text-[10px] uppercase text-gray-500">Protocolo SSL</div>
-                                 <div className="text-xs">{apiData.data.ssl?.protocol || '—'}</div>
+                                 <div className="text-xs">{apiData.data.ssl?.protocol || 'ΓÇö'}</div>
                                </div>
                                <div className="p-2 bg-gray-900 rounded-lg">
                                  <div className="text-[10px] uppercase text-gray-500">Servidor</div>
-                                 <div className="text-xs break-all">{apiData.data.httpHeaders?.server || '—'}</div>
+                                 <div className="text-xs break-all">{apiData.data.httpHeaders?.server || 'ΓÇö'}</div>
                                </div>
                                <div className="p-2 bg-gray-900 rounded-lg">
                                  <div className="text-[10px] uppercase text-gray-500">HTTP Status</div>
-                                 <div className="text-xs">{apiData.data.httpHeaders?.statusCode ?? '—'}</div>
+                                 <div className="text-xs">{apiData.data.httpHeaders?.statusCode ?? 'ΓÇö'}</div>
                                </div>
                              </div>
                            </div>
@@ -4311,7 +3266,7 @@ export default function OSINTPlatform() {
                                    <div key={type} className="p-2 bg-gray-900 rounded-lg">
                                      <div className="text-[10px] font-medium text-gray-500 mb-1">{type} ({records?.Answer?.length || 0})</div>
                                      {(records?.Answer || []).slice(0, 4).map((r: any, i: number) => (
-                                       <div key={i} className="text-[11px] font-mono text-green-400 truncate">{r.data || r.exchange || r.nsdname || '—'}</div>
+                                       <div key={i} className="text-[11px] font-mono text-green-400 truncate">{r.data || r.exchange || r.nsdname || 'ΓÇö'}</div>
                                      ))}
                                    </div>
                                  ))}
@@ -4356,20 +3311,20 @@ export default function OSINTPlatform() {
                                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
                                  <div className="p-2 bg-gray-900 rounded-lg">
                                    <div className="text-[10px] uppercase text-gray-500">Por status</div>
-                                   <div className="text-[11px] font-mono break-all">{Object.entries(apiData.data.fuzzingSummary.byStatus || {}).map(([k, v]) => `${k}:${v}`).join(' · ') || '—'}</div>
+                                   <div className="text-[11px] font-mono break-all">{Object.entries(apiData.data.fuzzingSummary.byStatus || {}).map(([k, v]) => `${k}:${v}`).join(' ┬╖ ') || 'ΓÇö'}</div>
                                  </div>
                                  <div className="p-2 bg-gray-900 rounded-lg">
-                                   <div className="text-[10px] uppercase text-gray-500">Por categoría</div>
-                                   <div className="text-[11px] font-mono break-all">{Object.entries(apiData.data.fuzzingSummary.byCategory || {}).map(([k, v]) => `${k}:${v}`).join(' · ') || '—'}</div>
+                                   <div className="text-[10px] uppercase text-gray-500">Por categor├¡a</div>
+                                   <div className="text-[11px] font-mono break-all">{Object.entries(apiData.data.fuzzingSummary.byCategory || {}).map(([k, v]) => `${k}:${v}`).join(' ┬╖ ') || 'ΓÇö'}</div>
                                  </div>
                                </div>
                              </div>
                            )}
 
-                           {/* Atribución */}
+                           {/* Atribuci├│n */}
                            {apiData.data.attribution && (
                              <div>
-                               <div className="text-xs uppercase text-gray-500 mb-2">Atribución de actor</div>
+                               <div className="text-xs uppercase text-gray-500 mb-2">Atribuci├│n de actor</div>
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                  <div className="p-2 bg-gray-900 rounded-lg">
                                    <div className="text-[10px] uppercase text-gray-500">Emails ({apiData.data.attribution.emails?.length || 0})</div>
@@ -4434,7 +3389,7 @@ export default function OSINTPlatform() {
                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                  <div className="p-2 bg-gray-900 rounded-lg">
                                    <div className="text-[10px] uppercase text-gray-500">Veredicto</div>
-                                   <div className="text-xs">{apiData.data.virusTotal.verdict || '—'}</div>
+                                   <div className="text-xs">{apiData.data.virusTotal.verdict || 'ΓÇö'}</div>
                                  </div>
                                  <div className="p-2 bg-gray-900 rounded-lg">
                                    <div className="text-[10px] uppercase text-gray-500">Malicious</div>
@@ -4466,7 +3421,7 @@ export default function OSINTPlatform() {
                                      </div>
                                      {(a.hash || a.size) && (
                                        <div className="text-[10px] text-gray-500 mt-1 truncate">
-                                         {a.hash ? `SHA-256: ${a.hash}` : ''}{a.size ? ` · ${(a.size / 1024).toFixed(1)} KB` : ''}
+                                         {a.hash ? `SHA-256: ${a.hash}` : ''}{a.size ? ` ┬╖ ${(a.size / 1024).toFixed(1)} KB` : ''}
                                        </div>
                                      )}
                                    </div>
@@ -4491,7 +3446,7 @@ export default function OSINTPlatform() {
                              walkRedirects(apiData.data.resourceTree);
                              return redirects.length ? (
                                <div>
-                                 <div className="text-xs uppercase text-gray-500 mb-2">Cadenas de redirección</div>
+                                 <div className="text-xs uppercase text-gray-500 mb-2">Cadenas de redirecci├│n</div>
                                  <div className="max-h-32 overflow-auto space-y-1">
                                    {Array.from(new Set(redirects)).slice(0, 40).map((r: string, i: number) => (
                                      <div key={i} className="text-[10px] font-mono text-gray-400 truncate">{r}</div>
@@ -4506,7 +3461,7 @@ export default function OSINTPlatform() {
                              <div>
                                <div className="text-xs uppercase text-gray-500 mb-2">Resource Tree (Live Crawl)</div>
                                <div className="p-2 bg-gray-900 rounded-lg text-[11px] text-gray-400">
-                                 El árbol completo de recursos (páginas, scripts, redirecciones, fuzz) se muestra en la sección "Resource Tree — Live Crawl" de esta pestaña y en el informe imprimible.
+                                 El ├írbol completo de recursos (p├íginas, scripts, redirecciones, fuzz) se muestra en la secci├│n "Resource Tree ΓÇö Live Crawl" de esta pesta├▒a y en el informe imprimible.
                                </div>
                              </div>
                            )}
@@ -4588,7 +3543,7 @@ export default function OSINTPlatform() {
                     {apiData.data.resourceTree && (
                       <div className="bg-gray-900 border border-blue-500/30 rounded-xl p-5">
                         <h3 className="font-semibold mb-3 flex items-center gap-2 flex-wrap">
-                          <FileCode className="w-5 h-5 text-blue-400" /> Resource Tree — Live Crawl (gospider-style)
+                          <FileCode className="w-5 h-5 text-blue-400" /> Resource Tree ΓÇö Live Crawl (gospider-style)
                           <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">
                             {(() => { let c=0; const count=(n:any)=>{c++; n.children?.forEach(count); }; count(apiData.data.resourceTree); return c; })()} nodes
                           </span>
@@ -4611,7 +3566,7 @@ export default function OSINTPlatform() {
                    {apiData.data.artifacts?.length > 0 && (
                      <div className="bg-gray-900 border border-red-500/30 rounded-xl p-5">
                        <h3 className="font-semibold mb-3 flex items-center gap-2">
-                         <Download className="w-5 h-5 text-red-400" /> Evidence — Downloaded Artifacts
+                         <Download className="w-5 h-5 text-red-400" /> Evidence ΓÇö Downloaded Artifacts
                          <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs">{apiData.data.artifacts.filter((a: any) => a.category === 'phishing_kit' && a.downloaded).length} kit(s)</span>
                          <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs">{apiData.data.artifacts.filter((a: any) => a.category === 'database' && a.downloaded).length} db(s)</span>
                          <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs">{apiData.data.artifacts.filter((a: any) => a.category === 'config' && a.downloaded).length} config(s)</span>
@@ -4641,7 +3596,7 @@ export default function OSINTPlatform() {
                                     <div className="max-h-56 overflow-auto bg-gray-900/60 rounded-lg p-2 font-mono text-[11px] space-y-0.5">
                                       {a.structure.entries.map((e: any, j: number) => (
                                         <div key={j} className="flex items-center gap-2">
-                                          <span className={`shrink-0 ${e.type === 'dir' ? 'text-yellow-400' : 'text-gray-400'}`}>{e.type === 'dir' ? '📁' : '📄'}</span>
+                                          <span className={`shrink-0 ${e.type === 'dir' ? 'text-yellow-400' : 'text-gray-400'}`}>{e.type === 'dir' ? '≡ƒôü' : '≡ƒôä'}</span>
                                           <span className="text-gray-300 truncate flex-1">{e.name}</span>
                                           {e.size > 0 && <span className="text-gray-500 shrink-0">{(e.size / 1024).toFixed(1)} KB</span>}
                                         </div>
@@ -4809,7 +3764,7 @@ export default function OSINTPlatform() {
                        <div className="text-xs text-gray-500 mb-4">By category: {Object.entries(apiData.data.fuzzingSummary.byCategory).map(([k,v]) => `${k}: ${v}`).join(', ')}</div>
                        {fuzzingExpanded && (
                          <div className="overflow-x-auto">
-                           <p className="text-xs text-gray-500 mb-2">Full fuzz results are embedded in the Resource Tree above (type: fuzz). Expand nodes with 🔴 folder icons.</p>
+                           <p className="text-xs text-gray-500 mb-2">Full fuzz results are embedded in the Resource Tree above (type: fuzz). Expand nodes with ≡ƒö┤ folder icons.</p>
                          </div>
                        )}
                      </div>
@@ -4821,7 +3776,7 @@ export default function OSINTPlatform() {
                         <h3 className="font-semibold mb-3 flex items-center gap-2">
                           <Network className="w-5 h-5 text-blue-400" /> Infrastructure Graph
                         </h3>
-                        <p className="text-xs text-gray-500 mb-3">Interactive graph: DNS · MX · NS · Subdomains · IP/ASN/Geo. Click nodes to expand.</p>
+                        <p className="text-xs text-gray-500 mb-3">Interactive graph: DNS ┬╖ MX ┬╖ NS ┬╖ Subdomains ┬╖ IP/ASN/Geo. Click nodes to expand.</p>
                         <InfrastructureGraph data={apiData.data} />
                       </div>
                     )}
@@ -4866,7 +3821,7 @@ export default function OSINTPlatform() {
                            {apiData.data.httpHeaders.headers?.['x-powered-by'] && (
                              <div className="flex justify-between"><span className="text-gray-400">Powered By:</span><span>{apiData.data.httpHeaders.headers['x-powered-by']}</span></div>
                            )}
-                           <div className="flex justify-between"><span className="text-gray-400">Content-Type:</span><span>{apiData.data.httpHeaders.headers?.['content-type'] || '—'}</span></div>
+                           <div className="flex justify-between"><span className="text-gray-400">Content-Type:</span><span>{apiData.data.httpHeaders.headers?.['content-type'] || 'ΓÇö'}</span></div>
                          </div>
                          <div className="space-y-1">
                            {Object.entries(apiData.data.httpHeaders.securityHeaders || {}).map(([header, present]: [string, any]) => (
@@ -4910,20 +3865,10 @@ export default function OSINTPlatform() {
           {/* ==================== URL SCANNER TAB ==================== */}
           {activeTab === 'url' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <ExternalLink className="w-7 h-7 text-yellow-400" /> URL Scanner
-                  <span className="text-sm font-normal text-gray-400">attack-surface · kit fingerprint · attribution</span>
-                </h2>
-                <button
-                  onClick={() => openPrintReport('url', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-300 border border-yellow-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <ExternalLink className="w-7 h-7 text-yellow-400" /> URL Scanner
+                <span className="text-sm font-normal text-gray-400">attack-surface ┬╖ kit fingerprint ┬╖ attribution</span>
+              </h2>
               <ModuleErrorBoundary module="URL Scanner">
                 <UrlScannerPanel
                   data={apiData?.data || null}
@@ -4939,22 +3884,13 @@ export default function OSINTPlatform() {
             </div>
           )}
 
-{/* ==================== HASH LOOKUP TAB ==================== */}
+          {/* ==================== HASH LOOKUP TAB ==================== */}
           {activeTab === 'hash' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Fingerprint className="w-7 h-7 text-cyan-400" /> Hash Lookup
-                </h2>
-                <button
-                  onClick={() => openPrintReport('hash', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Fingerprint className="w-7 h-7 text-cyan-400" /> Hash Lookup
+              </h2>
+              
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="flex gap-4">
                   <div className="flex-1">
@@ -5023,22 +3959,13 @@ export default function OSINTPlatform() {
             </div>
           )}
 
-{/* ==================== CVE DATABASE TAB ==================== */}
+          {/* ==================== CVE DATABASE TAB ==================== */}
           {activeTab === 'cve' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Shield className="w-7 h-7 text-orange-400" /> CVE Database (NIST NVD)
-                </h2>
-                <button
-                  onClick={() => openPrintReport('cve', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border border-orange-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Shield className="w-7 h-7 text-orange-400" /> CVE Database (NIST NVD)
+              </h2>
+              
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="flex gap-4">
                   <div className="flex-1">
@@ -5115,22 +4042,13 @@ export default function OSINTPlatform() {
             </div>
           )}
 
-{/* ==================== AI ANALYST TAB ==================== */}
+          {/* ==================== AI ANALYST TAB ==================== */}
           {activeTab === 'ai' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Cpu className="w-7 h-7 text-pink-400" /> AI Threat Analyst
-                </h2>
-                <button
-                  onClick={() => openPrintReport('ai', apiData?.analysis || apiData, inputValue)}
-                  className="px-4 py-2 bg-pink-600/20 hover:bg-pink-600/30 text-pink-300 border border-pink-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Cpu className="w-7 h-7 text-pink-400" /> AI Threat Analyst
+              </h2>
+              
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="flex gap-4">
                   <div className="flex-1">
@@ -5183,23 +4101,14 @@ export default function OSINTPlatform() {
             </div>
           )}
 
-{/* ==================== DARK WEB INTEL TAB ==================== */}
+          {/* ==================== DARK WEB INTEL TAB ==================== */}
           {activeTab === 'darkweb' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Skull className="w-7 h-7 text-red-500" /> Dark Web Intelligence Engine
-                  <span className="text-sm font-normal text-gray-400">(Deep/Dark Web Search)</span>
-                </h2>
-                <button
-                  onClick={() => openPrintReport('darkweb', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Skull className="w-7 h-7 text-red-500" /> Dark Web Intelligence Engine
+                <span className="text-sm font-normal text-gray-400">(Deep/Dark Web Search)</span>
+              </h2>
+              
               <div className="bg-gray-900 border border-red-500/30 rounded-xl p-6">
                 <div className="flex gap-4">
                   <div className="flex-1">
@@ -5223,7 +4132,7 @@ export default function OSINTPlatform() {
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="text-xs text-gray-500">Selectores rápidos (domino · email · IP · BTC):</span>
+                  <span className="text-xs text-gray-500">Selectores r├ípidos (domino ┬╖ email ┬╖ IP ┬╖ BTC):</span>
                   {['bitcoin.com', 'test@example.com', '8.8.8.8', '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'].map(q => (
                     <button
                       key={q}
@@ -5273,7 +4182,7 @@ export default function OSINTPlatform() {
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="font-semibold">
-                      Resultados combinados ({apiData.results.length}) — IntelX + DuckDuckGo + Bing
+                      Resultados combinados ({apiData.results.length}) ΓÇö IntelX + DuckDuckGo + Bing
                     </h3>
                     <div className="flex flex-wrap gap-1.5 text-[10px]">
                       {(apiData.engines || []).map((e: any, i: number) => (
@@ -5288,7 +4197,7 @@ export default function OSINTPlatform() {
 
                   {apiData.results.length === 0 && (
                     <div className="p-4 bg-gray-900 border border-gray-800 rounded-xl text-xs text-gray-400">
-                      {apiData.note ? apiData.note : 'Sin resultados para este término. Prueba con un dominio, email, IP o dirección Bitcoin.'}
+                      {apiData.note ? apiData.note : 'Sin resultados para este t├⌐rmino. Prueba con un dominio, email, IP o direcci├│n Bitcoin.'}
                     </div>
                   )}
 
@@ -5314,7 +4223,7 @@ export default function OSINTPlatform() {
                       </div>
                       {r.url.includes('.onion') && (
                         <div className="mt-2 text-[10px] text-yellow-500/80">
-                          ⚠ Abre esta URL solo dentro de Tor Browser — la red clara no puede resolver .onion.
+                          ΓÜá Abre esta URL solo dentro de Tor Browser ΓÇö la red clara no puede resolver .onion.
                         </div>
                       )}
                     </div>
@@ -5399,23 +4308,14 @@ export default function OSINTPlatform() {
             </div>
           )}
 
-{/* ==================== MOBILE SECURITY TAB ==================== */}
+          {/* ==================== MOBILE SECURITY TAB ==================== */}
           {activeTab === 'mobile' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Smartphone className="w-7 h-7 text-indigo-400" /> Mobile Security Analysis
-                  <span className="text-sm font-normal text-gray-400">(MobSF-style)</span>
-                </h2>
-                <button
-                  onClick={() => openPrintReport('mobile', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Smartphone className="w-7 h-7 text-indigo-400" /> Mobile Security Analysis
+                <span className="text-sm font-normal text-gray-400">(MobSF-style)</span>
+              </h2>
+              
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="flex gap-4">
                   <div className="flex-1">
@@ -5614,22 +4514,13 @@ export default function OSINTPlatform() {
             </div>
           )}
 
-{/* ==================== THREAT FEEDS TAB ==================== */}
+          {/* ==================== THREAT FEEDS TAB ==================== */}
           {activeTab === 'threats' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <AlertTriangle className="w-7 h-7 text-amber-400" /> Live Threat Feeds
-                </h2>
-                <button
-                  onClick={() => openPrintReport('threats', apiData?.feeds || apiData, inputValue)}
-                  className="px-4 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <AlertTriangle className="w-7 h-7 text-amber-400" /> Live Threat Feeds
+              </h2>
+              
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="flex flex-wrap gap-3">
                   <button
@@ -5717,22 +4608,12 @@ export default function OSINTPlatform() {
                 <h2 className="text-2xl font-bold flex items-center gap-3">
                   <Database className="w-7 h-7 text-emerald-400" /> IOC Manager
                 </h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => openPrintReport('iocs', { iocs, iocStats }, inputValue)}
-                    className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                    title="Generar informe imprimible HTML"
-                  >
-                    <Printer className="w-4 h-4" />
-                    Informe Imprimible
-                  </button>
-                  <button
-                    onClick={() => { setModalType('add'); setFormData({ type: 'IP', value: '', description: '', severity: 'MEDIUM', status: 'UNKNOWN', tags: [] }); setShowModal(true); }}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-medium flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" /> Add IOC
-                  </button>
-                </div>
+                <button
+                  onClick={() => { setModalType('add'); setFormData({ type: 'IP', value: '', description: '', severity: 'MEDIUM', status: 'UNKNOWN', tags: [] }); setShowModal(true); }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-medium flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Add IOC
+                </button>
               </div>
 
               {/* Filters */}
@@ -5823,22 +4704,13 @@ export default function OSINTPlatform() {
             </div>
           )}
 
-{/* ==================== EXPORT TAB ==================== */}
+          {/* ==================== EXPORT TAB ==================== */}
           {activeTab === 'export' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Download className="w-7 h-7 text-teal-400" /> Export Data
-                </h2>
-                <button
-                  onClick={() => openPrintReport('export', { exports: [] }, inputValue)}
-                  className="px-4 py-2 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Download className="w-7 h-7 text-teal-400" /> Export Data
+              </h2>
+              
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -5886,19 +4758,9 @@ export default function OSINTPlatform() {
           {/* ==================== INTELLIGENCE SOURCES TAB ==================== */}
           {activeTab === 'sources' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Wifi className="w-7 h-7 text-sky-400" /> Intelligence Sources
-                </h2>
-                <button
-                  onClick={() => openPrintReport('sources', { sources }, inputValue)}
-                  className="px-4 py-2 bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Wifi className="w-7 h-7 text-sky-400" /> Intelligence Sources
+              </h2>
 
               {/* Add Source Form */}
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
@@ -5979,7 +4841,7 @@ export default function OSINTPlatform() {
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium truncate">{source.name}</div>
                             <div className="text-xs text-gray-500">
-                              {source.type} • {source.method} {source.endpoint}
+                              {source.type} ΓÇó {source.method} {source.endpoint}
                             </div>
                             {health && (
                               <div className={`text-xs mt-0.5 ${health.ok ? 'text-green-500' : 'text-red-500'}`}>
@@ -6007,19 +4869,9 @@ export default function OSINTPlatform() {
           {/* ==================== REPORTS TAB ==================== */}
           {activeTab === 'reports' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <FileText className="w-7 h-7 text-violet-400" /> Report Generator
-                </h2>
-                <button
-                  onClick={() => openPrintReport('reports', { reports: reportsList || [] }, inputValue)}
-                  className="px-4 py-2 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <FileText className="w-7 h-7 text-violet-400" /> Report Generator
+              </h2>
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Report Configuration */}
@@ -6140,7 +4992,7 @@ export default function OSINTPlatform() {
                           className="w-full p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors"
                         >
                           <div className="font-medium text-sm">{template.name}</div>
-                          <div className="text-xs text-gray-400">{template.desc} • {template.modules.length} modules</div>
+                          <div className="text-xs text-gray-400">{template.desc} ΓÇó {template.modules.length} modules</div>
                         </button>
                       ))}
                     </div>
@@ -6211,7 +5063,7 @@ export default function OSINTPlatform() {
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium truncate">{report.title}</div>
                           <div className="text-xs text-gray-500">
-                            {new Date(report.createdAt || report.timestamp).toLocaleString()} • {report.modules?.length || 0} modules
+                            {new Date(report.createdAt || report.timestamp).toLocaleString()} ΓÇó {report.modules?.length || 0} modules
                           </div>
                         </div>
                         <div className="flex gap-1">
@@ -6245,20 +5097,10 @@ export default function OSINTPlatform() {
           {/* ==================== BRAND PROTECTION TAB ==================== */}
           {activeTab === 'brand' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Shield className="w-7 h-7 text-rose-400" /> Brand Protection
-                  <span className="text-sm font-normal text-gray-400">(Phishing & impersonation monitoring)</span>
-                </h2>
-                <button
-                  onClick={() => openPrintReport('brand', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Shield className="w-7 h-7 text-rose-400" /> Brand Protection
+                <span className="text-sm font-normal text-gray-400">(Phishing & impersonation monitoring)</span>
+              </h2>
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="flex gap-4">
                   <div className="flex-1">
@@ -6342,20 +5184,10 @@ export default function OSINTPlatform() {
           {/* ==================== URL SANDBOX TAB ==================== */}
           {activeTab === 'sandbox' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Zap className="w-7 h-7 text-lime-400" /> URL Sandbox
-                  <span className="text-sm font-normal text-gray-400">real detonation · HTTP/TLS · content · reputation</span>
-                </h2>
-                <button
-                  onClick={() => openPrintReport('sandbox', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-lime-600/20 hover:bg-lime-600/30 text-lime-300 border border-lime-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Zap className="w-7 h-7 text-lime-400" /> URL Sandbox
+                <span className="text-sm font-normal text-gray-400">real detonation ┬╖ HTTP/TLS ┬╖ content ┬╖ reputation</span>
+              </h2>
               <ModuleErrorBoundary module="URL Sandbox">
                 <UrlSandboxPanel
                   data={apiData?.data || null}
@@ -6373,42 +5205,21 @@ export default function OSINTPlatform() {
           {/* ==================== TAKE DOWN URL TAB ==================== */}
           {activeTab === 'takedown' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Send className="w-7 h-7 text-orange-400" /> TakeDown URL
-                  <span className="text-sm font-normal text-gray-400">Cargue URLs maliciosas y repórtelas a servicios de seguridad</span>
-                </h2>
-                <button
-                  onClick={() => openPrintReport('takedown', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border border-orange-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Send className="w-7 h-7 text-orange-400" /> TakeDown URL
+                <span className="text-sm font-normal text-gray-400">Cargue URLs maliciosas y rep├│rtelas a servicios de seguridad</span>
+              </h2>
               <TakeDownPanel />
             </div>
           )}
 
-{/* ==================== DNS DUMP TAB ==================== */}
-           {activeTab === 'dnsdump' && (
-             <ModuleErrorBoundary module="DNS Dump">
-               <div className="space-y-6">
-               <div className="flex items-center justify-between">
-                 <h2 className="text-2xl font-bold flex items-center gap-3">
-                   <Network className="w-7 h-7 text-teal-400" /> DNS Dump
-                   <span className="text-sm font-normal text-gray-400">(dnsdumpster.com style enumeration)</span>
-                 </h2>
-                 <button
-                   onClick={() => openPrintReport('dnsdump', apiData?.data, inputValue)}
-                   className="px-4 py-2 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                   title="Generar informe imprimible HTML"
-                 >
-                   <Printer className="w-4 h-4" />
-                   Informe Imprimible
-                 </button>
-               </div>
+          {/* ==================== DNS DUMP TAB ==================== */}
+          {activeTab === 'dnsdump' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Network className="w-7 h-7 text-teal-400" /> DNS Dump
+                <span className="text-sm font-normal text-gray-400">(dnsdumpster.com style enumeration)</span>
+              </h2>
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="flex gap-4">
                   <div className="flex-1">
@@ -6469,7 +5280,7 @@ export default function OSINTPlatform() {
 
                   {/* Tabla filtrable de registros DNS */}
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                    <h3 className="font-semibold mb-3 flex items-center gap-2"><Server className="w-5 h-5 text-purple-400" /> Registros DNS — tabla filtrable ({apiData.data.allRecords?.length || 0})</h3>
+                    <h3 className="font-semibold mb-3 flex items-center gap-2"><Server className="w-5 h-5 text-purple-400" /> Registros DNS ΓÇö tabla filtrable ({apiData.data.allRecords?.length || 0})</h3>
                     <div className="flex flex-wrap items-center gap-2 mb-3">
                       <button onClick={() => setDnsdumpType('ALL')} className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${dnsdumpType === 'ALL' ? 'bg-teal-600 border-teal-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'}`}>TODOS</button>
                       {Object.entries(apiData.data.records).map(([type, recs]: [string, any]) => (
@@ -6518,10 +5329,10 @@ export default function OSINTPlatform() {
                   {/* Grafo visual de subdominios */}
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
-                      <Network className="w-5 h-5 text-teal-400" /> Grafo visual — subdominios descubiertos ({apiData.data.subdomains?.length || 0})
+                      <Network className="w-5 h-5 text-teal-400" /> Grafo visual ΓÇö subdominios descubiertos ({apiData.data.subdomains?.length || 0})
                     </h3>
                     <p className="text-xs text-gray-500 mb-3">
-                      Fuentes: certificate transparency (crt.sh) + brute-force DNS. Nodos: dominio → subdominio → IP. Clic en un nodo para ver detalles.
+                      Fuentes: certificate transparency (crt.sh) + brute-force DNS. Nodos: dominio ΓåÆ subdominio ΓåÆ IP. Clic en un nodo para ver detalles.
                     </p>
                     <SubdomainGraph data={apiData.data} />
                   </div>
@@ -6529,7 +5340,7 @@ export default function OSINTPlatform() {
                   {/* Mapeo dominio -> IP -> proveedor de hosting */}
                   {apiData.data.ipMap?.length > 0 && (
                     <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                      <h3 className="font-semibold mb-3 flex items-center gap-2"><Globe2 className="w-5 h-5 text-indigo-400" /> Mapeo Dominio → IP → Proveedor de Hosting ({apiData.data.ipMap.length})</h3>
+                      <h3 className="font-semibold mb-3 flex items-center gap-2"><Globe2 className="w-5 h-5 text-indigo-400" /> Mapeo Dominio ΓåÆ IP ΓåÆ Proveedor de Hosting ({apiData.data.ipMap.length})</h3>
                       <div className="overflow-x-auto max-h-96 overflow-y-auto">
                         <table className="w-full text-left text-xs">
                           <thead>
@@ -6538,7 +5349,7 @@ export default function OSINTPlatform() {
                               <th className="py-2 pr-3">IP</th>
                               <th className="py-2 pr-3">ASN</th>
                               <th className="py-2 pr-3">Proveedor</th>
-                              <th className="py-2">País</th>
+                              <th className="py-2">Pa├¡s</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -6557,11 +5368,11 @@ export default function OSINTPlatform() {
                     </div>
                   )}
 
-                  {/* DNS histórico (passive DNS) con línea de tiempo */}
+                  {/* DNS hist├│rico (passive DNS) con l├¡nea de tiempo */}
                   {(apiData.data.passiveDns?.length > 0 || true) && (
                     <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                      <h3 className="font-semibold mb-3 flex items-center gap-2"><Clock className="w-5 h-5 text-yellow-400" /> DNS Histórico — Passive DNS con línea de tiempo (CT)</h3>
-                      <p className="text-xs text-gray-500 mb-4">Línea de tiempo basada en emisiones de certificados (certificate transparency) y registros passive DNS. Primera y última aparición observada por subdominio.</p>
+                      <h3 className="font-semibold mb-3 flex items-center gap-2"><Clock className="w-5 h-5 text-yellow-400" /> DNS Hist├│rico ΓÇö Passive DNS con l├¡nea de tiempo (CT)</h3>
+                      <p className="text-xs text-gray-500 mb-4">L├¡nea de tiempo basada en emisiones de certificados (certificate transparency) y registros passive DNS. Primera y ├║ltima aparici├│n observada por subdominio.</p>
                       {apiData.data.passiveDns?.length > 0 ? (
                         <div className="relative pl-6">
                           <div className="absolute left-2 top-1 bottom-1 w-px bg-gradient-to-b from-yellow-400/60 via-gray-700 to-transparent"></div>
@@ -6570,15 +5381,15 @@ export default function OSINTPlatform() {
                               <div className="absolute left-0 top-1 w-3 h-3 rounded-full bg-yellow-400/80 border-2 border-gray-900 -translate-x-1/2"></div>
                               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                                 <span className="font-mono text-gray-200">{p.name}</span>
-                                <span className="text-gray-500">visto: <span className="text-yellow-300 font-mono">{p.firstSeen}</span> → <span className="text-yellow-300 font-mono">{p.lastSeen}</span></span>
-                                <span className="px-1.5 py-0.5 bg-gray-800 rounded text-[10px] text-gray-400">{p.daysKnown} días activo</span>
+                                <span className="text-gray-500">visto: <span className="text-yellow-300 font-mono">{p.firstSeen}</span> ΓåÆ <span className="text-yellow-300 font-mono">{p.lastSeen}</span></span>
+                                <span className="px-1.5 py-0.5 bg-gray-800 rounded text-[10px] text-gray-400">{p.daysKnown} d├¡as activo</span>
                               </div>
                             </div>
                           ))}
                         </div>
                       ) : (
                         <div className="p-3 bg-gray-800/50 border border-yellow-500/20 rounded-lg text-xs text-gray-400">
-                          Sin datos históricos disponibles: las fuentes passive DNS (crt.sh / OTX AlienVault) no respondieron en este momento. Reintenta en unos minutos para ver la línea de tiempo.
+                          Sin datos hist├│ricos disponibles: las fuentes passive DNS (crt.sh / OTX AlienVault) no respondieron en este momento. Reintenta en unos minutos para ver la l├¡nea de tiempo.
                         </div>
                       )}
                     </div>
@@ -6601,7 +5412,7 @@ export default function OSINTPlatform() {
                               <th className="py-2 pr-3">CNAME</th>
                               <th className="py-2 pr-3">Servicio</th>
                               <th className="py-2 pr-3">Estado</th>
-                              <th className="py-2">Razón</th>
+                              <th className="py-2">Raz├│n</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -6635,19 +5446,19 @@ export default function OSINTPlatform() {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                         <div className="p-3 bg-gray-800 rounded-lg">
                           <div className="text-[10px] uppercase text-gray-500 mb-1">Registrar</div>
-                          <div className="text-sm font-mono break-all">{apiData.data.whois.registrar || '—'}</div>
+                          <div className="text-sm font-mono break-all">{apiData.data.whois.registrar || 'ΓÇö'}</div>
                         </div>
                         <div className="p-3 bg-gray-800 rounded-lg">
                           <div className="text-[10px] uppercase text-gray-500 mb-1">Registrado</div>
-                          <div className="text-sm font-mono">{apiData.data.whois.created ? apiData.data.whois.created.slice(0, 10) : '—'}</div>
+                          <div className="text-sm font-mono">{apiData.data.whois.created ? apiData.data.whois.created.slice(0, 10) : 'ΓÇö'}</div>
                         </div>
                         <div className="p-3 bg-gray-800 rounded-lg">
                           <div className="text-[10px] uppercase text-gray-500 mb-1">Expira</div>
-                          <div className="text-sm font-mono">{apiData.data.whois.expires ? apiData.data.whois.expires.slice(0, 10) : '—'}</div>
+                          <div className="text-sm font-mono">{apiData.data.whois.expires ? apiData.data.whois.expires.slice(0, 10) : 'ΓÇö'}</div>
                         </div>
                         <div className="p-3 bg-gray-800 rounded-lg">
                           <div className="text-[10px] uppercase text-gray-500 mb-1">Nameservers</div>
-                          <div className="text-sm font-mono truncate">{apiData.data.whois.nameservers?.join(', ') || '—'}</div>
+                          <div className="text-sm font-mono truncate">{apiData.data.whois.nameservers?.join(', ') || 'ΓÇö'}</div>
                         </div>
                       </div>
                     </div>
@@ -6682,26 +5493,15 @@ export default function OSINTPlatform() {
                 </div>
               )}
             </div>
-            </ModuleErrorBoundary>
           )}
 
           {/* ==================== SOCIAL MONITOR TAB ==================== */}
           {activeTab === 'social' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <MessageSquare className="w-7 h-7 text-blue-400" /> Telegram & Discord Monitor
-                  <span className="text-sm font-normal text-gray-400">(keyword intelligence across channels)</span>
-                </h2>
-                <button
-                  onClick={() => openPrintReport('social', apiData?.stats || apiData, inputValue)}
-                  className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <MessageSquare className="w-7 h-7 text-blue-400" /> Telegram & Discord Monitor
+                <span className="text-sm font-normal text-gray-400">(keyword intelligence across channels)</span>
+              </h2>
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="flex flex-wrap gap-3">
                   <input type="text" placeholder="Search captured messages..." value={inputValue}
@@ -6718,7 +5518,7 @@ export default function OSINTPlatform() {
                 </div>
                 {apiData?.configured === false && (
                   <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-300">
-                    Demo mode — set TELEGRAM_BOT_TOKEN and DISCORD_BOT_TOKEN (Settings → Environment Variables) for live capture.
+                    Demo mode ΓÇö set TELEGRAM_BOT_TOKEN and DISCORD_BOT_TOKEN (Settings ΓåÆ Environment Variables) for live capture.
                   </div>
                 )}
               </div>
@@ -6778,20 +5578,10 @@ export default function OSINTPlatform() {
           {/* ==================== EXECUTIVE OSINT TAB ==================== */}
           {activeTab === 'exec' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <ShieldUser className="w-7 h-7 text-amber-400" /> Executive Digital Protection
-                  <span className="text-sm font-normal text-gray-400">(personal OSINT & exposure monitoring)</span>
-                </h2>
-                <button
-                  onClick={() => openPrintReport('exec', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <ShieldUser className="w-7 h-7 text-amber-400" /> Executive Digital Protection
+                <span className="text-sm font-normal text-gray-400">(personal OSINT & exposure monitoring)</span>
+              </h2>
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="flex gap-4">
                   <div className="flex-1">
@@ -6874,20 +5664,10 @@ export default function OSINTPlatform() {
           {/* ==================== FAKE APP SCANNER TAB ==================== */}
           {activeTab === 'fakeapp' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Smartphone className="w-7 h-7 text-fuchsia-400" /> Fake App Scanner
-                  <span className="text-sm font-normal text-gray-400">(MOBSF-style + CVE matching)</span>
-                </h2>
-                <button
-                  onClick={() => openPrintReport('fakeapp', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-fuchsia-600/20 hover:bg-fuchsia-600/30 text-fuchsia-300 border border-fuchsia-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Smartphone className="w-7 h-7 text-fuchsia-400" /> Fake App Scanner
+                <span className="text-sm font-normal text-gray-400">(MOBSF-style + CVE matching)</span>
+              </h2>
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
                 <div>
                   <p className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wide flex items-center gap-2"><UploadCloud className="w-4 h-4 text-fuchsia-400" /> Upload file (analyzed in your browser)</p>
@@ -6902,7 +5682,7 @@ export default function OSINTPlatform() {
                     </button>
                   </div>
                   {fakeAppFileName && <p className="text-xs text-fuchsia-300 mt-2 font-mono">Selected: {fakeAppFileName}</p>}
-                  <p className="text-xs text-gray-500 mt-1">Choose the file and click <span className="text-fuchsia-400 font-semibold">Analizar archivo</span>. APK / XAPK / AAB / APKS / APPX / ZIP are scanned fully client-side — nothing but the report leaves your browser.</p>
+                  <p className="text-xs text-gray-500 mt-1">Choose the file and click <span className="text-fuchsia-400 font-semibold">Analizar archivo</span>. APK / XAPK / AAB / APKS / APPX / ZIP are scanned fully client-side ΓÇö nothing but the report leaves your browser.</p>
                 </div>
                 <div className="border-t border-gray-800 pt-4">
                   <p className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wide flex items-center gap-2"><Globe className="w-4 h-4 text-fuchsia-400" /> ...or analyze a download URL</p>
@@ -6918,7 +5698,7 @@ export default function OSINTPlatform() {
                     </button>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500">Statically analyzes the app — manifest (AXML), signing certificate, permissions, dex secrets &amp; URLs. Like MobSF.</p>
+                <p className="text-xs text-gray-500">Statically analyzes the app ΓÇö manifest (AXML), signing certificate, permissions, dex secrets &amp; URLs. Like MobSF.</p>
               </div>
 
               {apiData?.data?.verdict && (
@@ -6928,7 +5708,7 @@ export default function OSINTPlatform() {
                       <div>
                         <h3 className="font-semibold">Verdict: <span className={apiData.data.verdict === 'FAKE' ? 'text-red-400' : apiData.data.verdict === 'SUSPICIOUS' ? 'text-orange-400' : 'text-emerald-400'}>{apiData.data.verdict}</span></h3>
                         <p className="text-sm text-gray-400 mt-1 font-mono break-all">{apiData.data.fileName}</p>
-                        <p className="text-xs text-gray-500 mt-1 font-mono break-all">{apiData.data.appInfo?.package} · v{apiData.data.appInfo?.versionName || '?'} · {apiData.data.sha256?.substring(0, 20)}...</p>
+                        <p className="text-xs text-gray-500 mt-1 font-mono break-all">{apiData.data.appInfo?.package} ┬╖ v{apiData.data.appInfo?.versionName || '?'} ┬╖ {apiData.data.sha256?.substring(0, 20)}...</p>
                       </div>
                       <div className="text-right">
                         <div className="text-3xl font-bold">{apiData.data.score || 0}<span className="text-sm text-gray-500">/100</span></div>
@@ -6948,7 +5728,7 @@ export default function OSINTPlatform() {
                         <div><span className="text-gray-500 block">Package</span><span className="font-mono break-all">{apiData.data.appInfo?.package}</span></div>
                         <div><span className="text-gray-500 block">Version</span><span>{apiData.data.appInfo?.versionName} ({apiData.data.appInfo?.versionCode})</span></div>
                         <div><span className="text-gray-500 block">SDK</span><span>min {apiData.data.appInfo?.minSdk || '?'} / target {apiData.data.appInfo?.targetSdk || '?'}</span></div>
-                        <div><span className="text-gray-500 block">Size</span><span>{(apiData.data.sizeBytes / 1048576).toFixed(1)} MB · {apiData.data.fileType}</span></div>
+                        <div><span className="text-gray-500 block">Size</span><span>{(apiData.data.sizeBytes / 1048576).toFixed(1)} MB ┬╖ {apiData.data.fileType}</span></div>
                       </div>
                       <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
                         <div className="bg-gray-800/60 rounded-lg p-2"><span className="text-gray-500 block">Activities</span><span className="font-bold">{apiData.data.components?.activities?.length ?? 0}</span></div>
@@ -6983,11 +5763,11 @@ export default function OSINTPlatform() {
                       {(apiData.data.riskObjects || []).map((r: any, i: number) => (
                         <div key={i} className={`p-3 rounded-lg ${r.severity === 'CRITICAL' ? 'bg-red-500/10 border-l-2 border-red-500' : r.severity === 'HIGH' ? 'bg-orange-500/10 border-l-2 border-orange-500' : r.severity === 'MEDIUM' ? 'bg-yellow-500/10 border-l-2 border-yellow-500' : 'bg-gray-800/60 border-l-2 border-gray-600'}`}>
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold">{r.id} · {r.type}</span>
+                            <span className="text-sm font-bold">{r.id} ┬╖ {r.type}</span>
                             <span className="text-xs font-bold text-red-400">{r.severity}</span>
                           </div>
                           <p className="text-xs text-gray-400 mt-1">{r.description}</p>
-                          <p className="text-xs text-gray-500 mt-1">→ {r.recommendation}</p>
+                          <p className="text-xs text-gray-500 mt-1">ΓåÆ {r.recommendation}</p>
                         </div>
                       ))}
                     </div>
@@ -7237,7 +6017,7 @@ function TreeNode({ node, indent = 0, onDownload }: { node: any; indent?: number
         {hasChildren && <ChevronRight className={`w-3.5 h-3.5 text-gray-500 transition-transform ${expanded ? 'rotate-90' : ''}`} />}
         {typeIcon[node.type as keyof typeof typeIcon] || typeIcon.other}
         <span className="font-mono truncate flex-1 min-w-0">{node.name}</span>
-        <span className={`font-mono ${statusColor}`}>{node.status || '—'}</span>
+        <span className={`font-mono ${statusColor}`}>{node.status || 'ΓÇö'}</span>
         {node.size && <span className="text-gray-500">{(node.size / 1024).toFixed(1)} KB</span>}
         {secrets > 0 && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded text-[10px] font-bold">{secrets} secrets</span>}
         {node.meta?.forms > 0 && <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-[10px] font-bold">{node.meta.forms} forms</span>}
@@ -7353,10 +6133,10 @@ function InfrastructureGraph({ data }: { data: any }) {
 
   const getNodeIcon = (type: string) => {
     const icons: Record<string, string> = {
-      domain: '🌐', ip: '📍', asn: '🔢', isp: '🏢', geo: '🌍',
-      mx: '📧', ns: '📛', subdomain: '🌿',
+      domain: '≡ƒîÉ', ip: '≡ƒôì', asn: '≡ƒöó', isp: '≡ƒÅó', geo: '≡ƒîì',
+      mx: '≡ƒôº', ns: '≡ƒô¢', subdomain: '≡ƒî┐',
     };
-    return icons[type] || '🔗';
+    return icons[type] || '≡ƒöù';
   };
 
   if (!data.dns) return <div className="text-gray-500 text-center py-8">No DNS data available</div>;
@@ -7422,8 +6202,8 @@ function InfrastructureGraph({ data }: { data: any }) {
       {/* Pan/Zoom Controls */}
       <div className="absolute bottom-4 right-4 flex flex-col gap-1">
         <button onClick={() => setZoom(Math.min(zoom + 0.2, 3))} className="p-2 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">+</button>
-        <button onClick={() => setZoom(Math.max(zoom - 0.2, 0.3))} className="p-2 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">−</button>
-        <button onClick={() => { setPan({ x: 0, y: 0 }); setZoom(1); }} className="p-2 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">⌂</button>
+        <button onClick={() => setZoom(Math.max(zoom - 0.2, 0.3))} className="p-2 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">ΓêÆ</button>
+        <button onClick={() => { setPan({ x: 0, y: 0 }); setZoom(1); }} className="p-2 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">Γîé</button>
       </div>
 
       {/* Node Detail Panel */}
@@ -7431,7 +6211,7 @@ function InfrastructureGraph({ data }: { data: any }) {
         <div className="absolute top-4 left-4 w-72 bg-gray-900 border border-gray-700 rounded-lg p-4 shadow-lg z-10">
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-semibold">{selectedNode.label}</h4>
-            <button onClick={() => setSelectedNode(null)} className="text-gray-400 hover:text-white">×</button>
+            <button onClick={() => setSelectedNode(null)} className="text-gray-400 hover:text-white">├ù</button>
           </div>
           <div className="space-y-2 text-xs">
             <div><span className="text-gray-500">Type:</span> <span className="font-mono ml-2 capitalize">{selectedNode.type}</span></div>
@@ -7462,7 +6242,7 @@ function InfrastructureGraph({ data }: { data: any }) {
   );
 }
 
-// Subdomain Graph Component — DNS Dump (dominio → subdominios → IPs, fuentes CT/brute)
+// Subdomain Graph Component ΓÇö DNS Dump (dominio ΓåÆ subdominios ΓåÆ IPs, fuentes CT/brute)
 function SubdomainGraph({ data }: { data: any }) {
   const [selected, setSelected] = React.useState<any>(null);
   const infoMap = React.useMemo(() => {
@@ -7480,8 +6260,8 @@ function SubdomainGraph({ data }: { data: any }) {
   const providerFor = (host: string, ip: string) => {
     const row = ipRows.find((r: any) => r.host === host && r.ip === ip);
     if (!row) return '';
-    const parts = [row.provider, row.asn && row.asn !== '—' ? row.asn : '', row.country && row.country !== '—' ? row.country : ''].filter(Boolean);
-    return parts.join(' · ');
+    const parts = [row.provider, row.asn && row.asn !== 'ΓÇö' ? row.asn : '', row.country && row.country !== 'ΓÇö' ? row.country : ''].filter(Boolean);
+    return parts.join(' ┬╖ ');
   };
 
   const subs = (data?.subdomains || []).slice(0, 30);
@@ -7521,7 +6301,7 @@ function SubdomainGraph({ data }: { data: any }) {
         <g onClick={() => setSelected({ kind: 'root' })} style={{ cursor: 'pointer' }}>
           <circle cx={rootX} cy={36} r={22} fill="#134e4a" stroke="#2dd4bf" strokeWidth={2.5} />
           <text x={rootX} y={41} textAnchor="middle" fontSize="10" fill="#e2e8f0" fontFamily="monospace" fontWeight="bold">
-            {data?.domain?.length > 16 ? data.domain.slice(0, 14) + '…' : data?.domain || 'domain'}
+            {data?.domain?.length > 16 ? data.domain.slice(0, 14) + 'ΓÇª' : data?.domain || 'domain'}
           </text>
           <text x={rootX} y={72} textAnchor="middle" fontSize="9" fill="#64748b" fontFamily="monospace">dominio</text>
         </g>
@@ -7534,7 +6314,7 @@ function SubdomainGraph({ data }: { data: any }) {
           return (
             <g key={s} onClick={() => setSelected({ kind: 'sub', name: s })} style={{ cursor: 'pointer' }}>
               <circle cx={subX(i)} cy={128} r={15} fill="#111827" stroke={stroke} strokeWidth={selected?.name === s ? 3 : 2} />
-              <text x={subX(i)} y={132} textAnchor="middle" fontSize="8" fill="#cbd5e1" fontFamily="monospace">{label.length > 9 ? label.slice(0, 8) + '…' : label}</text>
+              <text x={subX(i)} y={132} textAnchor="middle" fontSize="8" fill="#cbd5e1" fontFamily="monospace">{label.length > 9 ? label.slice(0, 8) + 'ΓÇª' : label}</text>
               <text x={subX(i)} y={158} textAnchor="middle" fontSize="8" fill={color} fontFamily="monospace">{info?.ips?.length || 0} IP</text>
             </g>
           );
@@ -7557,7 +6337,7 @@ function SubdomainGraph({ data }: { data: any }) {
             <>
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-semibold text-sm break-all">{data?.domain}</h4>
-                <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-white">×</button>
+                <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-white">├ù</button>
               </div>
               <div className="space-y-2 text-xs">
                 <div><span className="text-gray-500">Subdominios:</span> <span className="font-mono ml-2">{data?.subdomains?.length || 0}</span></div>
@@ -7573,16 +6353,16 @@ function SubdomainGraph({ data }: { data: any }) {
               <>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-semibold text-sm break-all font-mono">{selected.name}</h4>
-                  <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-white">×</button>
+                  <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-white">├ù</button>
                 </div>
                 <div className="space-y-2 text-xs">
                   {info?.source && <div><span className="text-gray-500">Fuente:</span> <span className="ml-2">{info.source}</span></div>}
                   {info?.firstSeen && <div><span className="text-gray-500">Primera vista:</span> <span className="font-mono ml-2">{info.firstSeen}</span></div>}
-                  {info?.lastSeen && <div><span className="text-gray-500">Última vista:</span> <span className="font-mono ml-2">{info.lastSeen}</span></div>}
+                  {info?.lastSeen && <div><span className="text-gray-500">├Ültima vista:</span> <span className="font-mono ml-2">{info.lastSeen}</span></div>}
                   {info?.cname && <div><span className="text-gray-500">CNAME:</span> <span className="font-mono ml-2 break-all">{info.cname}</span></div>}
                   {tb && tb.status !== 'SAFE' && (
                     <div className={`p-2 rounded ${tb.status === 'CANDIDATE' ? 'bg-red-500/20 text-red-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
-                      <b>{tb.status}</b> — {tb.reason}
+                      <b>{tb.status}</b> ΓÇö {tb.reason}
                     </div>
                   )}
                   <div><span className="text-gray-500">IPs resolvidas:</span></div>
@@ -7597,11 +6377,11 @@ function SubdomainGraph({ data }: { data: any }) {
             <>
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-semibold text-sm break-all font-mono">{selected.ip}</h4>
-                <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-white">×</button>
+                <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-white">├ù</button>
               </div>
               <div className="space-y-2 text-xs">
                 <div><span className="text-gray-500">Host:</span> <span className="font-mono ml-2">{selected.host}</span></div>
-                <div><span className="text-gray-500">Proveedor:</span> <span className="ml-2">{providerFor(selected.host, selected.ip) || '—'}</span></div>
+                <div><span className="text-gray-500">Proveedor:</span> <span className="ml-2">{providerFor(selected.host, selected.ip) || 'ΓÇö'}</span></div>
               </div>
             </>
           )}
@@ -7613,15 +6393,14 @@ function SubdomainGraph({ data }: { data: any }) {
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: '#fb923c' }} /> bufferover</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: '#60a5fa' }} /> hackertarget</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: '#22d3ee' }} /> brute-force</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: '#2dd4bf' }} /> múltiples fuentes</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: '#2dd4bf' }} /> m├║ltiples fuentes</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: '#ef4444' }} /> takeover candidato</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: '#f59e0b' }} /> CNAME colgante</span>
       </div>
-      <button onClick={() => setSelected(null)} className="absolute top-2 right-2 p-1.5 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 text-xs text-gray-400">Limpiar selección</button>
+      <button onClick={() => setSelected(null)} className="absolute top-2 right-2 p-1.5 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 text-xs text-gray-400">Limpiar selecci├│n</button>
     </div>
   );
 }
 
 // force rebuild 08/20/2026 09:06:46
 // force rebuild 08/20/2026 09:32:28
-// Vercel redeploy trigger 09/17/2026 20:59:47

@@ -3,7 +3,7 @@
 
 import PDFDocument from 'pdfkit';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } from 'docx';
-import pptxgen from 'pptxgenjs';
+// import pptxgen from 'pptxgenjs';
 
 export interface ReportSection {
   title: string;

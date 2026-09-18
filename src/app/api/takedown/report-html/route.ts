@@ -88,3 +88,4 @@ export async function POST(request: Request) {
 function defangUrl(url: string): string {
   return url.replace(/^https?:\/\//i, 'hxxps://').replace(/\./g, '[.]');
 }
+

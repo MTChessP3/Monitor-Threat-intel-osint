@@ -63,3 +63,4 @@ function generateCsv(batch: Record<string, unknown>): string {
   ]);
   return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
 }
+
