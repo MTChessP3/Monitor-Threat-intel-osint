@@ -47,7 +47,9 @@ async function resolveRecord(domain: string, type: string): Promise<any> {
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return { type, status: res.status, Answer: [] };
-    return { type, ...(await res.json()) };
+    const data = await res.json();
+    if (data.Status !== 0) return { type, status: data.Status, Answer: [] };
+    return { type, ...data };
   } catch {
     return { type, status: 'ERROR', Answer: [] };
   }
@@ -68,8 +70,9 @@ async function resolveHost(host: string): Promise<{ ips: string[]; cname: string
     const a = aRes.status === 'fulfilled' ? aRes.value : null;
     const c = cRes.status === 'fulfilled' ? cRes.value : null;
     const ips = (a?.Answer || [])
-      .filter((x: any) => x.type === 1 || /^\d+\.\d+\.\d+\.\d+$/.test(String(x.data || '')))
-      .map((x: any) => String(x.data))
+      .filter((x: any) => x.type === 1)
+      .map((x: any) => String(x.data || ''))
+      .filter((d: string) => /^\d+\.\d+\.\d+\.\d+$/.test(d))
       .filter((d: string, i: number, arr: string[]) => arr.indexOf(d) === i)
       .slice(0, 5);
     const cname = (c?.Answer || []).find((x: any) => x.type === 5)?.data?.replace(/\.$/, '') || null;
@@ -314,7 +317,7 @@ export async function GET(request: NextRequest) {
     const byType: Record<string, any[]> = {};
     records.forEach((r) => {
       byType[r.type] = (r.Answer || []).map((a: any) => {
-        const data = String(a.data ?? (a.type === 16 ? a.data : a.data ?? ''));
+        const data = String(a.data || '');
         const row = {
           name: a.name || clean,
           type: r.type,
@@ -339,18 +342,23 @@ export async function GET(request: NextRequest) {
     const sourceLabel = (src: string) =>
       src === 'crt.sh' ? 'crt.sh' : src === 'otx' ? 'OTX passive DNS' : src === 'bufferover' ? 'bufferover' : src === 'hackertarget' ? 'hackertarget' : 'brute-force';
 
-    const subInfo = new Map<string, { name: string; source: string; firstSeen: string | null; lastSeen: string | null; ips: string[]; cname: string | null }>();
-    const addSub = (name: string, source: string, firstSeen: string | null, lastSeen: string | null, ips: string[] = []) => {
-      const existing = subInfo.get(name);
-      if (existing) {
-        if (!existing.source.includes(sourceLabel(source))) existing.source = `${existing.source} + ${sourceLabel(source)}`;
-        if (firstSeen && (!existing.firstSeen || firstSeen < existing.firstSeen)) existing.firstSeen = firstSeen;
-        if (lastSeen && (!existing.lastSeen || lastSeen > existing.lastSeen)) existing.lastSeen = lastSeen;
-        if (ips.length && !existing.ips.length) existing.ips = ips;
-      } else {
-        subInfo.set(name, { name, source: sourceLabel(source), firstSeen, lastSeen, ips, cname: null });
-      }
-    };
+const isValidSubdomain = (name: string): boolean => {
+    return name.includes('.') && !name.includes('@') && !name.includes(' ') && name.split('.').length >= 2 && name !== domain;
+  };
+
+  const subInfo = new Map<string, { name: string; source: string; firstSeen: string | null; lastSeen: string | null; ips: string[]; cname: string | null }>();
+  const addSub = (name: string, source: string, firstSeen: string | null, lastSeen: string | null, ips: string[] = []) => {
+    if (!isValidSubdomain(name)) return;
+    const existing = subInfo.get(name);
+    if (existing) {
+      if (!existing.source.includes(sourceLabel(source))) existing.source = `${existing.source} + ${sourceLabel(source)}`;
+      if (firstSeen && (!existing.firstSeen || firstSeen < existing.firstSeen)) existing.firstSeen = firstSeen;
+      if (lastSeen && (!existing.lastSeen || lastSeen > existing.lastSeen)) existing.lastSeen = lastSeen;
+      if (ips.length && !existing.ips.length) existing.ips = ips;
+    } else {
+      subInfo.set(name, { name, source: sourceLabel(source), firstSeen, lastSeen, ips, cname: null });
+    }
+  };
     ctSubs.forEach((s) => addSub(s.name, 'crt.sh', s.firstSeen, s.lastSeen));
     otxSubs.forEach((s) => addSub(s.name, 'otx', s.firstSeen, s.lastSeen, s.address ? [s.address] : []));
     bufferSubs.forEach((s) => addSub(s.name, 'bufferover', null, null, s.ip ? [s.ip] : []));
@@ -416,10 +424,13 @@ export async function GET(request: NextRequest) {
 
     const uniqueHosts = new Set<string>(subdomainNames);
     allRecords.forEach((a) => {
-      if (String(a.data || '').includes('.')) uniqueHosts.add(String(a.data));
-      if (a.name) uniqueHosts.add(String(a.name));
+      const d = String(a.data || '');
+      if (d.includes('.') && !/^\d+\.\d+\.\d+\.\d+$/.test(d) && !d.includes(' ') && !/^\d+ \d+$/.test(d)) uniqueHosts.add(d);
+      if (a.name && !a.name.includes(' ') && !a.name.includes('@')) uniqueHosts.add(String(a.name));
     });
-    mergedSubs.forEach((s) => s.ips.forEach((ip) => uniqueHosts.add(ip)));
+    mergedSubs.forEach((s) => {
+      s.ips.forEach((ip) => uniqueHosts.add(ip));
+    });
 
     const hosts = [...uniqueHosts].slice(0, 40);
 

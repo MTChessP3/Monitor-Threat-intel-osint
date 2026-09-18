@@ -6391,23 +6391,24 @@ export default function OSINTPlatform() {
             </div>
           )}
 
-          {/* ==================== DNS DUMP TAB ==================== */}
-          {activeTab === 'dnsdump' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Network className="w-7 h-7 text-teal-400" /> DNS Dump
-                  <span className="text-sm font-normal text-gray-400">(dnsdumpster.com style enumeration)</span>
-                </h2>
-                <button
-                  onClick={() => openPrintReport('dnsdump', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
+{/* ==================== DNS DUMP TAB ==================== */}
+           {activeTab === 'dnsdump' && (
+             <ModuleErrorBoundary module="DNS Dump">
+               <div className="space-y-6">
+               <div className="flex items-center justify-between">
+                 <h2 className="text-2xl font-bold flex items-center gap-3">
+                   <Network className="w-7 h-7 text-teal-400" /> DNS Dump
+                   <span className="text-sm font-normal text-gray-400">(dnsdumpster.com style enumeration)</span>
+                 </h2>
+                 <button
+                   onClick={() => openPrintReport('dnsdump', apiData?.data, inputValue)}
+                   className="px-4 py-2 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
+                   title="Generar informe imprimible HTML"
+                 >
+                   <Printer className="w-4 h-4" />
+                   Informe Imprimible
+                 </button>
+               </div>
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <div className="flex gap-4">
                   <div className="flex-1">
@@ -6681,6 +6682,7 @@ export default function OSINTPlatform() {
                 </div>
               )}
             </div>
+            </ModuleErrorBoundary>
           )}
 
           {/* ==================== SOCIAL MONITOR TAB ==================== */}
@@ -7622,3 +7624,4 @@ function SubdomainGraph({ data }: { data: any }) {
 
 // force rebuild 08/20/2026 09:06:46
 // force rebuild 08/20/2026 09:32:28
+// Vercel redeploy trigger 09/17/2026 20:59:47

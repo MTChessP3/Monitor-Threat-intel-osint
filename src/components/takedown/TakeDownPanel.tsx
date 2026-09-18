@@ -6,7 +6,7 @@ import {
   Upload, FileText, Shield, Send, Download, Printer, CheckCircle, XCircle,
   AlertCircle, Clock, Globe, Mail, Bug, Eye, RefreshCw, Trash2, Copy,
   ChevronDown, ChevronUp, Filter, List, Settings, Key, ExternalLink,
-  ChevronRight, Layers, Loader2
+  ChevronRight, Layers, Loader2, Lock, MapPin
 } from 'lucide-react';
 
 interface ExtractedUrl {
@@ -67,28 +67,92 @@ const SERVICE_OPTIONS: ServiceOption[] = [
     manualUrl: 'https://www.microsoft.com/wdsi/support/report-unsafe-site',
   },
   {
-    id: 'apwg',
-    name: 'APWG (Anti-Phishing Working Group)',
-    icon: <Mail className="w-4 h-4" />,
-    description: 'Reporte por correo electrónico a reportphishing@apwg.org',
-    requiresApiKey: false,
-    manualUrl: 'mailto:reportphishing@apwg.org',
-  },
-  {
-    id: 'cisa',
-    name: 'CISA / US-CERT',
-    icon: <Shield className="w-4 h-4" />,
-    description: 'Reporte por correo a phishing-report@us-cert.gov',
-    requiresApiKey: false,
-    manualUrl: 'mailto:phishing-report@us-cert.gov',
-  },
-  {
-    id: 'virustotal',
-    name: 'VirusTotal',
-    icon: <Bug className="w-4 h-4" />,
-    description: 'Análisis de URL (requiere API Key) o consulta manual',
+    id: 'netcraft',
+    name: 'Netcraft',
+    icon: <Eye className="w-4 h-4" />,
+    description: 'API de reporte de phishing web',
     requiresApiKey: true,
-    manualUrl: 'https://www.virustotal.com/gui/home/url',
+    manualUrl: 'https://netcraft.com/report-phishing/',
+  },
+  {
+    id: 'eset',
+    name: 'ESET',
+    icon: <Bug className="w-4 h-4" />,
+    description: 'API de reporte de amenazas ESET',
+    requiresApiKey: true,
+    manualUrl: 'https://www.eset.com/us/support/phishing-report/',
+  },
+  {
+    id: 'phishfort',
+    name: 'PhishFort',
+    icon: <Shield className="w-4 h-4" />,
+    description: 'API de reporte de phishing PhishFort',
+    requiresApiKey: true,
+    manualUrl: 'https://www.phishfort.com/report-phishing/',
+  },
+  {
+    id: 'phishreport',
+    name: 'PhishReport',
+    icon: <Mail className="w-4 h-4" />,
+    description: 'Envío de reporte de phishing por email',
+    requiresApiKey: false,
+    manualUrl: 'mailto:report@phishreport.org',
+  },
+  {
+    id: 'easydmarc',
+    name: 'EasyDMARC',
+    icon: <Globe className="w-4 h-4" />,
+    description: 'API de reporte DMARC y phishing',
+    requiresApiKey: true,
+    manualUrl: 'https://www.easydmarc.com/report-phishing/',
+  },
+  {
+    id: 'norton',
+    name: 'Norton (Gen Digital)',
+    icon: <Shield className="w-4 h-4" />,
+    description: 'Reporte de sitio unsafe Norton',
+    requiresApiKey: false,
+    manualUrl: 'https://support.norton.com/report-unsafe-site',
+  },
+  {
+    id: 'fortinet',
+    name: 'Fortinet / FortiGuard',
+    icon: <Shield className="w-4 h-4" />,
+    description: 'API de reporte FortiGuard',
+    requiresApiKey: true,
+    manualUrl: 'https://fortiguard.com/phishing-report/',
+  },
+  {
+    id: 'mcafee',
+    name: 'McAfee (Trellix)',
+    icon: <Lock className="w-4 h-4" />,
+    description: 'Reporte de phishing McAfee',
+    requiresApiKey: false,
+    manualUrl: 'https://support.mcafee.com/report-phishing',
+  },
+  {
+    id: 'crdf',
+    name: 'CRDF ThreatCenter',
+    icon: <MapPin className="w-4 h-4" />,
+    description: 'Centro de reporte de amenazas CRDF',
+    requiresApiKey: false,
+    manualUrl: 'https://threatcenter.crdf.org/report/',
+  },
+  {
+    id: 'phishtank',
+    name: 'PhishTank',
+    icon: <Bug className="w-4 h-4" />,
+    description: 'Base de datos colaborativa de phishing',
+    requiresApiKey: true,
+    manualUrl: 'https://phishtank.org/reportphish/',
+  },
+  {
+    id: 'antiphishing',
+    name: 'antiphishing.ch',
+    icon: <Globe className="w-4 h-4" />,
+    description: 'Reporte de phishing antiphishing.ch',
+    requiresApiKey: false,
+    manualUrl: 'https://antiphishing.ch/report/',
   },
 ];
 
@@ -126,6 +190,18 @@ export function TakeDownPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({
     google: '',
+    microsoft: '',
+    netcraft: '',
+    eset: '',
+    phishfort: '',
+    phishreport: '',
+    easydmarc: '',
+    norton: '',
+    fortinet: '',
+    mcafee: '',
+    crdf: '',
+    phishtank: '',
+    antiphishing: '',
     virustotal: '',
   });
 
@@ -357,7 +433,11 @@ export function TakeDownPanel() {
     setSelectedServices(new Set(SERVICE_OPTIONS.map(s => s.id)));
     setNotes('');
     setReportResult(null);
-    setApiKeys({ google: '', virustotal: '' });
+    setApiKeys({
+      google: '', microsoft: '', netcraft: '', eset: '', phishfort: '',
+      phishreport: '', easydmarc: '', norton: '', fortinet: '',
+      mcafee: '', crdf: '', phishtank: '', antiphishing: '', virustotal: ''
+    });
   };
 
   const getServiceOption = (id: string) => SERVICE_OPTIONS.find(s => s.id === id);
@@ -505,14 +585,14 @@ export function TakeDownPanel() {
               </div>
 
               {/* Services Preview */}
-              <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
                 {SERVICE_OPTIONS.map(service => (
                   <div key={service.id} className="p-4 rounded-lg bg-gray-800/50 border border-gray-700">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-400">
                         {service.icon}
                       </div>
-                      <span className="font-semibold">{service.name}</span>
+                      <span className="font-semibold text-sm">{service.name}</span>
                     </div>
                     <p className="text-sm text-gray-400">{service.description}</p>
                     {service.requiresApiKey && (
@@ -689,40 +769,28 @@ export function TakeDownPanel() {
                   })}
                 </div>
 
-                {(selectedServices.has('google') || selectedServices.has('virustotal')) && (
+                {SERVICE_OPTIONS.filter(s => s.requiresApiKey && selectedServices.has(s.id)).length > 0 && (
                   <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6">
                     <h3 className="font-semibold flex items-center gap-2 text-yellow-400 mb-3">
                       <Key className="w-5 h-5" />
                       Configuración de API Keys (Opcional)
                     </h3>
                     <p className="text-sm text-gray-400 mb-4">
-                      Para reportes automáticos en Google Safe Browsing y VirusTotal. Sin API Key, se generarán enlaces para reporte manual.
+                      Para reportes automáticos en los servicios seleccionados que requieren API Key. Sin API Key, se generarán enlaces para reporte manual.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {selectedServices.has('google') && (
-                        <div className="space-y-1">
-                          <label className="text-xs text-gray-400 block">Google Safe Browsing API Key</label>
+                      {SERVICE_OPTIONS.filter(s => s.requiresApiKey && selectedServices.has(s.id)).map((service) => (
+                        <div key={service.id} className="space-y-1">
+                          <label className="text-xs text-gray-400 block">{service.name} API Key</label>
                           <input
                             type="password"
-                            placeholder="Ingrese su API Key de Google Cloud"
-                            value={apiKeys.google}
-                            onChange={(e) => setApiKeys(prev => ({ ...prev, google: e.target.value }))}
+                            placeholder={`Ingrese su API Key de ${service.name}`}
+                            value={apiKeys[service.id]}
+                            onChange={(e) => setApiKeys(prev => ({ ...prev, [service.id]: e.target.value }))}
                             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500"
                           />
                         </div>
-                      )}
-                      {selectedServices.has('virustotal') && (
-                        <div className="space-y-1">
-                          <label className="text-xs text-gray-400 block">VirusTotal API Key</label>
-                          <input
-                            type="password"
-                            placeholder="Ingrese su API Key de VirusTotal"
-                            value={apiKeys.virustotal}
-                            onChange={(e) => setApiKeys(prev => ({ ...prev, virustotal: e.target.value }))}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500"
-                          />
-                        </div>
-                      )}
+                      ))}
                     </div>
                   </div>
                 )}
@@ -927,6 +995,100 @@ export function TakeDownPanel() {
                             🔷 Microsoft SmartScreen
                           </a>
                           <a
+                            href={`https://netcraft.com/report-phishing/?url=${encodeURIComponent(url)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-indigo-600/20 text-indigo-400 border border-indigo-600/30 hover:bg-indigo-600/30 transition-colors"
+                          >
+                            👁️ Netcraft
+                          </a>
+                          <a
+                            href={`https://www.eset.com/us/support/phishing-report?url=${encodeURIComponent(url)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-violet-600/20 text-violet-400 border border-violet-600/30 hover:bg-violet-600/30 transition-colors"
+                          >
+                            🛡️ ESET
+                          </a>
+                          <a
+                            href={`https://www.phishfort.com/report-phishing?url=${encodeURIComponent(url)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-pink-600/20 text-pink-400 border border-pink-600/30 hover:bg-pink-600/30 transition-colors"
+                          >
+                            🛡️ PhishFort
+                          </a>
+                          <a
+                            href={`mailto:report@phishreport.org?subject=Phishing%20Report&body=${encodeURIComponent(`URL: ${url}\n\n${notes || ''}`)}`}
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-red-600/20 text-red-400 border border-red-600/30 hover:bg-red-600/30 transition-colors"
+                          >
+                            📧 PhishReport
+                          </a>
+                          <a
+                            href={`https://www.easydmarc.com/report-phishing?url=${encodeURIComponent(url)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-amber-600/20 text-amber-400 border border-amber-600/30 hover:bg-amber-600/30 transition-colors"
+                          >
+                            📊 EasyDMARC
+                          </a>
+                          <a
+                            href="https://support.norton.com/report-unsafe-site"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-orange-600/20 text-orange-400 border border-orange-600/30 hover:bg-orange-600/30 transition-colors"
+                          >
+                            🛡️ Norton
+                          </a>
+                          <a
+                            href={`https://fortiguard.com/phishing-report?url=${encodeURIComponent(url)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-gray-600/20 text-gray-300 border border-gray-600/30 hover:bg-gray-600/30 transition-colors"
+                          >
+                            🏢 Fortinet
+                          </a>
+                          <a
+                            href="https://support.mcafee.com/report-phishing"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-lime-600/20 text-lime-400 border border-lime-600/30 hover:bg-lime-600/30 transition-colors"
+                          >
+                            🛡️ McAfee
+                          </a>
+                          <a
+                            href="https://threatcenter.crdf.org/report"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-teal-600/20 text-teal-400 border border-teal-600/30 hover:bg-teal-600/30 transition-colors"
+                          >
+                            📋 CRDF
+                          </a>
+                          <a
+                            href={`https://phishtank.org/reportphish?url=${encodeURIComponent(url)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-purple-600/20 text-purple-400 border border-purple-600/30 hover:bg-purple-600/30 transition-colors"
+                          >
+                            🦠 PhishTank
+                          </a>
+                          <a
+                            href="https://antiphishing.ch/report/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-cyan-600/20 text-cyan-400 border border-cyan-600/30 hover:bg-cyan-600/30 transition-colors"
+                          >
+                            🌐 antiphishing.ch
+                          </a>
+                          <a
+                            href={`https://www.virustotal.com/gui/url/${Buffer.from(url).toString('base64').replace(/=+$/, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium rounded bg-purple-600/20 text-purple-400 border border-purple-600/30 hover:bg-purple-600/30 transition-colors"
+                          >
+                            🦠 VirusTotal
+                          </a>
+                          <a
                             href={`mailto:reportphishing@apwg.org?subject=Phishing%20Report&body=${encodeURIComponent(`URL: ${url}\n\n${notes || ''}`)}`}
                             className="px-3 py-1.5 text-xs font-medium rounded bg-red-600/20 text-red-400 border border-red-600/30 hover:bg-red-600/30 transition-colors"
                           >
@@ -937,14 +1099,6 @@ export function TakeDownPanel() {
                             className="px-3 py-1.5 text-xs font-medium rounded bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 transition-colors"
                           >
                             🇺🇸 CISA/US-CERT
-                          </a>
-                          <a
-                            href={`https://www.virustotal.com/gui/url/${Buffer.from(url).toString('base64').replace(/=+$/, '')}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 text-xs font-medium rounded bg-purple-600/20 text-purple-400 border border-purple-600/30 hover:bg-purple-600/30 transition-colors"
-                          >
-                            🦠 VirusTotal
                           </a>
                         </div>
                       </div>

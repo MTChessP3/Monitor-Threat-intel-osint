@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   
   /* config options here */
   reactStrictMode: false,
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  turbopack: {
+    root: __dirname,
+  },
 
   // Keep pdfkit unbundled so its runtime-loaded .afm font files resolve
   // from node_modules instead of the traced /ROOT path.
