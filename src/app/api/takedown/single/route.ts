@@ -4,7 +4,7 @@ import { reportUrlToService } from '@/lib/takedown/services';
 import { generateTransactionId, sha256 } from '@/lib/takedown/hashGenerator';
 import { defangUrl } from '@/lib/takedown/defang';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {

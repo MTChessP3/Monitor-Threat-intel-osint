@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Search, Plus, Trash2, Edit3, UserCheck, AlertTriangle,
-  Loader2, ExternalLink, X, Save, Eye,
+  Loader2, ExternalLink, X, Save, Eye, ShieldAlert,
   Building2, Mail, Phone, FileText, Globe, ChevronUp, ChevronDown,
   Download, FileCheck, FileX, HardDrive, FolderOpen, FileJson,
   FileCode, Calendar, Users, Globe2, CheckCircle2, Filter,
@@ -1022,13 +1022,22 @@ export default function ProteccionEjecutivosPage() {
               <Search className="w-4 h-4" />
               Meta-Busqueda OSINT
             </Button>
-            <Button
-              onClick={() => { resetForm(); setShowCreateDialog(true); }}
-              className="bg-primary hover:bg-primary/90 text-white font-medium gap-2"
-            >
-              <Plus className="w-4 h-4" /> Nuevo Ejecutivo
-            </Button>
-          </div>
+<Button
+               onClick={() => { resetForm(); setShowCreateDialog(true); }}
+               className="bg-primary hover:bg-primary/90 text-white font-medium gap-2"
+             >
+               <Plus className="w-4 h-4" /> Nuevo Ejecutivo
+             </Button>
+             <NextLink href="/proteccion-ejecutiva-digital">
+               <Button
+                 className="bg-red-600 hover:bg-red-700 text-white font-medium gap-2"
+                 title="Executive Digital Protection - 21 Dork Categories"
+               >
+                 <ShieldAlert className="w-4 h-4" />
+                 <span className="hidden sm:inline">Digital Protection</span>
+               </Button>
+             </NextLink>
+           </div>
         </div>
 
         {/* Limits Info */}

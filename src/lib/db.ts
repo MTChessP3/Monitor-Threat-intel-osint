@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client'
-import { PrismaLibSQL } from '@prisma/adapter-libsql'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -17,17 +16,9 @@ function createPrismaClient(): PrismaClient {
   const tursoAuth = process.env.TURSO_AUTH_TOKEN;
 
   if (tursoUrl) {
-    // Use Turso/libSQL (SQLite-compatible cloud database that works on Vercel)
-    console.log('[DB] Using Turso/libSQL adapter');
-    const adapter = new PrismaLibSQL({
-      url: tursoUrl,
-      authToken: tursoAuth || undefined,
-    });
-    return new PrismaClient({ adapter } as any);
-  }
-
-  // On Vercel without Turso, use SQLite with /tmp path
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    console.log('[DB] Using Turso/libSQL');
+    return new PrismaClient({ datasources: { db: { url: tursoUrl } } });
+  } else if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
     console.log('[DB] Using SQLite with /tmp path on Vercel');
     return new PrismaClient({
       datasources: {

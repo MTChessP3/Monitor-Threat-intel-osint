@@ -6,6 +6,7 @@ import UrlSandboxPanel from '@/components/sandbox/UrlSandboxPanel';
 import UrlScannerPanel from '@/components/url/UrlScannerPanel';
 import TakeDownPanel from '@/components/takedown/TakeDownPanel';
 import ModuleErrorBoundary from '@/components/ModuleErrorBoundary';
+import ExecutiveDigitalProtection from '@/components/osint/ExecutiveDigitalProtection';
 import { analyzeApkBytes } from '@/lib/intel/fakeapp';
 import { 
   Search, Globe, Shield, Bug, FileText, Download, Upload, 
@@ -27,7 +28,7 @@ import {
 } from 'recharts';
 
 // ==================== TYPES ====================
-type TabType = 'dashboard' | 'ip' | 'domain' | 'url' | 'hash' | 'cve' | 'ai' | 'darkweb' | 'threats' | 'mobile' | 'forensics' | 'iocs' | 'export' | 'reports' | 'sources' | 'brand' | 'sandbox' | 'dnsdump' | 'social' | 'exec' | 'fakeapp' | 'takedown';
+type TabType = 'dashboard' | 'ip' | 'domain' | 'url' | 'hash' | 'cve' | 'ai' | 'darkweb' | 'threats' | 'mobile' | 'forensics' | 'iocs' | 'export' | 'reports' | 'sources' | 'brand' | 'sandbox' | 'dnsdump' | 'social' | 'exec' | 'fakeapp' | 'takedown' | 'edp';
 type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
 type IOCStatus = 'UNKNOWN' | 'BENIGN' | 'SUSPICIOUS' | 'MALICIOUS';
 
@@ -752,6 +753,7 @@ const NAV_CATEGORIES: NavCategory[] = [
       { id: 'social', label: 'Telegram & Discord Monitor', icon: MessageSquare, color: 'text-blue-400', badge: 'NEW' },
       { id: 'exec', label: 'Executive OSINT', icon: ShieldUser, color: 'text-amber-400', badge: 'NEW' },
       { id: 'brand', label: 'Brand Protection', icon: ShieldAlert, color: 'text-rose-400', badge: 'NEW' },
+      { id: 'edp', label: 'Digital Protection', icon: ShieldAlert, color: 'text-red-400', badge: 'NEW' },
       { id: 'fakeapp', label: 'Fake App Scanner', icon: Smartphone, color: 'text-fuchsia-400', badge: 'NEW' },
     ],
   },
@@ -5658,6 +5660,17 @@ export default function OSINTPlatform() {
                   <p className="text-gray-400">Monitor exposed emails, phones, documents, social media and dark web references for executives.</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ==================== EXECUTIVE DIGITAL PROTECTION TAB ==================== */}
+          {activeTab === 'edp' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <ShieldAlert className="w-7 h-7 text-red-400" /> Executive Digital Protection
+                <span className="text-sm font-normal text-gray-400">(21 Dork categories & printable OSINT modules)</span>
+              </h2>
+              <ExecutiveDigitalProtection />
             </div>
           )}
 
