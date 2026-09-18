@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { PrismaLibSQL } from '@prisma/adapter-libsql'
+import { PrismaLibSql } from '@prisma/adapter-libsql'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -19,7 +19,7 @@ function createPrismaClient(): PrismaClient {
   if (tursoUrl) {
     // Use Turso/libSQL (SQLite-compatible cloud database that works on Vercel)
     console.log('[DB] Using Turso/libSQL adapter');
-    const adapter = new PrismaLibSQL({
+    const adapter = new PrismaLibSql({
       url: tursoUrl,
       authToken: tursoAuth || undefined,
     });
