@@ -70,6 +70,18 @@ export interface ExecutiveProfile {
   leakedCredentials: number;
   riskScore: number;
   lastCheck: string;
+  // New fields
+  identificationNum?: string;
+  email?: string;
+  phone?: string;
+  position?: string;
+  organization?: string;
+  emailType?: 'personal' | 'corporate' | 'both';
+  address?: string;
+  location?: string;
+  socialMedia?: Array<{platform: string; url: string; handle: string; type: string}>;
+  notes?: string;
+  active?: boolean;
 }
 
 export interface ExposureFinding {

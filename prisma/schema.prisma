@@ -108,6 +108,18 @@ model Executive {
   riskScore          Int      @default(0)
   lastCheck          DateTime @default(now())
   createdAt          DateTime @default(now())
+  // New fields
+  identificationNum  String?
+  email              String?
+  phone              String?
+  position           String?
+  organization       String?
+  emailType          String?  // personal | corporate | both
+  address            String?
+  location           String?
+  socialMedia        String?  // JSON string
+  notes              String?
+  active             Boolean  @default(true)
 }
 
 model SocialChannel {
