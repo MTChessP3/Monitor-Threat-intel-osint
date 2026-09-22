@@ -367,6 +367,7 @@ export async function GET(request: NextRequest) {
         { id: 'threat-hunt', name: 'Threat Hunt Report', modules: ['darkweb', 'threats', 'ai'] },
         { id: 'comprehensive', name: 'Comprehensive Report', modules: ['dashboard', 'ip', 'domain', 'cve', 'darkweb', 'threats', 'iocs', 'mobile', 'ai'] },
         { id: 'brand-protection', name: 'Brand Protection Assessment', modules: ['brand', 'phishing', 'social', 'fakeapp'] },
+        { id: 'exec-protection', name: 'Executive Protection Assessment', modules: ['exec-protection', 'dorking', 'social', 'darkweb'] },
         { id: 'incident-response', name: 'Incident Response Report', modules: ['ip', 'domain', 'hash', 'url', 'cve', 'sandbox'] },
       ],
       formats: ['HTML', 'JSON', 'CSV', 'PDF', 'DOCX', 'PPTX'],

@@ -6,9 +6,9 @@ import UrlSandboxPanel from '@/components/sandbox/UrlSandboxPanel';
 import UrlScannerPanel from '@/components/url/UrlScannerPanel';
 import TakeDownPanel from '@/components/takedown/TakeDownPanel';
 import ModuleErrorBoundary from '@/components/ModuleErrorBoundary';
-import ExecutiveDigitalProtection from '@/components/osint/ExecutiveDigitalProtection';
+
 import { analyzeApkBytes } from '@/lib/intel/fakeapp';
-import { 
+import {
   Search, Globe, Shield, Bug, FileText, Download, Upload, 
   Trash2, Edit3, Plus, Eye, AlertTriangle, CheckCircle, XCircle,
   Activity, Database, Cpu, Lock, Unlock, RefreshCw, ExternalLink,
@@ -19,7 +19,7 @@ import {
   Play, Pause, Camera, FileSearch, Smartphone, Globe2, Skull, EyeOff,
   FolderOpen, DownloadCloud, UploadCloud, FileCode, LockOpen, ShieldAlert,
   Network, MessageSquare, ShieldUser, Radio, Presentation, Printer,
-  Send, Layers
+  Send, Layers, Image
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -271,6 +271,7 @@ function generatePrintableReport(tab: TabType, data: any, inputValue: string): s
     threats: 'Threat Feeds', iocs: 'IOC Manager', export: 'Export Data', reports: 'Reports',
     sources: 'Intelligence Sources', brand: 'Brand Protection', sandbox: 'URL Sandbox',
     dnsdump: 'DNS Dump', social: 'Telegram & Discord', exec: 'Executive OSINT',
+    'exec-protection': 'Executive Protection',
     fakeapp: 'Fake App Scanner', takedown: 'TakeDown URL', url: 'URL Scanner', sandbox: 'URL Sandbox',
   };
 
@@ -924,6 +925,71 @@ function generatePrintableReport(tab: TabType, data: any, inputValue: string): s
     `;
   };
 
+  // Generate Executive Protection Report
+  const generateExecProtectionReport = (data: any): string => {
+    const exec = data.executive;
+    const dorkResults = data.dorkResults;
+    const escapeHtml = (text: string) => text
+      .replace(/&/g, '&')
+      .replace(/</g, '<')
+      .replace(/>/g, '>')
+      .replace(/"/g, '"')
+      .replace(/'/g, '&#039;');
+
+    if (!exec) return '<div class="section"><div class="section-title">⚠️ No Executive Data</div><p>No executive data available for report.</p></div>';
+
+    let html = `
+      <div class="section">
+        <div class="section-title">👤 Executive Profile</div>
+        <div class="data-grid">
+          <div class="data-card"><div class="data-label">ID / Document</div><div class="data-value">${escapeHtml(exec.documentId || 'N/A')}</div></div>
+          <div class="data-card"><div class="data-label">Phone</div><div class="data-value">${escapeHtml(exec.phone || 'N/A')}</div></div>
+          <div class="data-card"><div class="data-label">Email Corporate</div><div class="data-value">${escapeHtml(exec.emailCorporate || 'N/A')}</div></div>
+          <div class="data-card"><div class="data-label">Email Personal</div><div class="data-value">${escapeHtml(exec.emailPersonal || 'N/A')}</div></div>
+          <div class="data-card"><div class="data-label">Address</div><div class="data-value">${escapeHtml(exec.address || 'N/A')}</div></div>
+          <div class="data-card"><div class="data-label">Location</div><div class="data-value">${escapeHtml(exec.location || 'N/A')}</div></div>
+        </div>
+      </div>
+    `;
+
+    if (exec.socialMedia?.length > 0) {
+      html += `
+        <div class="section">
+          <div class="section-title">📱 Social Media Profiles</div>
+          <div class="data-grid">
+            ${exec.socialMedia.map((sm: any) => `
+              <div class="data-card">
+                <div class="data-label">${escapeHtml(sm.platform)}</div>
+                <div class="data-value">${escapeHtml(sm.username)}</div>
+                ${sm.url ? `<div class="data-label"><a href="${escapeHtml(sm.url)}" target="_blank" style="color: #059669;">View Profile</a></div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    if (dorkResults?.queries?.length > 0) {
+      html += `
+        <div class="section">
+          <div class="section-title">🔍 OSINT Dork Research Queries (${dorkResults.queries.length} categories)</div>
+          <div class="data-grid">
+            ${dorkResults.queries.map((q: any) => `
+              <div class="data-card" style="grid-column: span 1;">
+                <div class="data-label">${escapeHtml(q.category)}</div>
+                <div class="data-value" style="font-family: monospace; font-size: 11px; white-space: pre-wrap;">${escapeHtml(q.query)}</div>
+                <div class="data-label">${escapeHtml(q.description)}</div>
+                <div class="data-value">Sources: ${q.sources.join(', ')}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    return html;
+  };
+
   // Generate IP Intel specific report if tab is ip
   let ipIntelHtml = '';
   if (tab === 'ip' && data) {
@@ -936,6 +1002,8 @@ function generatePrintableReport(tab: TabType, data: any, inputValue: string): s
     contentHtml = domainIntelHtml;
   } else if (tab === 'ip' && ipIntelHtml) {
     contentHtml = ipIntelHtml;
+  } else if (tab === 'exec-protection' && data) {
+    contentHtml = generateExecProtectionReport(data);
   } else if (data) {
     contentHtml = `
       <div class="section">
@@ -1515,6 +1583,7 @@ const NAV_CATEGORIES: NavCategory[] = [
       { id: 'darkweb', label: 'Deep & Dark Web', icon: Skull, color: 'text-red-500' },
       { id: 'social', label: 'Telegram & Discord Monitor', icon: MessageSquare, color: 'text-blue-400' },
       { id: 'brand', label: 'Brand Protection', icon: ShieldAlert, color: 'text-rose-400' },
+      { id: 'exec-protection', label: 'Executive Protection', icon: ShieldUser, color: 'text-amber-400' },
       { id: 'fakeapp', label: 'Fake App Scanner', icon: Smartphone, color: 'text-fuchsia-400' },
     ],
   },
@@ -1564,6 +1633,13 @@ export default function OSINTPlatform() {
   // Clear apiData when switching tabs to prevent cross-module data leakage
   useEffect(() => {
     setApiData(null);
+  }, [activeTab]);
+
+  // Load executives when exec-protection tab is active
+  useEffect(() => {
+    if (activeTab === 'exec-protection') {
+      loadExecutives();
+    }
   }, [activeTab]);
   const [selectedQueue, setSelectedQueue] = useState<Set<string>>(new Set());
   const [showDnsblDetail, setShowDnsblDetail] = useState(false);
@@ -2276,12 +2352,6 @@ export default function OSINTPlatform() {
   };
 
   // ==================== EXECUTIVE OSINT ====================
-  const handleExecScan = async () => {
-    if (!inputValue) { showFeedback('Enter the executive name to scan', 'error'); return; }
-    showFeedback(`Running exposure scan for "${inputValue}"...`, 'info');
-    await callAPI(`/api/osint/exec?name=${encodeURIComponent(inputValue)}`);
-  };
-
   // ==================== FAKE APP ====================
   const handleFakeApp = async () => {
     if (!inputValue) { showFeedback('Enter a direct APK download URL to analyze', 'error'); return; }
@@ -2319,6 +2389,64 @@ export default function OSINTPlatform() {
     } finally {
       setFakeAppAnalyzing(false);
     }
+};
+
+  // ==================== EXECUTIVE PROTECTION ====================
+  const [executives, setExecutives] = useState<any[]>([]);
+  const [execMode, setExecMode] = useState<'list' | 'add' | 'edit' | 'detail'>('list');
+  const [selectedExec, setSelectedExec] = useState<any>(null);
+  const [editingExec, setEditingExec] = useState<any>(null);
+  const [dorkResults, setDorkResults] = useState<any>(null);
+  const [dorkLoading, setDorkLoading] = useState(false);
+
+  const loadExecutives = async () => {
+    try {
+      const res = await fetch('/api/osint/exec-protection');
+      const data = await res.json();
+      if (data.success) setExecutives(data.data);
+    } catch (err) {
+      console.error('Load executives error:', err);
+    }
+  };
+
+  const deleteExecutive = async (id: string) => {
+    if (!confirm('Delete this executive?')) return;
+    try {
+      const res = await fetch(`/api/osint/exec-protection?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setExecutives(prev => prev.filter(e => e.id !== id));
+        showFeedback('Executive deleted', 'success');
+      }
+    } catch (err) {
+      showFeedback('Failed to delete executive', 'error');
+    }
+  };
+
+  const searchAllDorks = async (executiveId: string) => {
+    setDorkLoading(true);
+    setDorkResults(null);
+    try {
+      const res = await fetch('/api/osint/exec-protection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'search-all-dorks', executiveId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDorkResults(data.data);
+        showFeedback('Dork searches generated', 'success');
+      }
+    } catch (err) {
+      showFeedback('Failed to generate dork searches', 'error');
+    } finally {
+      setDorkLoading(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    showFeedback('Query copied to clipboard', 'success');
   };
 
   // IOC CRUD Handlers
@@ -2698,6 +2826,381 @@ export default function OSINTPlatform() {
         ? prev.modules.filter(m => m !== module)
         : [...prev.modules, module]
     }));
+  };
+
+  // ==================== EXECUTIVE PROTECTION FORMS ====================
+  const ExecAddForm = ({ onCancel, onSuccess }: { onCancel: () => void; onSuccess: () => void }) => {
+    const [form, setForm] = useState({
+      documentId: '',
+      phone: '',
+      emailCorporate: '',
+      emailPersonal: '',
+      socialMedia: [] as SocialMedia[],
+      address: '',
+      location: '',
+    });
+    const [newSocial, setNewSocial] = useState({ platform: '', url: '', username: '' });
+
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      try {
+        const res = await fetch('/api/osint/exec-protection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...form, socialMedia: form.socialMedia })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showFeedback('Executive added successfully', 'success');
+          onSuccess();
+        } else {
+          showFeedback(data.error || 'Failed to add executive', 'error');
+        }
+      } catch {
+        showFeedback('Failed to add executive', 'error');
+      }
+    };
+
+    const addSocial = () => {
+      if (newSocial.platform && newSocial.username) {
+        setForm(prev => ({ ...prev, socialMedia: [...prev.socialMedia, newSocial] }));
+        setNewSocial({ platform: '', url: '', username: '' });
+      }
+    };
+
+    const removeSocial = (idx: number) => {
+      setForm(prev => ({ ...prev, socialMedia: prev.socialMedia.filter((_, i) => i !== idx) }));
+    };
+
+    return (
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">ID / Document *</label>
+            <input
+              value={form.documentId}
+              onChange={e => setForm({ ...form, documentId: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Phone</label>
+            <input
+              value={form.phone}
+              onChange={e => setForm({ ...form, phone: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Email Corporate</label>
+            <input
+              value={form.emailCorporate}
+              onChange={e => setForm({ ...form, emailCorporate: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Email Personal</label>
+            <input
+              value={form.emailPersonal}
+              onChange={e => setForm({ ...form, emailPersonal: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-green-500 focus:outline-none"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-400 mb-1">Address</label>
+            <input
+              value={form.address}
+              onChange={e => setForm({ ...form, address: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-400 mb-1">Location (City, Country)</label>
+            <input
+              value={form.location}
+              onChange={e => setForm({ ...form, location: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-gray-800 pt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-medium">Social Media Profiles</h4>
+            <button type="button" onClick={addSocial} className="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 rounded text-sm font-medium flex items-center gap-1">
+              <Plus className="w-3 h-3" /> Add
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+            <input
+              value={newSocial.platform}
+              onChange={e => setNewSocial({ ...newSocial, platform: e.target.value })}
+              placeholder="Platform (e.g., LinkedIn, Facebook, Twitter, Instagram, TikTok, YouTube, GitHub, Custom)"
+              className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+            <input
+              value={newSocial.url}
+              onChange={e => setNewSocial({ ...newSocial, url: e.target.value })}
+              placeholder="URL (optional)"
+              className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+            <input
+              value={newSocial.username}
+              onChange={e => setNewSocial({ ...newSocial, username: e.target.value })}
+              placeholder="Username / Handle *"
+              className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+          {form.socialMedia.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {form.socialMedia.map((sm, idx) => (
+                <span key={idx} className="px-3 py-1 bg-gray-700 border border-gray-600 rounded flex items-center gap-2 text-sm">
+                  <span className="font-medium">{sm.platform}</span>
+                  <span className="text-gray-400">@{sm.username}</span>
+                  <button type="button" onClick={() => removeSocial(idx)} className="text-red-400 hover:text-red-300">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-4 pt-4 border-t border-gray-800">
+          <button type="submit" className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium flex items-center gap-2">
+            <Save className="w-4 h-4" /> Save Executive
+          </button>
+          <button type="button" onClick={onCancel} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium flex items-center gap-2">
+            <X className="w-4 h-4" /> Cancel
+          </button>
+        </div>
+      </form>
+    );
+  };
+
+  const ExecEditForm = ({ executive, onCancel, onSuccess }: { executive: any; onCancel: () => void; onSuccess: () => void }) => {
+    const [form, setForm] = useState({
+      documentId: executive.documentId,
+      phone: executive.phone,
+      emailCorporate: executive.emailCorporate,
+      emailPersonal: executive.emailPersonal,
+      socialMedia: executive.socialMedia || [],
+      address: executive.address,
+      location: executive.location,
+    });
+    const [newSocial, setNewSocial] = useState({ platform: '', url: '', username: '' });
+
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      try {
+        const res = await fetch('/api/osint/exec-protection', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: executive.id, ...form, socialMedia: form.socialMedia })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showFeedback('Executive updated successfully', 'success');
+          onSuccess();
+        } else {
+          showFeedback(data.error || 'Failed to update executive', 'error');
+        }
+      } catch {
+        showFeedback('Failed to update executive', 'error');
+      }
+    };
+
+    const addSocial = () => {
+      if (newSocial.platform && newSocial.username) {
+        setForm(prev => ({ ...prev, socialMedia: [...prev.socialMedia, newSocial] }));
+        setNewSocial({ platform: '', url: '', username: '' });
+      }
+    };
+
+    const removeSocial = (idx: number) => {
+      setForm(prev => ({ ...prev, socialMedia: prev.socialMedia.filter((_, i) => i !== idx) }));
+    };
+
+    return (
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-4xl mx-auto">
+        <div className="flex items-center gap-3 mb-4">
+          <h3 className="text-lg font-semibold">Editing: {executive.documentId}</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">ID / Document *</label>
+            <input
+              value={form.documentId}
+              onChange={e => setForm({ ...form, documentId: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Phone</label>
+            <input
+              value={form.phone}
+              onChange={e => setForm({ ...form, phone: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Email Corporate</label>
+            <input
+              value={form.emailCorporate}
+              onChange={e => setForm({ ...form, emailCorporate: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Email Personal</label>
+            <input
+              value={form.emailPersonal}
+              onChange={e => setForm({ ...form, emailPersonal: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-green-500 focus:outline-none"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-400 mb-1">Address</label>
+            <input
+              value={form.address}
+              onChange={e => setForm({ ...form, address: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-400 mb-1">Location (City, Country)</label>
+            <input
+              value={form.location}
+              onChange={e => setForm({ ...form, location: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-gray-800 pt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-medium">Social Media Profiles</h4>
+            <button type="button" onClick={addSocial} className="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 rounded text-sm font-medium flex items-center gap-1">
+              <Plus className="w-3 h-3" /> Add
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+            <input
+              value={newSocial.platform}
+              onChange={e => setNewSocial({ ...newSocial, platform: e.target.value })}
+              placeholder="Platform (e.g., LinkedIn, Facebook, Twitter, Instagram, TikTok, YouTube, GitHub, Custom)"
+              className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+            <input
+              value={newSocial.url}
+              onChange={e => setNewSocial({ ...newSocial, url: e.target.value })}
+              placeholder="URL (optional)"
+              className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+            <input
+              value={newSocial.username}
+              onChange={e => setNewSocial({ ...newSocial, username: e.target.value })}
+              placeholder="Username / Handle *"
+              className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+          {form.socialMedia.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {form.socialMedia.map((sm, idx) => (
+                <span key={idx} className="px-3 py-1 bg-gray-700 border border-gray-600 rounded flex items-center gap-2 text-sm">
+                  <span className="font-medium">{sm.platform}</span>
+                  <span className="text-gray-400">@{sm.username}</span>
+                  <button type="button" onClick={() => removeSocial(idx)} className="text-red-400 hover:text-red-300">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-4 pt-4 border-t border-gray-800">
+          <button type="submit" className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium flex items-center gap-2">
+            <Save className="w-4 h-4" /> Save Changes
+          </button>
+          <button type="button" onClick={onCancel} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium flex items-center gap-2">
+            <X className="w-4 h-4" /> Cancel
+          </button>
+        </div>
+      </form>
+    );
+  };
+
+  const ExecDetailView = ({ executive, onClose, onEdit }: { executive: any; onClose: () => void; onEdit: () => void }) => {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Executive Details</h3>
+          <div className="flex gap-2">
+            <button onClick={onEdit} className="px-4 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 rounded-lg font-medium flex items-center gap-2">
+              <Edit3 className="w-4 h-4" /> Edit
+            </button>
+            <button onClick={onClose} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium flex items-center gap-2">
+              <X className="w-4 h-4" /> Close
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+            <p className="text-xs text-gray-400 mb-1">ID / Document</p>
+            <p className="font-mono text-amber-300 text-lg">{executive.documentId}</p>
+          </div>
+          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+            <p className="text-xs text-gray-400 mb-1">Phone</p>
+            <p className="font-mono text-sm">{executive.phone || 'Not set'}</p>
+          </div>
+          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+            <p className="text-xs text-gray-400 mb-1">Email Corporate</p>
+            <p className="text-blue-400 text-sm break-all">{executive.emailCorporate || 'Not set'}</p>
+          </div>
+          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+            <p className="text-xs text-gray-400 mb-1">Email Personal</p>
+            <p className="text-green-400 text-sm break-all">{executive.emailPersonal || 'Not set'}</p>
+          </div>
+          <div className="md:col-span-2 lg:col-span-2 bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+            <p className="text-xs text-gray-400 mb-1">Address</p>
+            <p className="text-sm text-gray-300">{executive.address || 'Not set'}</p>
+          </div>
+          <div className="md:col-span-2 lg:col-span-2 bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+            <p className="text-xs text-gray-400 mb-1">Location</p>
+            <p className="text-sm text-gray-300 flex items-center gap-2">
+              <MapPin className="w-3 h-3 text-gray-500" />
+              {executive.location || 'Not set'}
+            </p>
+          </div>
+        </div>
+
+        {executive.socialMedia?.length > 0 && (
+          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+            <h4 className="font-medium mb-3 flex items-center gap-2">
+              <Users className="w-5 h-5 text-purple-400" /> Social Media Profiles ({executive.socialMedia.length})
+            </h4>
+            <div className="flex flex-wrap gap-3">
+              {executive.socialMedia.map((sm: any, idx: number) => (
+                <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg">
+                  <span className="font-medium text-purple-300">{sm.platform}</span>
+                  {sm.url && (
+                    <a href={sm.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 font-mono break-all max-w-xs">
+                      {sm.url}
+                    </a>
+                  )}
+                  <span className="text-gray-400">@{sm.username}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // ==================== RENDER ====================
@@ -6719,6 +7222,197 @@ export default function OSINTPlatform() {
                   <MessageSquare className="w-16 h-16 mx-auto mb-4 text-gray-600" />
                   <h3 className="text-lg font-semibold mb-2">Channel Monitor Ready</h3>
                   <p className="text-gray-400">Search keywords across Telegram and Discord channels. Connect bots for live capture.</p>
+                </div>
+              )}
+</div>
+            )}
+
+          {/* ==================== EXECUTIVE PROTECTION TAB ==================== */}
+          {activeTab === 'exec-protection' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold flex items-center gap-3">
+                  <ShieldUser className="w-7 h-7 text-amber-400" /> Executive Protection
+                  <span className="text-sm font-normal text-gray-400">(CRUD + OSINT Dork Research)</span>
+                </h2>
+              </div>
+
+              {/* Executive List / Add Form */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold">Executives</h3>
+                  <button
+                    onClick={() => setExecMode('add')}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> Add Executive
+                  </button>
+                </div>
+
+                {execMode === 'add' && (
+                  <ExecAddForm onCancel={() => setExecMode('list')} onSuccess={() => { setExecMode('list'); loadExecutives(); }} />
+                )}
+
+                {execMode === 'edit' && editingExec && (
+                  <ExecEditForm executive={editingExec} onCancel={() => { setExecMode('list'); setEditingExec(null); }} onSuccess={() => { setExecMode('list'); loadExecutives(); }} />
+                )}
+
+                {execMode === 'detail' && selectedExec && (
+                  <ExecDetailView executive={selectedExec} onClose={() => { setExecMode('list'); setSelectedExec(null); }} onEdit={() => { setEditingExec(selectedExec); setExecMode('edit'); }} />
+                )}
+
+                {execMode === 'list' && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-800 text-left text-gray-400">
+                          <th className="py-3 px-4">ID/Document</th>
+                          <th className="py-3 px-4">Phone</th>
+                          <th className="py-3 px-4">Emails</th>
+                          <th className="py-3 px-4">Social Media</th>
+                          <th className="py-3 px-4">Address / Location</th>
+                          <th className="py-3 px-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {executives.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-12 text-center text-gray-500">
+                              <ShieldUser className="w-12 h-12 mx-auto mb-3 text-gray-600" />
+                              <p>No executives registered. Click "Add Executive" to start.</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          executives.map((exec: any) => (
+                            <tr key={exec.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                              <td className="py-3 px-4 font-mono text-amber-300">{exec.documentId}</td>
+                              <td className="py-3 px-4 font-mono text-xs">{exec.phone || '-'}</td>
+                              <td className="py-3 px-4 text-xs">
+                                {exec.emailCorporate && <div className="text-blue-400">{exec.emailCorporate}</div>}
+                                {exec.emailPersonal && <div className="text-green-400">{exec.emailPersonal}</div>}
+                                {!exec.emailCorporate && !exec.emailPersonal && <span className="text-gray-500">-</span>}
+                              </td>
+                              <td className="py-3 px-4 text-xs">
+                                {exec.socialMedia?.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {exec.socialMedia.map((sm: any) => (
+                                      <span key={sm.platform} className="px-2 py-0.5 bg-gray-700 rounded text-xs">{sm.platform}</span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-500">-</span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 text-xs text-gray-400 max-w-xs truncate">
+                                {exec.address || exec.location || '-'}
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => { setSelectedExec(exec); setExecMode('detail'); }}
+                                    className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded text-xs font-medium"
+                                  >
+                                    View
+                                  </button>
+                                  <button
+                                    onClick={() => { setEditingExec(exec); setExecMode('edit'); }}
+                                    className="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 rounded text-xs font-medium"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => deleteExecutive(exec.id)}
+                                    className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 rounded text-xs font-medium"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Dork Research Section */}
+              {selectedExec && execMode === 'detail' && (
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Search className="w-5 h-5 text-purple-400" />
+                    OSINT Dork Research for: <span className="text-amber-300">{selectedExec.documentId}</span>
+                  </h3>
+                  <div className="flex gap-4 mb-6 flex-wrap">
+                    <button
+                      onClick={() => searchAllDorks(selectedExec.id)}
+                      disabled={dorkLoading}
+                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg font-medium flex items-center gap-2"
+                    >
+                      {dorkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                      Run All Dork Searches
+                    </button>
+                    <button
+                      onClick={() => openPrintReport('exec-protection', { executive: selectedExec, dorkResults: dorkResults }, selectedExec.documentId)}
+                      className="px-6 py-3 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-lg font-medium flex items-center gap-2 no-print"
+                    >
+                      <Printer className="w-4 h-4" />
+                      Print HTML Report
+                    </button>
+                  </div>
+
+                  {dorkResults && dorkResults.queries.length > 0 && (
+                    <div className="space-y-4">
+                      {dorkResults.queries.map((q: any, idx: number) => (
+                        <div key={idx} className="bg-gray-800/60 border border-gray-700 rounded-lg p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <h4 className="font-semibold text-purple-300">{q.category}</h4>
+                              <p className="text-xs text-gray-500">{q.description}</p>
+                            </div>
+                            <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs font-mono">
+                              {q.isImageSearch ? 'Images' : 'Web'}
+                            </span>
+                          </div>
+                          <div className="font-mono text-xs text-gray-300 bg-gray-900 p-3 rounded break-all">
+                            {q.query}
+                          </div>
+                          <div className="flex gap-3 mt-3 flex-wrap">
+                            {q.sources.map((source: string) => (
+                              <span key={source} className="px-2 py-1 bg-gray-700 text-gray-300 rounded text-xs">{source}</span>
+                            ))}
+                          </div>
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              onClick={() => copyToClipboard(q.query)}
+                              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs font-medium flex items-center gap-1"
+                            >
+                              <Copy className="w-3 h-3" /> Copy Query
+                            </button>
+                            <a
+                              href={`https://www.google.com/search?q=${encodeURIComponent(q.query)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-500/30 rounded text-xs font-medium flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3 h-3" /> Search Google
+                            </a>
+                            {q.isImageSearch && (
+                              <a
+                                href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q.query)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded text-xs font-medium flex items-center gap-1"
+                              >
+                                <Image className="w-3 h-3" /> Search Images
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
