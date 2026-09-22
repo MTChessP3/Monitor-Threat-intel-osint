@@ -17,6 +17,10 @@ export interface TargetInput {
   alias?: string;
   phone?: string;
   domain?: string;
+  address?: string;
+  location?: string;
+  socialMedia?: string[];
+  emailType?: string;
 }
 
 export interface SearchFilters {

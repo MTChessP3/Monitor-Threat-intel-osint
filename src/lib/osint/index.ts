@@ -3,6 +3,20 @@
 // ============================================================================
 
 export {
+  generatePrintableModuleHTML,
+  openPrintableModule,
+  downloadModuleAsHTML,
+  downloadModuleAsJSON,
+  generateFullReportHTML,
+  openFullReport,
+  downloadFullReportAsHTML,
+  type PrintableModuleOptions,
+  type ExecutiveProfileData,
+  type FullReportData,
+  type SocialMediaEntry,
+} from './executive-printable';
+
+export {
   EXECUTIVE_DORK_CATEGORIES,
   SEVERITY_LABELS,
   getCategoryById,
@@ -13,11 +27,3 @@ export {
   type DorkResult,
   type ExecutiveDorkCategoryData,
 } from './executive-dork-categories';
-
-export {
-  generatePrintableModuleHTML,
-  openPrintableModule,
-  downloadModuleAsHTML,
-  downloadModuleAsJSON,
-  type PrintableModuleOptions,
-} from './executive-printable';

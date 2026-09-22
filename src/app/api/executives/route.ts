@@ -33,6 +33,9 @@ export async function GET(request: NextRequest) {
         { identificationNum: { contains: search } },
         { email: { contains: search } },
         { organization: { contains: search } },
+        { phone: { contains: search } },
+        { address: { contains: search } },
+        { location: { contains: search } },
       ];
     }
 
@@ -69,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { identificationNum, fullName, email, phone, position, organization, riskLevel, notes } = body;
+    const { identificationNum, fullName, email, phone, position, organization, riskLevel, notes, socialMedia, address, location, emailType } = body;
 
     if (!identificationNum || !fullName) {
       return NextResponse.json(
@@ -109,6 +112,10 @@ export async function POST(request: NextRequest) {
         organization: organization || null,
         riskLevel: riskLevel || 'bajo',
         notes: notes || null,
+        socialMedia: socialMedia || null,
+        address: address || null,
+        location: location || null,
+        emailType: emailType || 'personal',
       },
     });
 
@@ -132,7 +139,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, identificationNum, fullName, email, phone, position, organization, riskLevel, notes, active } = body;
+    const { id, identificationNum, fullName, email, phone, position, organization, riskLevel, notes, active, socialMedia, address, location, emailType } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
@@ -166,6 +173,10 @@ export async function PUT(request: NextRequest) {
         ...(riskLevel !== undefined && { riskLevel }),
         ...(notes !== undefined && { notes }),
         ...(active !== undefined && { active }),
+        ...(socialMedia !== undefined && { socialMedia }),
+        ...(address !== undefined && { address }),
+        ...(location !== undefined && { location }),
+        ...(emailType !== undefined && { emailType }),
       },
     });
 

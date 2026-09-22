@@ -76,6 +76,13 @@ model Executive {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   familyMembers       FamilyMember[]
+  // Social Media fields
+  socialMedia         String?  @default("[]") // JSON string: [{platform, url, handle, type}]
+  // Address fields
+  address             String?
+  location            String?
+  // Email type (corporate/personal)
+  emailType           String?  @default("personal") // "corporate" | "personal" | "both"
 }
 
 model FamilyMember {
