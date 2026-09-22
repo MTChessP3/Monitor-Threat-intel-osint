@@ -4,8 +4,6 @@ import { generateTransactionId, sha256OfFile, computeBatchHash } from '@/lib/tak
 import { virustotalPreCheckBatch } from '@/lib/takedown/virustotal';
 import { extractUrlsFromText, normalizeUrl, isValidUrl } from '@/lib/takedown/defang';
 
-export const runtime = 'edge';
-
 export async function POST(request: Request) {
   try {
     await ensureDatabaseInitialized();

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@/lib/kv';
+import { kvGet, kvSet } from '@/lib/kv';
 
 const EXECUTIVES_KEY = 'exec-protection:executives';
 const DORK_CATEGORIES = [
@@ -151,11 +151,11 @@ function generateId(): string {
 }
 
 function getExecutives(): Promise<Executive[]> {
-  return kv.get<Executive[]>(EXECUTIVES_KEY) || Promise.resolve([]);
+  return kvGet<Executive[]>(EXECUTIVES_KEY) || Promise.resolve([]);
 }
 
 async function saveExecutives(executives: Executive[]): Promise<void> {
-  await kv.set(EXECUTIVES_KEY, executives);
+  await kvSet(EXECUTIVES_KEY, executives);
 }
 
 interface SocialMedia {

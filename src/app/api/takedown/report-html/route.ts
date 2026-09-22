@@ -3,8 +3,6 @@ import { db, ensureDatabaseInitialized } from '@/lib/db';
 import { generateHtmlReport } from '@/lib/takedown/reportGenerator';
 import { sha256 } from '@/lib/takedown/hashGenerator';
 
-export const runtime = 'edge';
-
 export async function POST(request: Request) {
   try {
     await ensureDatabaseInitialized();

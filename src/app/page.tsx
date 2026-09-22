@@ -259,824 +259,824 @@ function buildQueueEntry(apiData: any): IpQueueEntry {
 }
 
 // ==================== PRINT REPORT UTILITY ====================
-function generatePrintableReport(tab: TabType, data: any, inputValue: string): string {
-  const timestamp = new Date().toLocaleString('es-ES', { 
-    dateStyle: 'full', 
-    timeStyle: 'short' 
-  });
-  const tabLabels: Record<TabType, string> = {
-    dashboard: 'Dashboard', ip: 'IP Intel', domain: 'Domain Intel', forensics: 'Web Forensics',
-    dnsdump: 'DNS Dump', url: 'URL Scanner', hash: 'Hash Lookup', cve: 'CVE Database',
-    ai: 'AI Analyst', darkweb: 'Deep & Dark Web', mobile: 'Mobile Security',
-    threats: 'Threat Feeds', iocs: 'IOC Manager', export: 'Export Data', reports: 'Reports',
-    sources: 'Intelligence Sources', brand: 'Brand Protection', sandbox: 'URL Sandbox',
-    dnsdump: 'DNS Dump', social: 'Telegram & Discord', exec: 'Executive OSINT',
-    'exec-protection': 'Executive Protection',
-    fakeapp: 'Fake App Scanner', takedown: 'TakeDown URL', url: 'URL Scanner', sandbox: 'URL Sandbox',
-  };
-
-  const tabLabel = tabLabels[tab] || tab;
-  const reportData = JSON.stringify(data, null, 2).slice(0, 50000);
-  const inputDisplay = inputValue || 'N/A';
-
-  // Helper function for Domain Intel report
-  const generateDomainIntelReport = (data: any, intel: any, risk: any, virusTotal: any) => {
-    if (!intel) return '';
-    
-    const formatDate = (iso: string | null) => {
-      if (!iso) return '—';
-      const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10);
-    };
-
-    const getRiskClass = (level: string) => {
-      switch (level.toUpperCase()) {
-        case 'CRITICAL': return 'badge-critical';
-        case 'HIGH': return 'badge-elevated';
-        default: return 'badge-normal';
-      }
-    };
-
-    const escapeHtml = (text: string) => text
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"')
-      .replace(/'/g, '&#039;');
-
-    // Build DNS Records section
-    const buildDnsRecords = (records: any) => {
-      if (!records) return '<p class="data-value">No data</p>';
-      const types = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA', 'CAA'];
-      return types.map(type => {
-        const recs = records[type as keyof typeof records] || [];
-        if (recs.length === 0) return '';
-        return `
-          <div class="data-card">
-            <div class="data-label">${type} Records (${recs.length})</div>
-            <div class="data-value">${recs.slice(0, 5).map(r => escapeHtml(r.data || r.value || '')).join('<br>')}${recs.length > 5 ? `<br>... and ${recs.length - 5} more` : ''}</div>
-          </div>
-        `;
-      }).join('');
-    };
-
-    // Build subdomains section
-    const buildSubdomains = (subs: any[]) => {
-      if (!subs || subs.length === 0) return '<p class="data-value">No subdomains found</p>';
-      return subs.slice(0, 20).map(s => `
-        <div class="data-card">
-          <div class="data-label">${escapeHtml(s.name)}</div>
-          <div class="data-value">${s.ips.length > 0 ? s.ips.join(', ') : (s.cname ? `CNAME: ${s.cname}` : 'No A record')}</div>
-          <div class="data-label">Source: ${s.source === 'ct' ? 'Certificate Transparency' : 'Brute Force'}</div>
-        </div>
-      `).join('');
-    };
-
-    // Build IP/ASN infrastructure
-    const buildIpAsn = (ips: any[]) => {
-      if (!ips || ips.length === 0) return '<p class="data-value">No IP data</p>';
-      return ips.slice(0, 15).map(ip => `
-        <div class="data-card">
-          <div class="data-label">${ip.ip}</div>
-          <div class="data-value">Geo: ${ip.country} ${ip.city ? `(${ip.city})` : ''} ${ip.flag || ''}</div>
-          <div class="data-label">ASN: ${ip.asn || '—'}</div>
-          <div class="data-value">${ip.asname || ''}</div>
-          <div class="data-label">ISP: ${ip.isp}</div>
-          <div class="data-label">Flags: ${ip.hosting ? 'hosting ' : ''}${ip.proxy ? 'proxy ' : ''}${ip.tor ? 'tor ' : ''}</div>
-        </div>
-      `).join('');
-    };
-
-    // Build email security
-    const buildEmailSecurity = (es: any) => {
-      if (!es) return '<p class="data-value">No data</p>';
-      return `
-        <div class="data-grid">
-          <div class="data-card">
-            <div class="data-label">SPF</div>
-            <div class="data-value">${es.hasSPF ? '✓ Present' : '✗ Missing'} ${es.spfHardFail ? ' (hard fail -all)' : ''}</div>
-          </div>
-          <div class="data-card">
-            <div class="data-label">DMARC</div>
-            <div class="data-value">${es.hasDMARC ? '✓ Present' : '✗ Missing'} ${es.dmarcPolicy ? ` (policy: ${es.dmarcPolicy})` : ''}</div>
-          </div>
-          <div class="data-card">
-            <div class="data-label">DKIM</div>
-            <div class="data-value">${es.hasDKIM ? '✓ Present' : '✗ Missing'} ${es.dkimSelectors?.join(', ') || ''}</div>
-          </div>
-          <div class="data-card">
-            <div class="data-label">Risk Level</div>
-            <div class="data-value">${es.riskLevel}</div>
-          </div>
-        </div>
-        ${es.findings?.length > 0 ? `
-          <div class="section">
-            <div class="section-title">⚠️ Findings</div>
-            <ul>${es.findings.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
-          </div>
-        ` : ''}
-      `;
-    };
-
-    // Build WHOIS
-    const buildWhois = (whois: any) => {
-      if (!whois) return '<p class="data-value">WHOIS data not available</p>';
-      return `
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">Registrar</div><div class="data-value">${escapeHtml(whois.registrar || '—')}</div></div>
-          <div class="data-card"><div class="data-label">Created</div><div class="data-value">${formatDate(whois.created)}</div></div>
-          <div class="data-card"><div class="data-label">Updated</div><div class="data-value">${formatDate(whois.updated)}</div></div>
-          <div class="data-card"><div class="data-label">Expires</div><div class="data-value">${formatDate(whois.expires)}</div></div>
-          <div class="data-card"><div class="data-label">Registrant Org</div><div class="data-value">${escapeHtml(whois.registrantOrg || '—')}</div></div>
-          <div class="data-card"><div class="data-label">Country</div><div class="data-value">${escapeHtml(whois.registrantCountry || '—')}</div></div>
-        </div>
-        ${whois.nameservers?.length > 0 ? `
-          <div class="section">
-            <div class="section-title">📡 Nameservers</div>
-            <div class="data-grid">
-              ${whois.nameservers.map(ns => `<div class="data-card"><div class="data-value">${escapeHtml(ns)}</div></div>`).join('')}
-            </div>
-          </div>
-        ` : ''}
-      `;
-    };
-
-    // Build VirusTotal section for IP Intel
-    const buildVT = (vt: any) => {
-      if (!vt || !vt.analyzed) return '';
-      const stats = vt.lastAnalysisStats || { malicious: 0, suspicious: 0, harmless: 0, undetected: 0, timeout: 0 };
-      const total = vt.totalEngines || Object.values(stats).reduce((a: number, b: number) => a + b, 0);
-      return `
-        <div class="section">
-          <div class="section-title">🛡️ VirusTotal Analysis</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Verdict</div><div class="data-value"><span class="badge ${getVerdictClass(vt.verdict)}">${vt.verdict}</span></div></div>
-            <div class="data-card"><div class="data-label">Detection</div><div class="data-value">${stats.malicious}/${total} engines</div></div>
-            <div class="data-card"><div class="data-label">Reputation</div><div class="data-value">${vt.reputation}</div></div>
-            <div class="data-card"><div class="data-label">Last Analysis</div><div class="data-value">${vt.lastAnalysisDate ? formatDate(vt.lastAnalysisDate) : 'N/A'}</div></div>
-          </div>
-          <div class="section">
-            <div class="section-title">📊 Detection Breakdown</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-label">Malicious</div><div class="data-value">${stats.malicious || 0}</div></div>
-              <div class="data-card"><div class="data-label">Suspicious</div><div class="data-value">${stats.suspicious || 0}</div></div>
-              <div class="data-card"><div class="data-label">Undetected</div><div class="data-value">${stats.undetected || 0}</div></div>
-              <div class="data-card"><div class="data-label">Harmless</div><div class="data-value">${stats.harmless || 0}</div></div>
-              <div class="data-card"><div class="data-label">Timeout</div><div class="data-value">${stats.timeout || 0}</div></div>
-              <div class="data-card"><div class="data-label">Total Engines</div><div class="data-value">${total}</div></div>
-            </div>
-          </div>
-          <div class="section">
-            <div class="section-title">📋 Additional Info</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-label">ASN</div><div class="data-value">${vt.asn || 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">Country</div><div class="data-value">${vt.country || 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">First Seen</div><div class="data-value">${vt.firstSeen ? formatDate(vt.firstSeen) : 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">Last Seen</div><div class="data-value">${vt.lastSeen ? formatDate(vt.lastSeen) : 'N/A'}</div></div>
-            </div>
-          </div>
-          <div class="section">
-            <div class="section-title">🔗 VirusTotal Link</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-value"><a href="${vt.url}" target="_blank" style="color: #059669;">View on VirusTotal</a></div></div>
-            </div>
-          </div>
-        `;
-    };
-
-    // Build Relationship Graph explanation
-    const buildGraphExplanation = (graph: any) => {
-      if (!graph || !graph.nodes || graph.nodes.length === 0) {
-        return '<p class="data-value">No relationship graph data available</p>';
-      }
-      const nodeTypes: Record<string, number> = {};
-      graph.nodes.forEach((n: any) => {
-        nodeTypes[n.kind] = (nodeTypes[n.kind] || 0) + 1;
-      });
-      const edgeCount = graph.edges?.length || 0;
-      
-      return `
-        <div class="section">
-          <div class="section-title">🕸️ Relationship Graph — Topology Analysis</div>
-          <div class="section">
-            <h4>Graph Overview</h4>
-            <p>The relationship graph maps the domain's infrastructure topology using a radial layout:</p>
-            <ul>
-              <li><strong>Center (Ring 0):</strong> Primary domain (${escapeHtml(inputDisplay)})</li>
-              <li><strong>Ring 1 (92px):</strong> Subdomains, MX hosts, Nameservers</li>
-              <li><strong>Ring 2 (178px):</strong> Resolved IP addresses</li>
-              <li><strong>Ring 3 (262px):</strong> ASN/ISP organizations</li>
-            </ul>
-            <h4>Graph Statistics</h4>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-label">Total Nodes</div><div class="data-value">${graph.nodes.length}</div></div>
-              <div class="data-card"><div class="data-label">Total Edges</div><div class="data-value">${edgeCount}</div></div>
-              <div class="data-card"><div class="data-label">Node Types</div><div class="data-value">${Object.entries(nodeTypes).map(([k, v]) => `${k}: ${v}`).join(', ')}</div></div>
-            </div>
-            <h4>Graph Legend</h4>
-            <ul>
-              <li>🟣 <strong>Purple (Domain):</strong> Primary domain being analyzed</li>
-              <li>🔵 <strong>Blue (Subdomain):</strong> Discovered subdomains</li>
-              <li>🟢 <strong>Green (IP):</strong> Resolved IP addresses</li>
-              <li>🩷 <strong>Pink (MX):</strong> Mail exchange hosts</li>
-              <li>🟡 <strong>Yellow (ASN):</strong> Autonomous System Numbers / ISPs</li>
-              <li>🔘 <strong>Gray (NS):</strong> Authoritative nameservers</li>
-            </ul>
-            <h4>Graph Interpretation Guide</h4>
-            <ul>
-              <li><strong>Hubs (high-degree nodes):</strong> Nodes with many connections often indicate shared infrastructure (e.g., shared hosting, CDN, mail provider)</li>
-              <li><strong>Star topology:</strong> Single IP serving many subdomains → shared hosting / CDN</li>
-              <li><strong>Multiple ASNs:</strong> Infrastructure spans multiple providers (cloud, CDN, corporate)</li>
-              <li><strong>Orphaned nodes:</strong> Subdomains without resolution may indicate dangling records</li>
-              <li><strong>MX → IP chains:</strong> Trace mail flow; multiple MX pointing to same IP = single mail server</li>
-            </ul>
-          </div>
-        `;
-    };
-
-    // Build recommendations
-    const buildRecommendations = (recs: string[]) => {
-      if (!recs || recs.length === 0) return '<p class="data-value">No specific recommendations</p>';
-      return `
-        <div class="section">
-          <div class="section-title">🛡️ Recommendations</div>
-          <ol>${recs.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ol>
-        </div>
-      `;
-    };
-
-    // Main Domain Intel Report
-    return `
-      <div class="section">
-        <div class="section-title">🌐 Domain Intelligence Report</div>
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">Domain</div><div class="data-value">${escapeHtml(intel.domain)}</div></div>
-          <div class="data-card"><div class="data-label">Analysis Date</div><div class="data-value">${formatDate(intel.timestamp)}</div></div>
-          <div class="data-card"><div class="data-label">Source</div><div class="data-value">${intel.source}</div></div>
-          <div class="data-card"><div class="data-label">Live</div><div class="data-value">${intel.live ? 'Yes' : 'No'}</div></div>
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">⚠️ Risk Assessment</div>
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">Risk Score</div><div class="data-value">${risk?.score || 0}/100</div></div>
-          <div class="data-card"><div class="data-label">Risk Level</div><div class="data-value"><span class="badge ${getRiskClass(risk?.level || 'LOW')}">${risk?.level || 'LOW'}</div></div></div>
-        </div>
-        <div class="section">
-          <h4>Verdict</h4>
-          <p>${escapeHtml(risk?.verdict || 'No verdict')}</p>
-        </div>
-        ${risk?.signals?.length > 0 ? `
-          <div class="section">
-            <h4>Risk Signals</h4>
-            <div class="data-grid">
-              ${risk.signals.map(s => `<div class="data-card"><div class="data-label">${escapeHtml(s.label)}</div><div class="data-value">${s.points > 0 ? '+' : ''}${s.points} pts - ${escapeHtml(s.detail)}</div></div>`).join('')}
-            </div>
-          </div>
-        ` : ''}
-        ${buildRecommendations(risk?.recommendations || [])}
-      </div>
-
-      ${buildVT(virusTotal)}
-
-      <div class="section">
-        <div class="section-title">📊 Quick Statistics</div>
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">A Records</div><div class="data-value">${intel.records?.A?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">AAAA Records</div><div class="data-value">${intel.records?.AAAA?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">CNAME Records</div><div class="data-value">${intel.records?.CNAME?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">MX Records</div><div class="data-value">${intel.records?.MX?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">NS Records</div><div class="data-value">${intel.records?.NS?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">TXT Records</div><div class="data-value">${intel.records?.TXT?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">Subdomains</div><div class="data-value">${intel.subdomains?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">IP Addresses</div><div class="data-value">${intel.ips?.length || 0}</div></div>
-          <div class="data-card"><div class="data-label">MX Hosts</div><div class="data-value">${intel.mxHosts?.length || 0}</div></div>
-        </div>
-      </div>
-
-      ${buildEmailSecurity(intel.emailSecurity)}
-      ${buildWhois(intel.whois)}
-      ${buildGraphExplanation(intel.graph)}
-      ${buildDnsRecords(intel.records)}
-      ${buildSubdomains(intel.subdomains)}
-      ${buildIpAsn(intel.ips)}
-      ${intel.mxHosts?.length > 0 ? `
-        <div class="section">
-          <div class="section-title">📧 MX Hosts</div>
-          <div class="data-grid">
-            ${intel.mxHosts.slice(0, 10).map(mx => `
-              <div class="data-card">
-                <div class="data-label">${escapeHtml(mx.host)} (priority ${mx.priority})</div>
-                <div class="data-value">IP: ${mx.ip || '—'}</div>
-                <div class="data-label">ASN: ${mx.asn || '—'}</div>
-                <div class="data-value">${escapeHtml(mx.asname || '—')}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      ` : ''}
-      ${buildRecommendations(risk?.recommendations || [])}
-    `;
-  };
-
-  // Helper function for IP Intel printable report
-  const generateIpIntelReport = (data: any, inputValue: string) => {
-    if (!data) return '';
-    
-    const ip = data.data?.query || data.data?.ip || inputValue;
-    const vt = data.reputation?.virusTotal;
-    const reputation = data.reputation;
-    const scan = data.scan;
-    const pivot = data.pivot;
-    const rdap = data.data?.rdap;
-    const http = data.data?.http;
-    const tls = data.data?.tls;
-    const content = data.data?.content;
-    const redirects = data.data?.redirects;
-    const staticFlags = data.data?.staticFlags;
-    const verdict = data.analysis?.threatLevel || 'NORMAL';
-    const recommendations = data.analysis?.recommendations || [];
-    
-    const formatDate = (iso: string | null) => {
-      if (!iso) return '—';
-      const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10);
-    };
-    
-    const escapeHtml = (text: string) => text
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"')
-      .replace(/'/g, '&#039;');
-    
-    const getVerdictClass = (level: string) => {
-      switch (level) {
-        case 'MALICIOUS': return 'badge-critical';
-        case 'SUSPICIOUS': return 'badge-elevated';
-        case 'CLEAN': return 'badge-normal';
-        default: return 'badge-normal';
-      }
-    };
-    
-    // Build VirusTotal section
-    const buildVT = (vt: any) => {
-      if (!vt || !vt.analyzed) return '';
-      const stats = vt.lastAnalysisStats || { malicious: 0, suspicious: 0, harmless: 0, undetected: 0, timeout: 0 };
-      const total = vt.totalEngines || Object.values(stats).reduce((a: number, b: number) => a + b, 0);
-      return `
-        <div class="section">
-          <div class="section-title">🛡️ VirusTotal Analysis</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Verdict</div><div class="data-value"><span class="badge ${getVerdictClass(vt.verdict)}">${vt.verdict}</span></div></div>
-            <div class="data-card"><div class="data-label">Detection</div><div class="data-value">${stats.malicious}/${total} engines</div></div>
-            <div class="data-card"><div class="data-label">Reputation</div><div class="data-value">${vt.reputation}</div></div>
-            <div class="data-card"><div class="data-label">Last Analysis</div><div class="data-value">${vt.lastAnalysisDate ? formatDate(vt.lastAnalysisDate) : 'N/A'}</div></div>
-          </div>
-          <div class="section">
-            <div class="section-title">📊 Detection Breakdown</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-label">Malicious</div><div class="data-value">${stats.malicious || 0}</div></div>
-              <div class="data-card"><div class="data-label">Suspicious</div><div class="data-value">${stats.suspicious || 0}</div></div>
-              <div class="data-card"><div class="data-label">Undetected</div><div class="data-value">${stats.undetected || 0}</div></div>
-              <div class="data-card"><div class="data-label">Harmless</div><div class="data-value">${stats.harmless || 0}</div></div>
-              <div class="data-card"><div class="data-label">Timeout</div><div class="data-value">${stats.timeout || 0}</div></div>
-              <div class="data-card"><div class="data-label">Total Engines</div><div class="data-value">${total}</div></div>
-            </div>
-          </div>
-          ${vt.categories?.length > 0 ? `
-            <div class="section">
-              <div class="section-title">📂 Categories</div>
-              <div class="data-grid">
-                ${vt.categories.map(c => `<div class="data-card"><div class="data-value">${escapeHtml(c)}</div></div>`).join('')}
-              </div>
-            </div>
-          ` : ''}
-          ${vt.tags?.length > 0 ? `
-            <div class="section">
-              <div class="section-title">🏷️ Tags</div>
-              <div class="data-grid">
-                ${vt.tags.slice(0, 12).map(t => `<div class="data-card"><div class="data-value">#${escapeHtml(t)}</div></div>`).join('')}
-              </div>
-            </div>
-          ` : ''}
-          <div class="section">
-            <div class="section-title">📋 Additional Info</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-label">ASN</div><div class="data-value">${vt.asn || 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">Country</div><div class="data-value">${vt.country || 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">First Seen</div><div class="data-value">${vt.firstSeen ? formatDate(vt.firstSeen) : 'N/A'}</div></div>
-              <div class="data-card"><div class="data-label">Last Seen</div><div class="data-value">${vt.lastSeen ? formatDate(vt.lastSeen) : 'N/A'}</div></div>
-            </div>
-          </div>
-          <div class="section">
-            <div class="section-title">🔗 VirusTotal Link</div>
-            <div class="data-grid">
-              <div class="data-card"><div class="data-value"><a href="${vt.url}" target="_blank" style="color: #059669;">View on VirusTotal</a></div></div>
-            </div>
-          </div>
-        `;
-    };
-    
-    // Build reputation section
-    const buildReputation = (rep: any) => {
-      if (!rep) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🎯 Reputation & Infrastructure</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">IP</div><div class="data-value">${reputation?.ip || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Geo</div><div class="data-value">${rep.geo || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">ASN</div><div class="data-value">${rep.asn || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">ISP</div><div class="data-value">${rep.isp || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">DNSBL Listed</div><div class="data-value">${rep.dnsblListed || 0}</div></div>
-            <div class="data-card"><div class="data-label">DNSBL Blocked</div><div class="data-value">${rep.dnsblBlocked || 0}</div></div>
-            <div class="data-card"><div class="data-label">Tor Exit</div><div class="data-value">${rep.torExit ? 'Yes' : 'No'}</div></div>
-            <div class="data-card"><div class="data-label">URLhaus Count</div><div class="data-value">${rep.urlhausCount || 0}</div></div>
-            <div class="data-card"><div class="data-label">Hosting</div><div class="data-value">${rep.hosting ? 'Yes' : 'No'}</div></div>
-            <div class="data-card"><div class="data-label">Proxy</div><div class="data-value">${rep.proxy ? 'Yes' : 'No'}</div></div>
-            <div class="data-card"><div class="data-label">WHOIS Created</div><div class="data-value">${formatDate(rep.whoisCreated) || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Domain Age</div><div class="data-value">${rep.domainAgeDays ? `${rep.domainAgeDays} days` : 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Domain Expires</div><div class="data-value">${formatDate(rep.domainExpires) || 'N/A'}</div></div>
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build scan results
-    const buildScan = (scan: any) => {
-      if (!scan) return '';
-      const openPorts = scan.ports?.filter((p: any) => p.state === 'open') || [];
-      return `
-        <div class="section">
-          <div class="section-title">🔍 Port Scan Results</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">OS Fingerprint</div><div class="data-value">${scan.os || 'Unknown'}</div></div>
-            <div class="data-card"><div class="data-label">Open Ports</div><div class="data-value">${openPorts.length}</div></div>
-          </div>
-          ${openPorts.length > 0 ? `
-            <div class="section">
-              <h4>Open Ports</h4>
-              <div class="data-grid">
-                ${openPorts.map((p: any) => `
-                  <div class="data-card">
-                    <div class="data-label">Port ${p.port}</div>
-                    <div class="data-value">${p.service} (${p.state})</div>
-                    <div class="data-label">Banner: ${escapeHtml(p.banner || '—')}</div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          ` : ''}
-        </div>
-      `;
-    };
-    
-    // Build RDAP
-    const buildRdap = (rdap: any) => {
-      if (!rdap) return '';
-      return `
-        <div class="section">
-          <div class="section-title">📋 RDAP / WHOIS</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Handle</div><div class="data-value">${escapeHtml(rdap.handle || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Name</div><div class="data-value">${escapeHtml(rdap.name || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Type</div><div class="data-value">${escapeHtml(rdap.type || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Country</div><div class="data-value">${escapeHtml(rdap.country || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Start Address</div><div class="data-value">${escapeHtml(rdap.startAddress || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">End Address</div><div class="data-value">${escapeHtml(rdap.endAddress || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Entities</div><div class="data-value">${rdap.entities?.join(', ') || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Abuse Contacts</div><div class="data-value">${rdap.abuseContacts?.join(', ') || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Status</div><div class="data-value">${rdap.status?.join(', ') || 'N/A'}</div></div>
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build HTTP
-    const buildHttp = (http: any) => {
-      if (!http) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🌐 HTTP Fingerprint</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Final URL</div><div class="data-value">${escapeHtml(http.finalUrl || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Status</div><div class="data-value">${http.status} ${http.statusText}</div></div>
-            <div class="data-card"><div class="data-label">Protocol</div><div class="data-value">${http.protocol}</div></div>
-            <div class="data-card"><div class="data-label">Server</div><div class="data-value">${escapeHtml(http.server || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Content-Type</div><div class="data-value">${escapeHtml(http.contentType || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">TTFB</div><div class="data-value">${http.timings?.ttfbMs} ms</div></div>
-            <div class="data-card"><div class="data-label">Total Time</div><div class="data-value">${http.timings?.totalMs} ms</div></div>
-          </div>
-          ${http.headers ? `
-            <div class="section">
-              <h4>Headers</h4>
-              <div class="json-block">${JSON.stringify(http.headers, null, 2)}</div>
-            </div>
-          ` : ''}
-        </div>
-      `;
-    };
-    
-    // Build TLS
-    const buildTls = (tls: any) => {
-      if (!tls) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🔒 TLS Certificate</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Protocol</div><div class="data-value">${tls.protocol}</div></div>
-            <div class="data-card"><div class="data-label">Cipher</div><div class="data-value">${escapeHtml(tls.cipher)}</div></div>
-            <div class="data-card"><div class="data-label">Subject CN</div><div class="data-value">${escapeHtml(tls.subjectCn || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Issuer CN</div><div class="data-value">${escapeHtml(tls.issuerCn || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Valid From</div><div class="data-value">${formatDate(tls.validFrom)}</div></div>
-            <div class="data-card"><div class="data-label">Valid To</div><div class="data-value">${formatDate(tls.validTo)}</div></div>
-            <div class="data-card"><div class="data-label">Status</div><div class="data-value">${tls.expired ? 'EXPIRED' : tls.selfSigned ? 'SELF-SIGNED' : tls.hostnameMismatch ? 'MISMATCH' : 'VALID'}</div></div>
-            <div class="data-card"><div class="data-label">SAN</div><div class="data-value">${tls.san?.join(', ') || 'N/A'}</div></div>
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build content analysis
-    const buildContent = (content: any) => {
-      if (!content) return '';
-      return `
-        <div class="section">
-          <div class="section-title">📄 Content Analysis</div>
-          <div class="data-grid">
-            <div class="data-card"><div class="data-label">Title</div><div class="data-value">${escapeHtml(content.title || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Description</div><div class="data-value">${escapeHtml(content.description || 'N/A')}</div></div>
-            <div class="data-card"><div class="data-label">Language</div><div class="data-value">${content.lang || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Favicon</div><div class="data-value">${content.favicon || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Forms</div><div class="data-value">${content.forms?.length || 0}</div></div>
-            <div class="data-card"><div class="data-label">Iframes</div><div class="data-value">${content.iframes?.length || 0}</div></div>
-            <div class="data-card"><div class="data-label">Meta Refresh</div><div class="data-value">${content.metaRefresh ? 'Yes' : 'No'}</div></div>
-            <div class="data-card"><div class="data-label">Obfuscated JS</div><div class="data-value">${content.obfuscatedJs ? 'Yes' : 'No'}</div></div>
-            <div class="data-card"><div class="data-label">Inline JS Bytes</div><div class="data-value">${content.inlineJsBytes || 0}</div></div>
-            <div class="data-card"><div class="data-label">Scripts</div><div class="data-value">${content.scripts?.length || 0}</div></div>
-            <div class="data-card"><div class="data-label">Emails</div><div class="data-value">${content.emails?.join(', ') || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Telegram Tokens</div><div class="data-value">${content.telegramTokens?.join(', ') || 'N/A'}</div></div>
-            <div class="data-card"><div class="data-label">Telegram Chat IDs</div><div class="data-value">${content.telegramChatIds?.join(', ') || 'N/A'}</div></div>
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build redirects
-    const buildRedirects = (redirects: any[]) => {
-      if (!redirects || redirects.length === 0) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🔄 Redirect Chain</div>
-          <div class="data-grid">
-            ${redirects.map((r, i) => `
-              <div class="data-card">
-                <div class="data-label">Step ${r.index || i + 1}</div>
-                <div class="data-value">${escapeHtml(r.url)}</div>
-                <div class="data-label">Status: ${r.status || 'N/A'}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build static flags
-    const buildStaticFlags = (flags: any[]) => {
-      if (!flags || flags.length === 0) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🚩 Static Flags</div>
-          <div class="data-grid">
-            ${flags.map(f => `
-              <div class="data-card">
-                <div class="data-label">${escapeHtml(f.label)}</div>
-                <div class="data-value">Weight: ${f.weight} · Category: ${f.category}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build screenshot
-    const buildScreenshot = (screenshotUrl: string) => {
-      if (!screenshotUrl) return '';
-      return `
-        <div class="section">
-          <div class="section-title">📸 Screenshot</div>
-          <div class="data-grid">
-            <div class="data-card">
-              <a href="${screenshotUrl}" target="_blank" style="color: #059669;">View Screenshot</a>
-            </div>
-          </div>
-        </div>
-      `;
-    };
-    
-    // Build recommendations
-    const buildRecommendations = (recs: string[]) => {
-      if (!recs || recs.length === 0) return '';
-      return `
-        <div class="section">
-          <div class="section-title">🛡️ Recommendations</div>
-          <ol>${recs.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ol>
-        </div>
-      `;
-    };
-    
-    // Build the complete IP Intel report
-    return `
-      <div class="section">
-        <div class="section-title">🔍 IP Intelligence Report</div>
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">IP Address</div><div class="data-value">${escapeHtml(ip)}</div></div>
-          <div class="data-card"><div class="data-label">Analysis Date</div><div class="data-value">${formatDate(new Date().toISOString())}</div></div>
-          <div class="data-card"><div class="data-label">Source</div><div class="data-value">NEXUS Real Sandbox</div></div>
-        </div>
-      </div>
-      
-      ${vt ? `<div class="section"><div class="section-title">🛡️ VirusTotal Analysis</div>${buildVT(vt)}` : ''}
-      
-      <div class="section">
-        <div class="section-title">⚠️ Threat Assessment</div>
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">Threat Level</div><div class="data-value">${verdict}</div></div>
-        </div>
-        <div class="section">
-          <h4>Recommendations</h4>
-          <ul>${recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
-        </div>
-      </div>
-      
-      ${buildReputation(data.reputation)}
-      ${buildScan(data.scan)}
-      ${buildVT(data.reputation?.virusTotal)}
-      ${buildRdap(data.data?.rdap)}
-      ${buildHttp(data.data?.http)}
-      ${buildTls(data.data?.tls)}
-      ${buildRedirects(data.data?.redirects)}
-      ${buildContent(data.data?.content)}
-      ${buildStaticFlags(data.data?.staticFlags)}
-      ${data.data?.screenshotUrl ? buildScreenshot(data.data.screenshotUrl) : ''}
-      ${buildRecommendations(data.analysis?.recommendations || [])}
-    `;
-  };
-
-  // Generate Executive Protection Report
-  const generateExecProtectionReport = (data: any): string => {
-    const exec = data.executive;
-    const dorkResults = data.dorkResults;
-    const escapeHtml = (text: string) => text
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"')
-      .replace(/'/g, '&#039;');
-
-    if (!exec) return '<div class="section"><div class="section-title">⚠️ No Executive Data</div><p>No executive data available for report.</p></div>';
-
-    let html = `
-      <div class="section">
-        <div class="section-title">👤 Executive Profile</div>
-        <div class="data-grid">
-          <div class="data-card"><div class="data-label">ID / Document</div><div class="data-value">${escapeHtml(exec.documentId || 'N/A')}</div></div>
-          <div class="data-card"><div class="data-label">Phone</div><div class="data-value">${escapeHtml(exec.phone || 'N/A')}</div></div>
-          <div class="data-card"><div class="data-label">Email Corporate</div><div class="data-value">${escapeHtml(exec.emailCorporate || 'N/A')}</div></div>
-          <div class="data-card"><div class="data-label">Email Personal</div><div class="data-value">${escapeHtml(exec.emailPersonal || 'N/A')}</div></div>
-          <div class="data-card"><div class="data-label">Address</div><div class="data-value">${escapeHtml(exec.address || 'N/A')}</div></div>
-          <div class="data-card"><div class="data-label">Location</div><div class="data-value">${escapeHtml(exec.location || 'N/A')}</div></div>
-        </div>
-      </div>
-    `;
-
-    if (exec.socialMedia?.length > 0) {
-      html += `
-        <div class="section">
-          <div class="section-title">📱 Social Media Profiles</div>
-          <div class="data-grid">
-            ${exec.socialMedia.map((sm: any) => `
-              <div class="data-card">
-                <div class="data-label">${escapeHtml(sm.platform)}</div>
-                <div class="data-value">${escapeHtml(sm.username)}</div>
-                ${sm.url ? `<div class="data-label"><a href="${escapeHtml(sm.url)}" target="_blank" style="color: #059669;">View Profile</a></div>` : ''}
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    }
-
-    if (dorkResults?.queries?.length > 0) {
-      html += `
-        <div class="section">
-          <div class="section-title">🔍 OSINT Dork Research Queries (${dorkResults.queries.length} categories)</div>
-          <div class="data-grid">
-            ${dorkResults.queries.map((q: any) => `
-              <div class="data-card" style="grid-column: span 1;">
-                <div class="data-label">${escapeHtml(q.category)}</div>
-                <div class="data-value" style="font-family: monospace; font-size: 11px; white-space: pre-wrap;">${escapeHtml(q.query)}</div>
-                <div class="data-label">${escapeHtml(q.description)}</div>
-                <div class="data-value">Sources: ${q.sources.join(', ')}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    }
-
-    return html;
-  };
-
-  // Generate IP Intel specific report if tab is ip
-  let ipIntelHtml = '';
-  if (tab === 'ip' && data) {
-    ipIntelHtml = generateIpIntelReport(data, inputValue);
-  }
-
-  // Build the final HTML content based on tab
-  let contentHtml = '';
-  if (tab === 'domain' && domainIntelHtml) {
-    contentHtml = domainIntelHtml;
-  } else if (tab === 'ip' && ipIntelHtml) {
-    contentHtml = ipIntelHtml;
-  } else if (tab === 'exec-protection' && data) {
-    contentHtml = generateExecProtectionReport(data);
-  } else if (data) {
-    contentHtml = `
-      <div class="section">
-        <div class="section-title">📊 Datos de Análisis</div>
-        <div class="json-block">${reportData}</div>
-      </div>
-    `;
-  }
-
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${tabLabel} - Informe Imprimible | NEXUS-INTEL</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; background: #fff; color: #1f2937; line-height: 1.6; }
-    .header { border-bottom: 3px solid #059669; padding-bottom: 20px; margin-bottom: 30px; text-align: center; }
-    .logo { font-size: 24px; font-weight: 800; color: #059669; margin-bottom: 8px; }
-    .title { font-size: 28px; font-weight: 700; color: #111827; margin-bottom: 4px; }
-    .subtitle { color: #6b7280; font-size: 14px; }
-    .meta { display: flex; justify-content: center; gap: 20px; margin-top: 16px; flex-wrap: wrap; font-size: 13px; color: #6b7280; }
-    .section { margin-bottom: 30px; }
-    .section-title { font-size: 18px; font-weight: 700; color: #111827; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-    .data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-    .data-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; }
-    .data-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px; }
-    .data-value { font-weight: 600; color: #111827; word-break: break-word; font-family: monospace; font-size: 13px; }
-    .json-block { background: #111827; color: #10b981; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-    .badge-normal { background: #dcfce7; color: #166534; }
-    .badge-elevated { background: #fef3c7; color: #92400e; }
-    .badge-critical { background: #fee2e2; color: #991b1b; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; }
-    @media print { .no-print { display: none; } body { padding: 0; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="logo">🛡️ NEXUS-INTEL</div>
-    <div class="title">Informe de Inteligencia: ${tabLabel}</div>
-    <div class="subtitle">Plataforma de Inteligencia de Amenazas y Protección Ejecutiva</div>
-    <div class="meta">
-      <span>📅 Generado: ${timestamp}</span>
-      <span>🎯 Objetivo: ${inputDisplay}</span>
-      <span>🔍 Módulo: ${tabLabel}</span>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">📋 Resumen Ejecutivo</div>
-    <div class="data-grid">
-      <div class="data-card"><div class="data-label">Módulo</div><div class="data-value">${tabLabel}</div></div>
-      <div class="data-card"><div class="data-label">Fecha/Hora</div><div class="data-value">${timestamp}</div></div>
-      <div class="data-card"><div class="data-label">Objetivo Analizado</div><div class="data-value">${inputDisplay}</div></div>
-      <div class="data-card"><div class="data-label">Estado</div><div class="data-value"><span class="badge badge-normal">Completado</span></div></div>
-    </div>
-  </div>
-
-  ${contentHtml}
-
-  <div class="footer">
-    <p>Generado por NEXUS-INTEL — Plataforma de Inteligencia de Amenazas y Protección Ejecutiva</p>
-    <p>Este informe se generó automáticamente. Verifique los datos antes de tomar decisiones operacionales.</p>
-  </div>
-
-  <script>
-    window.onload = () => { window.print(); }
-  </script>
-</body>
-</html>`;
-}
+// function generatePrintableReport(tab: TabType, data: any, inputValue: string): string {
+//   const timestamp = new Date().toLocaleString('es-ES', { 
+//     dateStyle: 'full', 
+//     timeStyle: 'short' 
+//   });
+//   const tabLabels: Record<TabType, string> = {
+//     dashboard: 'Dashboard', ip: 'IP Intel', domain: 'Domain Intel', forensics: 'Web Forensics',
+//     dnsdump: 'DNS Dump', url: 'URL Scanner', hash: 'Hash Lookup', cve: 'CVE Database',
+//     ai: 'AI Analyst', darkweb: 'Deep & Dark Web', mobile: 'Mobile Security',
+//     threats: 'Threat Feeds', iocs: 'IOC Manager', export: 'Export Data', reports: 'Reports',
+//     sources: 'Intelligence Sources', brand: 'Brand Protection', sandbox: 'URL Sandbox',
+//     dnsdump: 'DNS Dump', social: 'Telegram & Discord', exec: 'Executive OSINT',
+//     'exec-protection': 'Executive Protection',
+//     fakeapp: 'Fake App Scanner', takedown: 'TakeDown URL', url: 'URL Scanner', sandbox: 'URL Sandbox',
+//   };
+// 
+//   const tabLabel = tabLabels[tab] || tab;
+//   const reportData = JSON.stringify(data, null, 2).slice(0, 50000);
+//   const inputDisplay = inputValue || 'N/A';
+// 
+//   // Helper function for Domain Intel report
+//   const generateDomainIntelReport = (data: any, intel: any, risk: any, virusTotal: any) => {
+//     if (!intel) return '';
+//     
+//     const formatDate = (iso: string | null) => {
+//       if (!iso) return '—';
+//       const d = new Date(iso);
+//       return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10);
+//     };
+// 
+//     const getRiskClass = (level: string) => {
+//       switch (level.toUpperCase()) {
+//         case 'CRITICAL': return 'badge-critical';
+//         case 'HIGH': return 'badge-elevated';
+//         default: return 'badge-normal';
+//       }
+//     };
+// 
+//     const escapeHtml = (text: string) => text
+//       .replace(/&/g, '&')
+//       .replace(/</g, '<')
+//       .replace(/>/g, '>')
+//       .replace(/"/g, '"')
+//       .replace(/'/g, '&#039;');
+// 
+//     // Build DNS Records section
+//     const buildDnsRecords = (records: any) => {
+//       if (!records) return '<p class="data-value">No data</p>';
+//       const types = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA', 'CAA'];
+//       return types.map(type => {
+//         const recs = records[type as keyof typeof records] || [];
+//         if (recs.length === 0) return '';
+//         return `
+//           <div class="data-card">
+//             <div class="data-label">${type} Records (${recs.length})</div>
+//             <div class="data-value">${recs.slice(0, 5).map(r => escapeHtml(r.data || r.value || '')).join('<br>')}${recs.length > 5 ? `<br>... and ${recs.length - 5} more` : ''}</div>
+//           </div>
+//         `;
+//       }).join('');
+//     };
+// 
+//     // Build subdomains section
+//     const buildSubdomains = (subs: any[]) => {
+//       if (!subs || subs.length === 0) return '<p class="data-value">No subdomains found</p>';
+//       return subs.slice(0, 20).map(s => `
+//         <div class="data-card">
+//           <div class="data-label">${escapeHtml(s.name)}</div>
+//           <div class="data-value">${s.ips.length > 0 ? s.ips.join(', ') : (s.cname ? `CNAME: ${s.cname}` : 'No A record')}</div>
+//           <div class="data-label">Source: ${s.source === 'ct' ? 'Certificate Transparency' : 'Brute Force'}</div>
+//         </div>
+//       `).join('');
+//     };
+// 
+//     // Build IP/ASN infrastructure
+//     const buildIpAsn = (ips: any[]) => {
+//       if (!ips || ips.length === 0) return '<p class="data-value">No IP data</p>';
+//       return ips.slice(0, 15).map(ip => `
+//         <div class="data-card">
+//           <div class="data-label">${ip.ip}</div>
+//           <div class="data-value">Geo: ${ip.country} ${ip.city ? `(${ip.city})` : ''} ${ip.flag || ''}</div>
+//           <div class="data-label">ASN: ${ip.asn || '—'}</div>
+//           <div class="data-value">${ip.asname || ''}</div>
+//           <div class="data-label">ISP: ${ip.isp}</div>
+//           <div class="data-label">Flags: ${ip.hosting ? 'hosting ' : ''}${ip.proxy ? 'proxy ' : ''}${ip.tor ? 'tor ' : ''}</div>
+//         </div>
+//       `).join('');
+//     };
+// 
+//     // Build email security
+//     const buildEmailSecurity = (es: any) => {
+//       if (!es) return '<p class="data-value">No data</p>';
+//       return `
+//         <div class="data-grid">
+//           <div class="data-card">
+//             <div class="data-label">SPF</div>
+//             <div class="data-value">${es.hasSPF ? '✓ Present' : '✗ Missing'} ${es.spfHardFail ? ' (hard fail -all)' : ''}</div>
+//           </div>
+//           <div class="data-card">
+//             <div class="data-label">DMARC</div>
+//             <div class="data-value">${es.hasDMARC ? '✓ Present' : '✗ Missing'} ${es.dmarcPolicy ? ` (policy: ${es.dmarcPolicy})` : ''}</div>
+//           </div>
+//           <div class="data-card">
+//             <div class="data-label">DKIM</div>
+//             <div class="data-value">${es.hasDKIM ? '✓ Present' : '✗ Missing'} ${es.dkimSelectors?.join(', ') || ''}</div>
+//           </div>
+//           <div class="data-card">
+//             <div class="data-label">Risk Level</div>
+//             <div class="data-value">${es.riskLevel}</div>
+//           </div>
+//         </div>
+//         ${es.findings?.length > 0 ? `
+//           <div class="section">
+//             <div class="section-title">⚠️ Findings</div>
+//             <ul>${es.findings.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
+//           </div>
+//         ` : ''}
+//       `;
+//     };
+// 
+//     // Build WHOIS
+//     const buildWhois = (whois: any) => {
+//       if (!whois) return '<p class="data-value">WHOIS data not available</p>';
+//       return `
+//         <div class="data-grid">
+//           <div class="data-card"><div class="data-label">Registrar</div><div class="data-value">${escapeHtml(whois.registrar || '—')}</div></div>
+//           <div class="data-card"><div class="data-label">Created</div><div class="data-value">${formatDate(whois.created)}</div></div>
+//           <div class="data-card"><div class="data-label">Updated</div><div class="data-value">${formatDate(whois.updated)}</div></div>
+//           <div class="data-card"><div class="data-label">Expires</div><div class="data-value">${formatDate(whois.expires)}</div></div>
+//           <div class="data-card"><div class="data-label">Registrant Org</div><div class="data-value">${escapeHtml(whois.registrantOrg || '—')}</div></div>
+//           <div class="data-card"><div class="data-label">Country</div><div class="data-value">${escapeHtml(whois.registrantCountry || '—')}</div></div>
+//         </div>
+//         ${whois.nameservers?.length > 0 ? `
+//           <div class="section">
+//             <div class="section-title">📡 Nameservers</div>
+//             <div class="data-grid">
+//               ${whois.nameservers.map(ns => `<div class="data-card"><div class="data-value">${escapeHtml(ns)}</div></div>`).join('')}
+//             </div>
+//           </div>
+//         ` : ''}
+//       `;
+//     };
+// 
+//     // Build VirusTotal section for IP Intel
+//     const buildVT = (vt: any) => {
+//       if (!vt || !vt.analyzed) return '';
+//       const stats = vt.lastAnalysisStats || { malicious: 0, suspicious: 0, harmless: 0, undetected: 0, timeout: 0 };
+//       const total = vt.totalEngines || Object.values(stats).reduce((a: number, b: number) => a + b, 0);
+//       return `
+//         <div class="section">
+//           <div class="section-title">🛡️ VirusTotal Analysis</div>
+//           <div class="data-grid">
+//             <div class="data-card"><div class="data-label">Verdict</div><div class="data-value"><span class="badge ${getVerdictClass(vt.verdict)}">${vt.verdict}</span></div></div>
+//             <div class="data-card"><div class="data-label">Detection</div><div class="data-value">${stats.malicious}/${total} engines</div></div>
+//             <div class="data-card"><div class="data-label">Reputation</div><div class="data-value">${vt.reputation}</div></div>
+//             <div class="data-card"><div class="data-label">Last Analysis</div><div class="data-value">${vt.lastAnalysisDate ? formatDate(vt.lastAnalysisDate) : 'N/A'}</div></div>
+//           </div>
+//           <div class="section">
+//             <div class="section-title">📊 Detection Breakdown</div>
+//             <div class="data-grid">
+//               <div class="data-card"><div class="data-label">Malicious</div><div class="data-value">${stats.malicious || 0}</div></div>
+//               <div class="data-card"><div class="data-label">Suspicious</div><div class="data-value">${stats.suspicious || 0}</div></div>
+//               <div class="data-card"><div class="data-label">Undetected</div><div class="data-value">${stats.undetected || 0}</div></div>
+//               <div class="data-card"><div class="data-label">Harmless</div><div class="data-value">${stats.harmless || 0}</div></div>
+//               <div class="data-card"><div class="data-label">Timeout</div><div class="data-value">${stats.timeout || 0}</div></div>
+//               <div class="data-card"><div class="data-label">Total Engines</div><div class="data-value">${total}</div></div>
+//             </div>
+//           </div>
+//           <div class="section">
+//             <div class="section-title">📋 Additional Info</div>
+//             <div class="data-grid">
+//               <div class="data-card"><div class="data-label">ASN</div><div class="data-value">${vt.asn || 'N/A'}</div></div>
+//               <div class="data-card"><div class="data-label">Country</div><div class="data-value">${vt.country || 'N/A'}</div></div>
+//               <div class="data-card"><div class="data-label">First Seen</div><div class="data-value">${vt.firstSeen ? formatDate(vt.firstSeen) : 'N/A'}</div></div>
+//               <div class="data-card"><div class="data-label">Last Seen</div><div class="data-value">${vt.lastSeen ? formatDate(vt.lastSeen) : 'N/A'}</div></div>
+//             </div>
+//           </div>
+//           <div class="section">
+//             <div class="section-title">🔗 VirusTotal Link</div>
+//             <div class="data-grid">
+//               <div class="data-card"><div class="data-value"><a href="${vt.url}" target="_blank" style="color: #059669;">View on VirusTotal</a></div></div>
+//             </div>
+//           </div>
+//         `;
+//     };
+// 
+//     // Build Relationship Graph explanation
+//     const buildGraphExplanation = (graph: any) => {
+//       if (!graph || !graph.nodes || graph.nodes.length === 0) {
+//         return '<p class="data-value">No relationship graph data available</p>';
+//       }
+//       const nodeTypes: Record<string, number> = {};
+//       graph.nodes.forEach((n: any) => {
+//         nodeTypes[n.kind] = (nodeTypes[n.kind] || 0) + 1;
+//       });
+//       const edgeCount = graph.edges?.length || 0;
+//       
+//       return `
+//         <div class="section">
+//           <div class="section-title">🕸️ Relationship Graph — Topology Analysis</div>
+//           <div class="section">
+//             <h4>Graph Overview</h4>
+//             <p>The relationship graph maps the domain's infrastructure topology using a radial layout:</p>
+//             <ul>
+//               <li><strong>Center (Ring 0):</strong> Primary domain (${escapeHtml(inputDisplay)})</li>
+//               <li><strong>Ring 1 (92px):</strong> Subdomains, MX hosts, Nameservers</li>
+//               <li><strong>Ring 2 (178px):</strong> Resolved IP addresses</li>
+//               <li><strong>Ring 3 (262px):</strong> ASN/ISP organizations</li>
+//             </ul>
+//             <h4>Graph Statistics</h4>
+//             <div class="data-grid">
+//               <div class="data-card"><div class="data-label">Total Nodes</div><div class="data-value">${graph.nodes.length}</div></div>
+//               <div class="data-card"><div class="data-label">Total Edges</div><div class="data-value">${edgeCount}</div></div>
+//               <div class="data-card"><div class="data-label">Node Types</div><div class="data-value">${Object.entries(nodeTypes).map(([k, v]) => `${k}: ${v}`).join(', ')}</div></div>
+//             </div>
+//             <h4>Graph Legend</h4>
+//             <ul>
+//               <li>🟣 <strong>Purple (Domain):</strong> Primary domain being analyzed</li>
+//               <li>🔵 <strong>Blue (Subdomain):</strong> Discovered subdomains</li>
+//               <li>🟢 <strong>Green (IP):</strong> Resolved IP addresses</li>
+//               <li>🩷 <strong>Pink (MX):</strong> Mail exchange hosts</li>
+//               <li>🟡 <strong>Yellow (ASN):</strong> Autonomous System Numbers / ISPs</li>
+//               <li>🔘 <strong>Gray (NS):</strong> Authoritative nameservers</li>
+//             </ul>
+//             <h4>Graph Interpretation Guide</h4>
+//             <ul>
+//               <li><strong>Hubs (high-degree nodes):</strong> Nodes with many connections often indicate shared infrastructure (e.g., shared hosting, CDN, mail provider)</li>
+//               <li><strong>Star topology:</strong> Single IP serving many subdomains → shared hosting / CDN</li>
+//               <li><strong>Multiple ASNs:</strong> Infrastructure spans multiple providers (cloud, CDN, corporate)</li>
+//               <li><strong>Orphaned nodes:</strong> Subdomains without resolution may indicate dangling records</li>
+//               <li><strong>MX → IP chains:</strong> Trace mail flow; multiple MX pointing to same IP = single mail server</li>
+//             </ul>
+//           </div>
+//         `;
+//     };
+// 
+//     // Build recommendations
+//     const buildRecommendations = (recs: string[]) => {
+//       if (!recs || recs.length === 0) return '<p class="data-value">No specific recommendations</p>';
+//       return `
+//         <div class="section">
+//           <div class="section-title">🛡️ Recommendations</div>
+//           <ol>${recs.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ol>
+//         </div>
+//       `;
+//     };
+// 
+//     // Main Domain Intel Report
+//     return `
+//       <div class="section">
+//         <div class="section-title">🌐 Domain Intelligence Report</div>
+//         <div class="data-grid">
+//           <div class="data-card"><div class="data-label">Domain</div><div class="data-value">${escapeHtml(intel.domain)}</div></div>
+//           <div class="data-card"><div class="data-label">Analysis Date</div><div class="data-value">${formatDate(intel.timestamp)}</div></div>
+//           <div class="data-card"><div class="data-label">Source</div><div class="data-value">${intel.source}</div></div>
+//           <div class="data-card"><div class="data-label">Live</div><div class="data-value">${intel.live ? 'Yes' : 'No'}</div></div>
+//         </div>
+//       </div>
+// 
+//       <div class="section">
+//         <div class="section-title">⚠️ Risk Assessment</div>
+//         <div class="data-grid">
+//           <div class="data-card"><div class="data-label">Risk Score</div><div class="data-value">${risk?.score || 0}/100</div></div>
+//           <div class="data-card"><div class="data-label">Risk Level</div><div class="data-value"><span class="badge ${getRiskClass(risk?.level || 'LOW')}">${risk?.level || 'LOW'}</div></div></div>
+//         </div>
+//         <div class="section">
+//           <h4>Verdict</h4>
+//           <p>${escapeHtml(risk?.verdict || 'No verdict')}</p>
+//         </div>
+//         ${risk?.signals?.length > 0 ? `
+//           <div class="section">
+//             <h4>Risk Signals</h4>
+//             <div class="data-grid">
+//               ${risk.signals.map(s => `<div class="data-card"><div class="data-label">${escapeHtml(s.label)}</div><div class="data-value">${s.points > 0 ? '+' : ''}${s.points} pts - ${escapeHtml(s.detail)}</div></div>`).join('')}
+//             </div>
+//           </div>
+//         ` : ''}
+//         ${buildRecommendations(risk?.recommendations || [])}
+//       </div>
+// 
+//       ${buildVT(virusTotal)}
+// 
+//       <div class="section">
+//         <div class="section-title">📊 Quick Statistics</div>
+//         <div class="data-grid">
+//           <div class="data-card"><div class="data-label">A Records</div><div class="data-value">${intel.records?.A?.length || 0}</div></div>
+//           <div class="data-card"><div class="data-label">AAAA Records</div><div class="data-value">${intel.records?.AAAA?.length || 0}</div></div>
+//           <div class="data-card"><div class="data-label">CNAME Records</div><div class="data-value">${intel.records?.CNAME?.length || 0}</div></div>
+//           <div class="data-card"><div class="data-label">MX Records</div><div class="data-value">${intel.records?.MX?.length || 0}</div></div>
+//           <div class="data-card"><div class="data-label">NS Records</div><div class="data-value">${intel.records?.NS?.length || 0}</div></div>
+//           <div class="data-card"><div class="data-label">TXT Records</div><div class="data-value">${intel.records?.TXT?.length || 0}</div></div>
+//           <div class="data-card"><div class="data-label">Subdomains</div><div class="data-value">${intel.subdomains?.length || 0}</div></div>
+//           <div class="data-card"><div class="data-label">IP Addresses</div><div class="data-value">${intel.ips?.length || 0}</div></div>
+//           <div class="data-card"><div class="data-label">MX Hosts</div><div class="data-value">${intel.mxHosts?.length || 0}</div></div>
+//         </div>
+//       </div>
+// 
+//       ${buildEmailSecurity(intel.emailSecurity)}
+//       ${buildWhois(intel.whois)}
+//       ${buildGraphExplanation(intel.graph)}
+//       ${buildDnsRecords(intel.records)}
+//       ${buildSubdomains(intel.subdomains)}
+//       ${buildIpAsn(intel.ips)}
+//       ${intel.mxHosts?.length > 0 ? `
+//         <div class="section">
+//           <div class="section-title">📧 MX Hosts</div>
+//           <div class="data-grid">
+//             ${intel.mxHosts.slice(0, 10).map(mx => `
+//               <div class="data-card">
+//                 <div class="data-label">${escapeHtml(mx.host)} (priority ${mx.priority})</div>
+//                 <div class="data-value">IP: ${mx.ip || '—'}</div>
+//                 <div class="data-label">ASN: ${mx.asn || '—'}</div>
+//                 <div class="data-value">${escapeHtml(mx.asname || '—')}</div>
+//               </div>
+//             `).join('')}
+//           </div>
+//         </div>
+//       ` : ''}
+//       ${buildRecommendations(risk?.recommendations || [])}
+//     `;
+//   };
+// 
+//   // Helper function for IP Intel printable report
+//   const generateIpIntelReport = (data: any, inputValue: string) => {
+//     if (!data) return '';
+//     
+//     const ip = data.data?.query || data.data?.ip || inputValue;
+//     const vt = data.reputation?.virusTotal;
+//     const reputation = data.reputation;
+//     const scan = data.scan;
+//     const pivot = data.pivot;
+//     const rdap = data.data?.rdap;
+//     const http = data.data?.http;
+//     const tls = data.data?.tls;
+//     const content = data.data?.content;
+//     const redirects = data.data?.redirects;
+//     const staticFlags = data.data?.staticFlags;
+//     const verdict = data.analysis?.threatLevel || 'NORMAL';
+//     const recommendations = data.analysis?.recommendations || [];
+//     
+//     const formatDate = (iso: string | null) => {
+//       if (!iso) return '—';
+//       const d = new Date(iso);
+//       return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10);
+//     };
+//     
+//     const escapeHtml = (text: string) => text
+//       .replace(/&/g, '&')
+//       .replace(/</g, '<')
+//       .replace(/>/g, '>')
+//       .replace(/"/g, '"')
+//       .replace(/'/g, '&#039;');
+//     
+//     const getVerdictClass = (level: string) => {
+//       switch (level) {
+//         case 'MALICIOUS': return 'badge-critical';
+//         case 'SUSPICIOUS': return 'badge-elevated';
+//         case 'CLEAN': return 'badge-normal';
+//         default: return 'badge-normal';
+//       }
+//     };
+//     
+//     // Build VirusTotal section
+//     const buildVT = (vt: any) => {
+//       if (!vt || !vt.analyzed) return '';
+//       const stats = vt.lastAnalysisStats || { malicious: 0, suspicious: 0, harmless: 0, undetected: 0, timeout: 0 };
+//       const total = vt.totalEngines || Object.values(stats).reduce((a: number, b: number) => a + b, 0);
+//       return `
+//         <div class="section">
+//           <div class="section-title">🛡️ VirusTotal Analysis</div>
+//           <div class="data-grid">
+//             <div class="data-card"><div class="data-label">Verdict</div><div class="data-value"><span class="badge ${getVerdictClass(vt.verdict)}">${vt.verdict}</span></div></div>
+//             <div class="data-card"><div class="data-label">Detection</div><div class="data-value">${stats.malicious}/${total} engines</div></div>
+//             <div class="data-card"><div class="data-label">Reputation</div><div class="data-value">${vt.reputation}</div></div>
+//             <div class="data-card"><div class="data-label">Last Analysis</div><div class="data-value">${vt.lastAnalysisDate ? formatDate(vt.lastAnalysisDate) : 'N/A'}</div></div>
+//           </div>
+//           <div class="section">
+//             <div class="section-title">📊 Detection Breakdown</div>
+//             <div class="data-grid">
+//               <div class="data-card"><div class="data-label">Malicious</div><div class="data-value">${stats.malicious || 0}</div></div>
+//               <div class="data-card"><div class="data-label">Suspicious</div><div class="data-value">${stats.suspicious || 0}</div></div>
+//               <div class="data-card"><div class="data-label">Undetected</div><div class="data-value">${stats.undetected || 0}</div></div>
+//               <div class="data-card"><div class="data-label">Harmless</div><div class="data-value">${stats.harmless || 0}</div></div>
+//               <div class="data-card"><div class="data-label">Timeout</div><div class="data-value">${stats.timeout || 0}</div></div>
+//               <div class="data-card"><div class="data-label">Total Engines</div><div class="data-value">${total}</div></div>
+//             </div>
+//           </div>
+//           ${vt.categories?.length > 0 ? `
+//             <div class="section">
+//               <div class="section-title">📂 Categories</div>
+//               <div class="data-grid">
+//                 ${vt.categories.map(c => `<div class="data-card"><div class="data-value">${escapeHtml(c)}</div></div>`).join('')}
+//               </div>
+//             </div>
+//           ` : ''}
+//           ${vt.tags?.length > 0 ? `
+//             <div class="section">
+//               <div class="section-title">🏷️ Tags</div>
+//               <div class="data-grid">
+//                 ${vt.tags.slice(0, 12).map(t => `<div class="data-card"><div class="data-value">#${escapeHtml(t)}</div></div>`).join('')}
+//               </div>
+//             </div>
+//           ` : ''}
+//           <div class="section">
+//             <div class="section-title">📋 Additional Info</div>
+//             <div class="data-grid">
+//               <div class="data-card"><div class="data-label">ASN</div><div class="data-value">${vt.asn || 'N/A'}</div></div>
+//               <div class="data-card"><div class="data-label">Country</div><div class="data-value">${vt.country || 'N/A'}</div></div>
+//               <div class="data-card"><div class="data-label">First Seen</div><div class="data-value">${vt.firstSeen ? formatDate(vt.firstSeen) : 'N/A'}</div></div>
+//               <div class="data-card"><div class="data-label">Last Seen</div><div class="data-value">${vt.lastSeen ? formatDate(vt.lastSeen) : 'N/A'}</div></div>
+//             </div>
+//           </div>
+//           <div class="section">
+//             <div class="section-title">🔗 VirusTotal Link</div>
+//             <div class="data-grid">
+//               <div class="data-card"><div class="data-value"><a href="${vt.url}" target="_blank" style="color: #059669;">View on VirusTotal</a></div></div>
+//             </div>
+//           </div>
+//         `;
+//     };
+//     
+//     // Build reputation section
+//     const buildReputation = (rep: any) => {
+//       if (!rep) return '';
+//       return `
+//         <div class="section">
+//           <div class="section-title">🎯 Reputation & Infrastructure</div>
+//           <div class="data-grid">
+//             <div class="data-card"><div class="data-label">IP</div><div class="data-value">${reputation?.ip || 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">Geo</div><div class="data-value">${rep.geo || 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">ASN</div><div class="data-value">${rep.asn || 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">ISP</div><div class="data-value">${rep.isp || 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">DNSBL Listed</div><div class="data-value">${rep.dnsblListed || 0}</div></div>
+//             <div class="data-card"><div class="data-label">DNSBL Blocked</div><div class="data-value">${rep.dnsblBlocked || 0}</div></div>
+//             <div class="data-card"><div class="data-label">Tor Exit</div><div class="data-value">${rep.torExit ? 'Yes' : 'No'}</div></div>
+//             <div class="data-card"><div class="data-label">URLhaus Count</div><div class="data-value">${rep.urlhausCount || 0}</div></div>
+//             <div class="data-card"><div class="data-label">Hosting</div><div class="data-value">${rep.hosting ? 'Yes' : 'No'}</div></div>
+//             <div class="data-card"><div class="data-label">Proxy</div><div class="data-value">${rep.proxy ? 'Yes' : 'No'}</div></div>
+//             <div class="data-card"><div class="data-label">WHOIS Created</div><div class="data-value">${formatDate(rep.whoisCreated) || 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">Domain Age</div><div class="data-value">${rep.domainAgeDays ? `${rep.domainAgeDays} days` : 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">Domain Expires</div><div class="data-value">${formatDate(rep.domainExpires) || 'N/A'}</div></div>
+//           </div>
+//         </div>
+//       `;
+//     };
+//     
+//     // Build scan results
+//     const buildScan = (scan: any) => {
+//       if (!scan) return '';
+//       const openPorts = scan.ports?.filter((p: any) => p.state === 'open') || [];
+//       return `
+//         <div class="section">
+//           <div class="section-title">🔍 Port Scan Results</div>
+//           <div class="data-grid">
+//             <div class="data-card"><div class="data-label">OS Fingerprint</div><div class="data-value">${scan.os || 'Unknown'}</div></div>
+//             <div class="data-card"><div class="data-label">Open Ports</div><div class="data-value">${openPorts.length}</div></div>
+//           </div>
+//           ${openPorts.length > 0 ? `
+//             <div class="section">
+//               <h4>Open Ports</h4>
+//               <div class="data-grid">
+//                 ${openPorts.map((p: any) => `
+//                   <div class="data-card">
+//                     <div class="data-label">Port ${p.port}</div>
+//                     <div class="data-value">${p.service} (${p.state})</div>
+//                     <div class="data-label">Banner: ${escapeHtml(p.banner || '—')}</div>
+//                   </div>
+//                 `).join('')}
+//               </div>
+//             </div>
+//           ` : ''}
+//         </div>
+//       `;
+//     };
+//     
+//     // Build RDAP
+//     const buildRdap = (rdap: any) => {
+//       if (!rdap) return '';
+//       return `
+//         <div class="section">
+//           <div class="section-title">📋 RDAP / WHOIS</div>
+//           <div class="data-grid">
+//             <div class="data-card"><div class="data-label">Handle</div><div class="data-value">${escapeHtml(rdap.handle || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">Name</div><div class="data-value">${escapeHtml(rdap.name || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">Type</div><div class="data-value">${escapeHtml(rdap.type || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">Country</div><div class="data-value">${escapeHtml(rdap.country || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">Start Address</div><div class="data-value">${escapeHtml(rdap.startAddress || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">End Address</div><div class="data-value">${escapeHtml(rdap.endAddress || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">Entities</div><div class="data-value">${rdap.entities?.join(', ') || 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">Abuse Contacts</div><div class="data-value">${rdap.abuseContacts?.join(', ') || 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">Status</div><div class="data-value">${rdap.status?.join(', ') || 'N/A'}</div></div>
+//           </div>
+//         </div>
+//       `;
+//     };
+//     
+//     // Build HTTP
+//     const buildHttp = (http: any) => {
+//       if (!http) return '';
+//       return `
+//         <div class="section">
+//           <div class="section-title">🌐 HTTP Fingerprint</div>
+//           <div class="data-grid">
+//             <div class="data-card"><div class="data-label">Final URL</div><div class="data-value">${escapeHtml(http.finalUrl || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">Status</div><div class="data-value">${http.status} ${http.statusText}</div></div>
+//             <div class="data-card"><div class="data-label">Protocol</div><div class="data-value">${http.protocol}</div></div>
+//             <div class="data-card"><div class="data-label">Server</div><div class="data-value">${escapeHtml(http.server || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">Content-Type</div><div class="data-value">${escapeHtml(http.contentType || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">TTFB</div><div class="data-value">${http.timings?.ttfbMs} ms</div></div>
+//             <div class="data-card"><div class="data-label">Total Time</div><div class="data-value">${http.timings?.totalMs} ms</div></div>
+//           </div>
+//           ${http.headers ? `
+//             <div class="section">
+//               <h4>Headers</h4>
+//               <div class="json-block">${JSON.stringify(http.headers, null, 2)}</div>
+//             </div>
+//           ` : ''}
+//         </div>
+//       `;
+//     };
+//     
+//     // Build TLS
+//     const buildTls = (tls: any) => {
+//       if (!tls) return '';
+//       return `
+//         <div class="section">
+//           <div class="section-title">🔒 TLS Certificate</div>
+//           <div class="data-grid">
+//             <div class="data-card"><div class="data-label">Protocol</div><div class="data-value">${tls.protocol}</div></div>
+//             <div class="data-card"><div class="data-label">Cipher</div><div class="data-value">${escapeHtml(tls.cipher)}</div></div>
+//             <div class="data-card"><div class="data-label">Subject CN</div><div class="data-value">${escapeHtml(tls.subjectCn || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">Issuer CN</div><div class="data-value">${escapeHtml(tls.issuerCn || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">Valid From</div><div class="data-value">${formatDate(tls.validFrom)}</div></div>
+//             <div class="data-card"><div class="data-label">Valid To</div><div class="data-value">${formatDate(tls.validTo)}</div></div>
+//             <div class="data-card"><div class="data-label">Status</div><div class="data-value">${tls.expired ? 'EXPIRED' : tls.selfSigned ? 'SELF-SIGNED' : tls.hostnameMismatch ? 'MISMATCH' : 'VALID'}</div></div>
+//             <div class="data-card"><div class="data-label">SAN</div><div class="data-value">${tls.san?.join(', ') || 'N/A'}</div></div>
+//           </div>
+//         </div>
+//       `;
+//     };
+//     
+//     // Build content analysis
+//     const buildContent = (content: any) => {
+//       if (!content) return '';
+//       return `
+//         <div class="section">
+//           <div class="section-title">📄 Content Analysis</div>
+//           <div class="data-grid">
+//             <div class="data-card"><div class="data-label">Title</div><div class="data-value">${escapeHtml(content.title || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">Description</div><div class="data-value">${escapeHtml(content.description || 'N/A')}</div></div>
+//             <div class="data-card"><div class="data-label">Language</div><div class="data-value">${content.lang || 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">Favicon</div><div class="data-value">${content.favicon || 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">Forms</div><div class="data-value">${content.forms?.length || 0}</div></div>
+//             <div class="data-card"><div class="data-label">Iframes</div><div class="data-value">${content.iframes?.length || 0}</div></div>
+//             <div class="data-card"><div class="data-label">Meta Refresh</div><div class="data-value">${content.metaRefresh ? 'Yes' : 'No'}</div></div>
+//             <div class="data-card"><div class="data-label">Obfuscated JS</div><div class="data-value">${content.obfuscatedJs ? 'Yes' : 'No'}</div></div>
+//             <div class="data-card"><div class="data-label">Inline JS Bytes</div><div class="data-value">${content.inlineJsBytes || 0}</div></div>
+//             <div class="data-card"><div class="data-label">Scripts</div><div class="data-value">${content.scripts?.length || 0}</div></div>
+//             <div class="data-card"><div class="data-label">Emails</div><div class="data-value">${content.emails?.join(', ') || 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">Telegram Tokens</div><div class="data-value">${content.telegramTokens?.join(', ') || 'N/A'}</div></div>
+//             <div class="data-card"><div class="data-label">Telegram Chat IDs</div><div class="data-value">${content.telegramChatIds?.join(', ') || 'N/A'}</div></div>
+//           </div>
+//         </div>
+//       `;
+//     };
+//     
+//     // Build redirects
+//     const buildRedirects = (redirects: any[]) => {
+//       if (!redirects || redirects.length === 0) return '';
+//       return `
+//         <div class="section">
+//           <div class="section-title">🔄 Redirect Chain</div>
+//           <div class="data-grid">
+//             ${redirects.map((r, i) => `
+//               <div class="data-card">
+//                 <div class="data-label">Step ${r.index || i + 1}</div>
+//                 <div class="data-value">${escapeHtml(r.url)}</div>
+//                 <div class="data-label">Status: ${r.status || 'N/A'}</div>
+//               </div>
+//             `).join('')}
+//           </div>
+//         </div>
+//       `;
+//     };
+//     
+//     // Build static flags
+//     const buildStaticFlags = (flags: any[]) => {
+//       if (!flags || flags.length === 0) return '';
+//       return `
+//         <div class="section">
+//           <div class="section-title">🚩 Static Flags</div>
+//           <div class="data-grid">
+//             ${flags.map(f => `
+//               <div class="data-card">
+//                 <div class="data-label">${escapeHtml(f.label)}</div>
+//                 <div class="data-value">Weight: ${f.weight} · Category: ${f.category}</div>
+//               </div>
+//             `).join('')}
+//           </div>
+//         </div>
+//       `;
+//     };
+//     
+//     // Build screenshot
+//     const buildScreenshot = (screenshotUrl: string) => {
+//       if (!screenshotUrl) return '';
+//       return `
+//         <div class="section">
+//           <div class="section-title">📸 Screenshot</div>
+//           <div class="data-grid">
+//             <div class="data-card">
+//               <a href="${screenshotUrl}" target="_blank" style="color: #059669;">View Screenshot</a>
+//             </div>
+//           </div>
+//         </div>
+//       `;
+//     };
+//     
+//     // Build recommendations
+//     const buildRecommendations = (recs: string[]) => {
+//       if (!recs || recs.length === 0) return '';
+//       return `
+//         <div class="section">
+//           <div class="section-title">🛡️ Recommendations</div>
+//           <ol>${recs.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ol>
+//         </div>
+//       `;
+//     };
+//     
+//     // Build the complete IP Intel report
+//     return `
+//       <div class="section">
+//         <div class="section-title">🔍 IP Intelligence Report</div>
+//         <div class="data-grid">
+//           <div class="data-card"><div class="data-label">IP Address</div><div class="data-value">${escapeHtml(ip)}</div></div>
+//           <div class="data-card"><div class="data-label">Analysis Date</div><div class="data-value">${formatDate(new Date().toISOString())}</div></div>
+//           <div class="data-card"><div class="data-label">Source</div><div class="data-value">NEXUS Real Sandbox</div></div>
+//         </div>
+//       </div>
+//       
+//       ${vt ? `<div class="section"><div class="section-title">🛡️ VirusTotal Analysis</div>${buildVT(vt)}` : ''}
+//       
+//       <div class="section">
+//         <div class="section-title">⚠️ Threat Assessment</div>
+//         <div class="data-grid">
+//           <div class="data-card"><div class="data-label">Threat Level</div><div class="data-value">${verdict}</div></div>
+//         </div>
+//         <div class="section">
+//           <h4>Recommendations</h4>
+//           <ul>${recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
+//         </div>
+//       </div>
+//       
+//       ${buildReputation(data.reputation)}
+//       ${buildScan(data.scan)}
+//       ${buildVT(data.reputation?.virusTotal)}
+//       ${buildRdap(data.data?.rdap)}
+//       ${buildHttp(data.data?.http)}
+//       ${buildTls(data.data?.tls)}
+//       ${buildRedirects(data.data?.redirects)}
+//       ${buildContent(data.data?.content)}
+//       ${buildStaticFlags(data.data?.staticFlags)}
+//       ${data.data?.screenshotUrl ? buildScreenshot(data.data.screenshotUrl) : ''}
+//       ${buildRecommendations(data.analysis?.recommendations || [])}
+//     `;
+//   };
+// 
+//   // Generate Executive Protection Report
+//   const generateExecProtectionReport = (data: any): string => {
+//     const exec = data.executive;
+//     const dorkResults = data.dorkResults;
+//     const escapeHtml = (text: string) => text
+//       .replace(/&/g, '&')
+//       .replace(/</g, '<')
+//       .replace(/>/g, '>')
+//       .replace(/"/g, '"')
+//       .replace(/'/g, '&#039;');
+// 
+//     if (!exec) return '<div class="section"><div class="section-title">⚠️ No Executive Data</div><p>No executive data available for report.</p></div>';
+// 
+//     let html = `
+//       <div class="section">
+//         <div class="section-title">👤 Executive Profile</div>
+//         <div class="data-grid">
+//           <div class="data-card"><div class="data-label">ID / Document</div><div class="data-value">${escapeHtml(exec.documentId || 'N/A')}</div></div>
+//           <div class="data-card"><div class="data-label">Phone</div><div class="data-value">${escapeHtml(exec.phone || 'N/A')}</div></div>
+//           <div class="data-card"><div class="data-label">Email Corporate</div><div class="data-value">${escapeHtml(exec.emailCorporate || 'N/A')}</div></div>
+//           <div class="data-card"><div class="data-label">Email Personal</div><div class="data-value">${escapeHtml(exec.emailPersonal || 'N/A')}</div></div>
+//           <div class="data-card"><div class="data-label">Address</div><div class="data-value">${escapeHtml(exec.address || 'N/A')}</div></div>
+//           <div class="data-card"><div class="data-label">Location</div><div class="data-value">${escapeHtml(exec.location || 'N/A')}</div></div>
+//         </div>
+//       </div>
+//     `;
+// 
+//     if (exec.socialMedia?.length > 0) {
+//       html += `
+//         <div class="section">
+//           <div class="section-title">📱 Social Media Profiles</div>
+//           <div class="data-grid">
+//             ${exec.socialMedia.map((sm: any) => `
+//               <div class="data-card">
+//                 <div class="data-label">${escapeHtml(sm.platform)}</div>
+//                 <div class="data-value">${escapeHtml(sm.username)}</div>
+//                 ${sm.url ? `<div class="data-label"><a href="${escapeHtml(sm.url)}" target="_blank" style="color: #059669;">View Profile</a></div>` : ''}
+//               </div>
+//             `).join('')}
+//           </div>
+//         </div>
+//       `;
+//     }
+// 
+//     if (dorkResults?.queries?.length > 0) {
+//       html += `
+//         <div class="section">
+//           <div class="section-title">🔍 OSINT Dork Research Queries (${dorkResults.queries.length} categories)</div>
+//           <div class="data-grid">
+//             ${dorkResults.queries.map((q: any) => `
+//               <div class="data-card" style="grid-column: span 1;">
+//                 <div class="data-label">${escapeHtml(q.category)}</div>
+//                 <div class="data-value" style="font-family: monospace; font-size: 11px; white-space: pre-wrap;">${escapeHtml(q.query)}</div>
+//                 <div class="data-label">${escapeHtml(q.description)}</div>
+//                 <div class="data-value">Sources: ${q.sources.join(', ')}</div>
+//               </div>
+//             `).join('')}
+//           </div>
+//         </div>
+//       `;
+//     }
+// 
+//     return html;
+//   };
+// 
+//   // Generate IP Intel specific report if tab is ip
+//   let ipIntelHtml = '';
+//   if (tab === 'ip' && data) {
+//     ipIntelHtml = generateIpIntelReport(data, inputValue);
+//   }
+// 
+//   // Build the final HTML content based on tab
+//   let contentHtml = '';
+//   if (tab === 'domain' && domainIntelHtml) {
+//     contentHtml = domainIntelHtml;
+//   } else if (tab === 'ip' && ipIntelHtml) {
+//     contentHtml = ipIntelHtml;
+//   } else if (tab === 'exec-protection' && data) {
+//     contentHtml = generateExecProtectionReport(data);
+//   } else if (data) {
+//     contentHtml = `
+//       <div class="section">
+//         <div class="section-title">📊 Datos de Análisis</div>
+//         <div class="json-block">${reportData}</div>
+//       </div>
+//     `;
+//   }
+// 
+//   return `<!DOCTYPE html>
+// <html lang="es">
+// <head>
+//   <meta charset="UTF-8">
+//   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+//   <title>${tabLabel} - Informe Imprimible | NEXUS-INTEL</title>
+//   <style>
+//     * { box-sizing: border-box; }
+//     body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; background: #fff; color: #1f2937; line-height: 1.6; }
+//     .header { border-bottom: 3px solid #059669; padding-bottom: 20px; margin-bottom: 30px; text-align: center; }
+//     .logo { font-size: 24px; font-weight: 800; color: #059669; margin-bottom: 8px; }
+//     .title { font-size: 28px; font-weight: 700; color: #111827; margin-bottom: 4px; }
+//     .subtitle { color: #6b7280; font-size: 14px; }
+//     .meta { display: flex; justify-content: center; gap: 20px; margin-top: 16px; flex-wrap: wrap; font-size: 13px; color: #6b7280; }
+//     .section { margin-bottom: 30px; }
+//     .section-title { font-size: 18px; font-weight: 700; color: #111827; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+//     .data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+//     .data-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; }
+//     .data-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px; }
+//     .data-value { font-weight: 600; color: #111827; word-break: break-word; font-family: monospace; font-size: 13px; }
+//     .json-block { background: #111827; color: #10b981; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+//     .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+//     .badge-normal { background: #dcfce7; color: #166534; }
+//     .badge-elevated { background: #fef3c7; color: #92400e; }
+//     .badge-critical { background: #fee2e2; color: #991b1b; }
+//     .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; }
+//     @media print { .no-print { display: none; } body { padding: 0; } }
+//   </style>
+// </head>
+// <body>
+//   <div class="header">
+//     <div class="logo">🛡️ NEXUS-INTEL</div>
+//     <div class="title">Informe de Inteligencia: ${tabLabel}</div>
+//     <div class="subtitle">Plataforma de Inteligencia de Amenazas y Protección Ejecutiva</div>
+//     <div class="meta">
+//       <span>📅 Generado: ${timestamp}</span>
+//       <span>🎯 Objetivo: ${inputDisplay}</span>
+//       <span>🔍 Módulo: ${tabLabel}</span>
+//     </div>
+//   </div>
+// 
+//   <div class="section">
+//     <div class="section-title">📋 Resumen Ejecutivo</div>
+//     <div class="data-grid">
+//       <div class="data-card"><div class="data-label">Módulo</div><div class="data-value">${tabLabel}</div></div>
+//       <div class="data-card"><div class="data-label">Fecha/Hora</div><div class="data-value">${timestamp}</div></div>
+//       <div class="data-card"><div class="data-label">Objetivo Analizado</div><div class="data-value">${inputDisplay}</div></div>
+//       <div class="data-card"><div class="data-label">Estado</div><div class="data-value"><span class="badge badge-normal">Completado</span></div></div>
+//     </div>
+//   </div>
+// 
+//   ${contentHtml}
+// 
+//   <div class="footer">
+//     <p>Generado por NEXUS-INTEL — Plataforma de Inteligencia de Amenazas y Protección Ejecutiva</p>
+//     <p>Este informe se generó automáticamente. Verifique los datos antes de tomar decisiones operacionales.</p>
+//   </div>
+// 
+//   <script>
+//     window.onload = () => { window.print(); }
+//   </script>
+// </body>
+// </html>`;
+// }
 
 function openPrintReport(tab: TabType, data: any, inputValue: string) {
   const html = generatePrintableReport(tab, data, inputValue);
@@ -3652,7 +3652,7 @@ export default function OSINTPlatform() {
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {(() => {
+                    {(function() {
                       const top = [...ipQueue].sort((a, b) => b.riskScore - a.riskScore)[0];
                       const sevClass = (s: string) => s === 'CRITICAL' ? 'text-red-300 bg-red-500/20 border-red-500/40' : s === 'HIGH' ? 'text-orange-300 bg-orange-500/15 border-orange-500/40' : s === 'MEDIUM' ? 'text-yellow-300 bg-yellow-500/10 border-yellow-500/40' : 'text-green-300 bg-green-500/10 border-green-500/40';
                       return (
@@ -3753,7 +3753,7 @@ export default function OSINTPlatform() {
                           <p className="text-xs text-gray-400 font-medium">DNSBL detail — {apiData.reputation.dnsbl.length} zones checked</p>
                           <button onClick={() => setShowDnsblDetail(false)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
                         </div>
-                        {(() => {
+                        {(function() {
                           const listed = (apiData.reputation.dnsbl || []).filter((d: any) => d.listed);
                           const blocked = (apiData.reputation.dnsbl || []).filter((d: any) => d.blocked);
                           const flagged = [...listed, ...blocked];
@@ -3893,7 +3893,7 @@ export default function OSINTPlatform() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <p className="text-xs text-gray-400 mb-1">DNS Blacklists (DNSBL)</p>
-                            {(() => {
+                            {(function() {
                                 const dnsbl: any[] = apiData.reputation.dnsbl || [];
                                 const listed = dnsbl.filter((d: any) => d.listed);
                                 const blocked = dnsbl.filter((d: any) => d.blocked);
@@ -4044,7 +4044,7 @@ export default function OSINTPlatform() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <p className="text-xs text-gray-400 mb-1">DNS Blacklists (DNSBL)</p>
-                            {(() => {
+                            {(function() {
                                 const dnsbl: any[] = apiData.reputation.dnsbl || [];
                                 const listed = dnsbl.filter((d: any) => d.listed);
                                 const blocked = dnsbl.filter((d: any) => d.blocked);
@@ -4140,7 +4140,7 @@ export default function OSINTPlatform() {
                           <Terminal className="w-4 h-4 text-purple-400" /> Active Scan — Exposed Services
                         </h4>
                         <p className="text-xs text-gray-400 mb-2">Estimated OS: <span className="text-purple-300 font-medium">{apiData.scan.os}</span></p>
-                        {(() => {
+                        {(function() {
                           const ports = apiData.scan.ports || [];
                           const open = ports.filter((p: any) => p.state === 'open');
                           const closed = ports.filter((p: any) => p.state === 'closed');
@@ -4282,7 +4282,7 @@ export default function OSINTPlatform() {
                     {/* Threat Assessment — summarized, click to expand */}
                     {apiData.data && (
                       <div className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-                        {(() => {
+                        {(function() {
                           const severity = riskSeverityFrom(apiData);
                           const abuseScore = computeAbuseScore(apiData);
                           const factors = computeAbuseBreakdown(apiData);
@@ -4930,7 +4930,7 @@ export default function OSINTPlatform() {
                            )}
 
                            {/* Redirects / cadenas */}
-                           {(() => {
+                           {(function() {
                              const redirects: string[] = [];
                              const walkRedirects = (n: any) => {
                                if (n?.redirectChain?.length) {
@@ -4976,11 +4976,11 @@ export default function OSINTPlatform() {
                         <h3 className="font-semibold mb-3 flex items-center gap-2">
                           <Camera className="w-5 h-5 text-yellow-400" /> Live Screenshot
                           <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded">
-                            Captured: {(() => { const d = new Date(); const utc5 = new Date(d.getTime() - 5 * 60 * 60 * 1000); return utc5.toISOString().slice(0, 19).replace('T', ' ') + ' UTC-5'; })()}
+                            Captured: {(function() { const d = new Date(); const utc5 = new Date(d.getTime() - 5 * 60 * 60 * 1000); return utc5.toISOString().slice(0, 19).replace('T', ' ') + ' UTC-5'; })()}
                           </span>
                         </h3>
                         <div className="relative aspect-video bg-gray-950 rounded-lg border border-gray-800 overflow-hidden">
-                          {(() => {
+                          {(function() {
                             const domain = apiData.data.domain;
                             const screenshotUrl = `https://s0.wp.com/mshots/v1/${encodeURIComponent('https://' + domain)}?w=1280&h=720`;
                             return (
@@ -5044,7 +5044,7 @@ export default function OSINTPlatform() {
                         <h3 className="font-semibold mb-3 flex items-center gap-2 flex-wrap">
                           <FileCode className="w-5 h-5 text-blue-400" /> Resource Tree — Live Crawl (gospider-style)
                           <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">
-                            {(() => { let c=0; const count=(n:any)=>{c++; n.children?.forEach(count); }; count(apiData.data.resourceTree); return c; })()} nodes
+                            {(function() { let c=0; const count=(n:any)=>{c++; n.children?.forEach(count); }; count(apiData.data.resourceTree); return c; })()} nodes
                           </span>
                           <button
                             onClick={handleWgetZip}
@@ -5247,7 +5247,7 @@ export default function OSINTPlatform() {
                          <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${fuzzingExpanded ? 'rotate-180' : ''}`} />
                        </button>
                        <div className="flex flex-wrap gap-4 mb-4 text-xs">
-                         {(() => {
+                         {(function() {
                            const s = apiData.data.fuzzingSummary;
                            return (
                              <>

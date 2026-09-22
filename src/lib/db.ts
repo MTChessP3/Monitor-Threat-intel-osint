@@ -64,27 +64,11 @@ export async function ensureDatabaseInitialized(): Promise<void> {
       console.error('[DB] Manual table creation on Turso failed:', error instanceof Error ? error.message.substring(0, 300) : String(error).substring(0, 300));
     }
   } else if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    // Skip prisma db push on edge runtime - use manual table creation instead
     try {
-      // Push the schema to create tables if they don't exist
-      const { execSync } = await import('child_process');
-      console.log('[DB] Pushing schema to SQLite database on Vercel...');
-      execSync('npx prisma db push --skip-generate --accept-data-loss', {
-        env: {
-          ...process.env,
-          DATABASE_URL: 'file:/tmp/vip-intelligence.db',
-        },
-        stdio: 'pipe',
-        timeout: 30000,
-      });
-      console.log('[DB] Schema pushed successfully');
-    } catch (error) {
-      console.error('[DB] Schema push error:', error instanceof Error ? error.message.substring(0, 300) : String(error).substring(0, 300));
-      // Fallback: create tables manually using raw SQL
-      try {
-        await createTablesManually();
-      } catch (e2) {
-        console.error('[DB] Manual table creation also failed:', e2 instanceof Error ? e2.message.substring(0, 300) : String(e2).substring(0, 300));
-      }
+      await createTablesManually();
+    } catch (e2) {
+      console.error('[DB] Manual table creation failed:', e2 instanceof Error ? e2.message.substring(0, 300) : String(e2).substring(0, 300));
     }
   }
 
