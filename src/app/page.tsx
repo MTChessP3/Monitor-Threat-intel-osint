@@ -3652,564 +3652,564 @@ export default function OSINTPlatform() {
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {(function() {
-                      const top = [...ipQueue].sort((a, b) => b.riskScore - a.riskScore)[0];
-                      const sevClass = (s: string) => s === 'CRITICAL' ? 'text-red-300 bg-red-500/20 border-red-500/40' : s === 'HIGH' ? 'text-orange-300 bg-orange-500/15 border-orange-500/40' : s === 'MEDIUM' ? 'text-yellow-300 bg-yellow-500/10 border-yellow-500/40' : 'text-green-300 bg-green-500/10 border-green-500/40';
-                      return (
-                        <>
-                          {top && (
-                            <div className="p-3 rounded-lg border-2 border-red-500/40 bg-red-500/10">
-                              <div className="flex flex-wrap items-center gap-2 text-xs">
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold uppercase tracking-wide">Top Risk</span>
-                                <span className="font-mono font-bold text-red-200">{top.ip}</span>
-                                <span className={`px-2 py-0.5 rounded border text-[10px] font-medium uppercase ${sevClass(top.severity)}`}>{top.severity}</span>
-                                <span className="text-gray-400">{top.flag} {top.country}</span>
-                                <span className="text-gray-500">Risk {top.riskScore}/100</span>
-                              </div>
-                              <div className="mt-1 h-1.5 bg-gray-700 rounded overflow-hidden">
-                                <div className="h-1.5 rounded" style={{ width: `${top.riskScore}%`, backgroundColor: abuseScoreColor(top.riskScore) }} />
-                              </div>
-                              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
-                                <span><span className="text-gray-300 font-medium">{top.abuseScore}%</span> abuse</span>
-                                <span>{top.blacklistCount} blacklisted{top.blockedCount ? ` · ${top.blockedCount} blocked` : ''}</span>
-                                <span>{top.torExit ? 'Tor exit' : 'No Tor'}</span>
-                                <span>URLhaus: {top.urlhausCount}</span>
-                                {top.malware && <span className="text-red-300">{top.malware}</span>}
-                              </div>
-                            </div>
-                          )}
-                          {ipQueue.map((e) => (
-                            <div key={e.id} className={`px-2.5 py-2 rounded border ${selectedQueue.has(e.id) ? 'bg-cyan-500/10 border-cyan-500/40' : 'bg-gray-800/50 border-gray-700'}`}>
-                              <div className="flex flex-wrap items-center gap-2 text-xs">
-                                <input type="checkbox" checked={selectedQueue.has(e.id)} onChange={() => toggleQueueSelect(e.id)} className="accent-cyan-500" />
-                                <span className="font-mono font-bold">{e.ip}</span>
-                                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-medium uppercase ${sevClass(e.severity)}`}>{e.severity}</span>
-                                <span className="text-gray-400">{e.flag} {e.country}</span>
-                                <span className="text-gray-500 ml-auto shrink-0">{timeAgo(e.addedAt)}</span>
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-400 pl-6">
-                                <span><span className="text-gray-200 font-medium">{e.abuseScore}%</span> abuse</span>
-                                <span>{e.blacklistCount} listed</span>
-                                <span>{e.category}</span>
-                                <span>URLhaus: {e.urlhausCount}</span>
-                                {e.openPorts.length > 0 && <span className="font-mono text-red-300">Ports: {e.openPorts.join(', ')}</span>}
-                                {e.malware && <span className="text-red-300">{e.malware}</span>}
-                              </div>
-                            </div>
-                          ))}
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-
-              {/* Results Display */}
-              {apiData && apiData.data && (
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl p-5">
-                    <h3 className="font-semibold mb-3 flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5 text-green-400" /> Live Results
-                      {apiData.fetchedLive && <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded">LIVE DATA</span>}
-                    </h3>
-                    
-                    {/* Status cards: threat level / blacklists / network category */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
-                      <div className={`px-3 py-2 rounded-lg border flex items-center gap-2 ${threatBadgeClass(apiData)}`}>
-                        <AlertTriangle className="w-4 h-4 shrink-0" />
-                        <div className="min-w-0">
-                          <div className="text-[10px] uppercase tracking-wide opacity-80">Threat Level</div>
-                          <div className="font-bold truncate">{apiData.analysis?.threatLevel || 'NORMAL'}</div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setShowDnsblDetail((v) => !v)}
-                        className={`px-3 py-2 rounded-lg border flex items-center gap-2 text-left ${(apiData.reputation?.dnsbl?.filter((d: any) => d.listed)?.length || 0) > 0 ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-green-500/10 text-green-300 border-green-500/40'}`}
-                      >
-                        <Ban className="w-4 h-4 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[10px] uppercase tracking-wide opacity-80">Blacklists</div>
-                          <div className="font-bold truncate">
-                            {(apiData.reputation?.dnsbl?.filter((d: any) => d.listed)?.length || 0) > 0
-                              ? `Blacklisted (${apiData.reputation.dnsbl.filter((d: any) => d.listed).length} lists)`
-                              : 'Not blacklisted'}
-                          </div>
-                        </div>
-                        <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${showDnsblDetail ? 'rotate-180' : ''}`} />
-                      </button>
-                      <div className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-800/50 flex items-center gap-2">
-                        <Wifi className="w-4 h-4 shrink-0 text-blue-400" />
-                        <div className="min-w-0">
-                          <div className="text-[10px] uppercase tracking-wide text-gray-500">Network</div>
-                          <div className="font-bold text-gray-200 truncate">{networkCategory(apiData)}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* DNSBL detail (toggled from the Blacklists card) */}
-                    {showDnsblDetail && apiData.reputation && (
-                      <div className="mb-4 p-3 bg-gray-900/60 rounded-lg border border-gray-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-xs text-gray-400 font-medium">DNSBL detail — {apiData.reputation.dnsbl.length} zones checked</p>
-                          <button onClick={() => setShowDnsblDetail(false)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
-                        </div>
-                        {(function() {
-                          const listed = (apiData.reputation.dnsbl || []).filter((d: any) => d.listed);
-                          const blocked = (apiData.reputation.dnsbl || []).filter((d: any) => d.blocked);
-                          const flagged = [...listed, ...blocked];
-                          return flagged.length === 0 ? (
-                            <p className="text-xs text-green-400">No blacklist hits across {apiData.reputation.dnsbl.length} DNSBL zones.</p>
-                          ) : (
-                            <ul className="space-y-1">
-                              {flagged.map((d: any) => (
-                                <li key={d.zone} className={`flex flex-col text-xs px-2 py-1 rounded ${d.listed ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/30'}`}>
-                                  <span className="flex items-center justify-between gap-2">
-                                    <span className="font-medium">{d.name} <span className="text-gray-500 font-normal">[{d.group}]</span></span>
-                                    <span className="font-mono shrink-0">{d.listed ? `LISTED ${d.records.join(',')}` : 'BLOCKED (resolver)'}</span>
-                                  </span>
-                                  {d.listed && d.message && (
-                                    <span className="text-[10px] text-gray-400 break-all mt-0.5">{d.message}</span>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          );
-                        })()}
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-3">
-                      {(apiData.data.query || apiData.data.ip) && (
-                        <>
-                          <InfoCard label="IP Address" value={apiData.data.query || apiData.data.ip} icon={<Globe className="w-4 h-4" />} />
-                          <InfoCard label="Hostname (reverse DNS)" value={apiData.data.reverse || 'N/A'} icon={<Network className="w-4 h-4" />} />
-                          <InfoCard label="Country" value={`${apiData.data.country || 'N/A'} (${apiData.data.countryCode || ''})`} icon={<MapPin className="w-4 h-4" />} />
-                          <InfoCard label="Region" value={apiData.data.regionName || 'N/A'} icon={<MapPin className="w-4 h-4" />} />
-                          <InfoCard label="City" value={apiData.data.city || 'N/A'} icon={<Server className="w-4 h-4" />} />
-                          <InfoCard label="District" value={apiData.data.district || 'N/A'} icon={<MapPin className="w-4 h-4" />} />
-                          <InfoCard label="Postal Code" value={apiData.data.zip || 'N/A'} icon={<FileCode className="w-4 h-4" />} />
-                          <InfoCard label="Continent" value={`${apiData.data.continent || 'N/A'} (${apiData.data.continentCode || ''})`} icon={<Globe2 className="w-4 h-4" />} />
-                          <InfoCard label="ISP" value={apiData.data.isp || 'N/A'} icon={<Wifi className="w-4 h-4" />} />
-                          <InfoCard label="Organization" value={apiData.data.org || 'N/A'} icon={<Database className="w-4 h-4" />} />
-                          <InfoCard label="ASN" value={`${apiData.data.as || 'N/A'}${apiData.data.asname ? ` — ${apiData.data.asname}` : ''}`} icon={<Radar className="w-4 h-4" />} />
-                          <InfoCard label="Latitude" value={apiData.data.lat || 'N/A'} icon={<Target className="w-4 h-4" />} />
-                          <InfoCard label="Longitude" value={apiData.data.lon || 'N/A'} icon={<Target className="w-4 h-4" />} />
-                          <InfoCard label="Timezone" value={apiData.data.timezone || 'N/A'} icon={<Clock className="w-4 h-4" />} />
-                          <InfoCard label="Local Time" value={apiData.data.timezone ? new Intl.DateTimeFormat('en-GB', { timeZone: apiData.data.timezone, dateStyle: 'medium', timeStyle: 'medium' }).format(new Date()) : 'N/A'} icon={<Clock className="w-4 h-4" />} />
-                          <InfoCard label="Currency" value={apiData.data.currency || 'N/A'} icon={<Database className="w-4 h-4" />} />
-                        </>
-                      )}
-                    </div>
-
-                    {/* Map */}
-                    {apiData.data.lat && apiData.data.lon && (
-                      <div className="mt-4 rounded-lg overflow-hidden border border-gray-700">
-                        <iframe
-                          title="IP Location Map"
-                          src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(apiData.data.lon) - 0.1}%2C${Number(apiData.data.lat) - 0.1}%2C${Number(apiData.data.lon) + 0.1}%2C${Number(apiData.data.lat) + 0.1}&layer=mapnik&marker=${apiData.data.lat}%2C${apiData.data.lon}`}
-                          className="w-full h-64"
-                          loading="lazy"
-                        />
-                      </div>
-                    )}
-
-                    {apiData.data.location && (
-                      <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
-                        <h4 className="text-sm font-medium mb-2">Location Details</h4>
-                        <p className="text-sm text-gray-300">{apiData.data.location}</p>
-                      </div>
-                    )}
-
-                    {/* RDAP / WHOIS ownership */}
-                    {apiData.data.rdap && (
-                      <div className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-                        <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <Shield className="w-4 h-4 text-green-400" /> Network Ownership (RDAP)
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                          {apiData.data.rdap.name && <div><span className="text-gray-400">Network:</span> <span className="font-mono">{apiData.data.rdap.name}</span></div>}
-                          {apiData.data.rdap.startAddress && apiData.data.rdap.endAddress && <div><span className="text-gray-400">Range:</span> <span className="font-mono">{apiData.data.rdap.startAddress} — {apiData.data.rdap.endAddress}</span></div>}
-                          {apiData.data.rdap.entities?.length > 0 && <div><span className="text-gray-400">Registrant:</span> <span>{apiData.data.rdap.entities.join(', ')}</span></div>}
-                          {apiData.data.rdap.country && <div><span className="text-gray-400">Registry Country:</span> <span>{apiData.data.rdap.country}</span></div>}
-                          {apiData.data.rdap.status?.length > 0 && <div><span className="text-gray-400">Status:</span> <span>{apiData.data.rdap.status.join(', ')}</span></div>}
-                          {apiData.data.rdap.abuseContacts?.length > 0 && <div><span className="text-gray-400">Abuse Contact:</span> <a href={`mailto:${apiData.data.rdap.abuseContacts[0]}`} className="text-red-400 underline break-all">{apiData.data.rdap.abuseContacts.join(', ')}</a></div>}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Reputation & Threat Intelligence */}
-                    {apiData.reputation && (
-                      <div id="ip-reputation" className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 scroll-mt-4">
-                        <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                          <ShieldAlert className="w-4 h-4 text-red-400" /> Reputation & Threat Intelligence
-                        </h4>
-                        {/* VirusTotal Classification */}
-                        {apiData.reputation?.virusTotal && apiData.reputation.virusTotal.analyzed && (
-                          <div className="mt-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
-                            <h5 className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-2">
-                              <Shield className="w-3.5 h-3.5 text-orange-400" /> VirusTotal Classification
-                            </h5>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Verdict</div>
-                                <div className="font-bold text-lg flex items-center gap-2">
-                                  <span className={`px-2 py-0.5 rounded text-xs ${
-                                    apiData.reputation.virusTotal.verdict === 'MALICIOUS' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
-                                    apiData.reputation.virusTotal.verdict === 'SUSPICIOUS' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
-                                    apiData.reputation.virusTotal.verdict === 'CLEAN' ? 'bg-green-500/20 text-green-400 border border-green-500/40' :
-                                    'bg-gray-700 text-gray-300 border border-gray-600'
-                                  }`}>
-                                    {apiData.reputation.virusTotal.verdict}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Detection</div>
-                                <div className="font-bold text-lg">
-                                  {apiData.reputation.virusTotal.lastAnalysisStats?.malicious || 0} / {apiData.reputation.virusTotal.totalEngines || 0} engines
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Reputation Score</div>
-                                <div className="font-bold text-lg">{apiData.reputation.virusTotal.reputation || 0}</div>
-                              </div>
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Last Analysis</div>
-                                <div className="font-bold text-lg">
-                                  {apiData.reputation.virusTotal.lastAnalysisDate ? new Date(apiData.reputation.virusTotal.lastAnalysisDate).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A'}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-2">
-                              <a href={apiData.reputation.virusTotal.url} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
-                                <ExternalLink className="w-3 h-3" />
-                                View on VirusTotal
-                              </a>
-                            </div>
-                          </div>
-                        )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-xs text-gray-400 mb-1">DNS Blacklists (DNSBL)</p>
-                            {(function() {
-                                const dnsbl: any[] = apiData.reputation.dnsbl || [];
-                                const listed = dnsbl.filter((d: any) => d.listed);
-                                const blocked = dnsbl.filter((d: any) => d.blocked);
-                                const clean = dnsbl.filter((d: any) => !d.listed && !d.blocked);
-                                const groups: string[] = Array.from(new Set(clean.map((d: any) => d.group))).sort();
-                                return (
-                                  <div className="space-y-2">
-                                    <div className="flex flex-wrap gap-1 text-[11px]">
-                                      <span className={`px-2 py-0.5 rounded border ${listed.length ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{listed.length} listed</span>
-                                      <span className={`px-2 py-0.5 rounded border ${blocked.length ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{blocked.length} blocked</span>
-                                      <span className="px-2 py-0.5 rounded bg-gray-900 text-gray-400 border border-gray-700">{dnsbl.length} lists checked</span>
-                                    </div>
-                                    {listed.length === 0 && blocked.length === 0 && (
-                                      <p className="text-xs text-green-400">No blacklist hits across {dnsbl.length} DNSBL zones.</p>
-                                    )}
-                                    {(listed.length > 0 || blocked.length > 0) && (
-                                      <ul className="space-y-1">
-                                        {[...listed, ...blocked].map((d: any) => (
-                                          <li key={d.zone} className={`flex flex-col text-xs px-2 py-1 rounded ${d.listed ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/30'}`}>
-                                            <span className="flex items-center justify-between gap-2">
-                                              <span className="font-medium">{d.name} <span className="text-gray-500 font-normal">[{d.group}]</span></span>
-                                              <span className="font-mono shrink-0">{d.listed ? `LISTED ${d.records.join(',')}` : 'BLOCKED (resolver)'}</span>
-                                            </span>
-                                            {d.listed && d.message && (
-                                              <span className="text-[10px] text-gray-400 break-all mt-0.5">{d.message}</span>
-                                            )}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    )}
-                                    <details className="text-xs">
-                                      <summary className="cursor-pointer text-gray-400 hover:text-gray-300">Show all clean lists ({clean.length})</summary>
-                                      <div className="mt-1.5 space-y-1.5">
-                                        {groups.map((g: string) => (
-                                          <div key={g}>
-                                            <p className="text-[10px] uppercase tracking-wide text-gray-500">{g}</p>
-                                            <div className="flex flex-wrap gap-1">
-                                              {clean.filter((d: any) => d.group === g).map((d: any) => (
-                                                <span key={d.zone} className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 text-[11px]">{d.name}</span>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </details>
-                                  </div>
-                                );
-                              })()
-                            }
-                          </div>
-                          {/* VirusTotal Classification */}
-                          {apiData.reputation?.virusTotal && apiData.reputation.virusTotal.analyzed && (
-                            <div className="mt-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
-                              <h5 className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-2">
-                                <Shield className="w-3.5 h-3.5 text-orange-400" /> VirusTotal Classification
-                              </h5>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                  <div className="text-xs text-gray-500 mb-1">Verdict</div>
-                                  <div className="font-bold text-lg flex items-center gap-2">
-                                    <span className={`px-2 py-0.5 rounded text-xs ${
-                                      apiData.reputation.virusTotal.verdict === 'MALICIOUS' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
-                                      apiData.reputation.virusTotal.verdict === 'SUSPICIOUS' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
-                                      apiData.reputation.virusTotal.verdict === 'CLEAN' ? 'bg-green-500/20 text-green-400 border border-green-500/40' :
-                                      'bg-gray-700 text-gray-300 border border-gray-600'
-                                    }`}>
-                                      {apiData.reputation.virusTotal.verdict}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                  <div className="text-xs text-gray-500 mb-1">Detection</div>
-                                  <div className="font-bold text-lg">
-                                    {apiData.reputation.virusTotal.lastAnalysisStats?.malicious || 0} / {apiData.reputation.virusTotal.totalEngines || 0} engines
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                  <div className="text-xs text-gray-500 mb-1">Reputation Score</div>
-                                  <div className="font-bold text-lg">{apiData.reputation.virusTotal.reputation || 0}</div>
-                                </div>
-                                <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                  <div className="text-xs text-gray-500 mb-1">Last Analysis</div>
-                                  <div className="font-bold text-lg">
-                                    {apiData.reputation.virusTotal.lastAnalysisDate ? new Date(apiData.reputation.virusTotal.lastAnalysisDate).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A'}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="mt-2">
-                                <a href={apiData.reputation.virusTotal.url} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
-                                  <ExternalLink className="w-3 h-3" />
-                                  View on VirusTotal
-                                </a>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                          </div>
-                        )}
-                        {/* VirusTotal Classification */}
-                        {apiData.reputation?.virusTotal && apiData.reputation.virusTotal.analyzed && (
-                          <div className="mt-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
-                            <h5 className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-2">
-                              <Shield className="w-3.5 h-3.5 text-orange-400" /> VirusTotal Classification
-                            </h5>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Verdict</div>
-                                <div className="font-bold text-lg flex items-center gap-2">
-                                  <span className={`px-2 py-0.5 rounded text-xs ${
-                                    apiData.reputation.virusTotal.verdict === 'MALICIOUS' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
-                                    apiData.reputation.virusTotal.verdict === 'SUSPICIOUS' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
-                                    apiData.reputation.virusTotal.verdict === 'CLEAN' ? 'bg-green-500/20 text-green-400 border border-green-500/40' :
-                                    'bg-gray-700 text-gray-300 border border-gray-600'
-                                  }`}>
-                                    {apiData.reputation.virusTotal.verdict}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Detection</div>
-                                <div className="font-bold text-lg">
-                                  {apiData.reputation.virusTotal.lastAnalysisStats?.malicious || 0} / {apiData.reputation.virusTotal.totalEngines || 0} engines
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Reputation Score</div>
-                                <div className="font-bold text-lg">{apiData.reputation.virusTotal.reputation || 0}</div>
-                              </div>
-                              <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-500 mb-1">Last Analysis</div>
-                                <div className="font-bold text-lg">
-                                  {apiData.reputation.virusTotal.lastAnalysisDate ? new Date(apiData.reputation.virusTotal.lastAnalysisDate).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A'}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-2">
-                              <a href={apiData.reputation.virusTotal.url} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
-                                <ExternalLink className="w-3 h-3" />
-                                View on VirusTotal
-                              </a>
-                            </div>
-                          </div>
-                        )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-xs text-gray-400 mb-1">DNS Blacklists (DNSBL)</p>
-                            {(function() {
-                                const dnsbl: any[] = apiData.reputation.dnsbl || [];
-                                const listed = dnsbl.filter((d: any) => d.listed);
-                                const blocked = dnsbl.filter((d: any) => d.blocked);
-                                const clean = dnsbl.filter((d: any) => !d.listed && !d.blocked);
-                                const groups: string[] = Array.from(new Set(clean.map((d: any) => d.group))).sort();
-                                return (
-                                  <div className="space-y-2">
-                                    <div className="flex flex-wrap gap-1 text-[11px]">
-                                      <span className={`px-2 py-0.5 rounded border ${listed.length ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{listed.length} listed</span>
-                                      <span className={`px-2 py-0.5 rounded border ${blocked.length ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{blocked.length} blocked</span>
-                                      <span className="px-2 py-0.5 rounded bg-gray-900 text-gray-400 border border-gray-700">{dnsbl.length} lists checked</span>
-                                    </div>
-                                    {listed.length === 0 && blocked.length === 0 && (
-                                      <p className="text-xs text-green-400">No blacklist hits across {dnsbl.length} DNSBL zones.</p>
-                                    )}
-                                    {(listed.length > 0 || blocked.length > 0) && (
-                                      <ul className="space-y-1">
-                                        {[...listed, ...blocked].map((d: any) => (
-                                          <li key={d.zone} className={`flex flex-col text-xs px-2 py-1 rounded ${d.listed ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/30'}`}>
-                                            <span className="flex items-center justify-between gap-2">
-                                              <span className="font-medium">{d.name} <span className="text-gray-500 font-normal">[{d.group}]</span></span>
-                                              <span className="font-mono shrink-0">{d.listed ? `LISTED ${d.records.join(',')}` : 'BLOCKED (resolver)'}</span>
-                                            </span>
-                                            {d.listed && d.message && (
-                                              <span className="text-[10px] text-gray-400 break-all mt-0.5">{d.message}</span>
-                                            )}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    )}
-                                    <details className="text-xs">
-                                      <summary className="cursor-pointer text-gray-400 hover:text-gray-300">Show all clean lists ({clean.length})</summary>
-                                      <div className="mt-1.5 space-y-1.5">
-                                        {groups.map((g: string) => (
-                                          <div key={g}>
-                                            <p className="text-[10px] uppercase tracking-wide text-gray-500">{g}</p>
-                                            <div className="flex flex-wrap gap-1">
-                                              {clean.filter((d: any) => d.group === g).map((d: any) => (
-                                                <span key={d.zone} className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 text-[11px]">{d.name}</span>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </details>
-                                  </div>
-                                );
-                              })()
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-400 mb-1">Malicious URL History (URLhaus)</p>
-                            {apiData.reputation.urlhaus?.urlCount > 0 ? (
-                              <>
-                                <p className="text-sm text-red-400 font-medium mb-2">{apiData.reputation.urlhaus.urlCount} malicious URL(s) associated</p>
-                                <ul className="space-y-1 max-h-32 overflow-y-auto">
-                                  {apiData.reputation.urlhaus.urls.slice(0, 10).map((u: any, i: number) => (
-                                    <li key={i} className="text-xs font-mono text-red-300 bg-gray-900 rounded px-2 py-1 break-all">
-                                      {u.url} <span className="text-gray-500">[{u.threat} · {u.dateAdded}]</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </>
-                            ) : (
-                              <p className="text-xs text-green-400">No malicious URLs found on URLhaus</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Certificates / pivoting */}
-                    {apiData.pivot?.certificates?.length > 0 && (
-                      <div className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-                        <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <Lock className="w-4 h-4 text-blue-400" /> SSL/TLS Certificates & Linked Domains (crt.sh)
-                        </h4>
-                        <ul className="space-y-1 max-h-48 overflow-y-auto">
-                          {apiData.pivot.certificates.slice(0, 25).map((c: any, i: number) => (
-                            <li key={i} className="text-xs px-2 py-1 bg-gray-900 rounded">
-                              <span className="font-mono text-blue-300">{c.nameValue}</span>
-                              {c.issuerName && <span className="text-gray-500"> · {c.issuerName}</span>}
-                              {c.notBefore && <span className="text-gray-600"> · valid from {c.notBefore.slice(0, 10)}</span>}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Active scan */}
-                    {apiData.scan?.ports?.length > 0 && (
-                      <div id="ip-scan" className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 scroll-mt-4">
-                        <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <Terminal className="w-4 h-4 text-purple-400" /> Active Scan — Exposed Services
-                        </h4>
-                        <p className="text-xs text-gray-400 mb-2">Estimated OS: <span className="text-purple-300 font-medium">{apiData.scan.os}</span></p>
-                        {(function() {
-                          const ports = apiData.scan.ports || [];
-                          const open = ports.filter((p: any) => p.state === 'open');
-                          const closed = ports.filter((p: any) => p.state === 'closed');
-                          const filtered = ports.filter((p: any) => p.state === 'filtered');
-                          return (
-                            <div className="space-y-3">
-                              <div className="flex flex-wrap gap-1 text-[11px]">
-                                <span className="px-2 py-0.5 rounded bg-gray-900 text-gray-400 border border-gray-700">Scanned {ports.length} ports (yougetsignal-style)</span>
-                                <span className={`px-2 py-0.5 rounded border ${open.length ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{open.length} open</span>
-                                <span className={`px-2 py-0.5 rounded border ${closed.length ? 'bg-green-500/10 text-green-400 border-green-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{closed.length} closed</span>
-                                <span className={`px-2 py-0.5 rounded border ${filtered.length ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{filtered.length} filtered/timeout</span>
-                              </div>
-                              {open.length === 0 ? (
-                                <p className="text-xs text-green-400">No open ports detected on the 20-port probe list. Filtered/closed ports are omitted below.</p>
-                              ) : (
-                                <>
-                                  <div className="flex flex-wrap gap-1">
-                                    {open.map((p: any) => (
-                                      <span key={p.port} className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 text-xs font-mono">{p.port} {p.service}</span>
-                                    ))}
-                                  </div>
-                                  <div className="space-y-2">
-                                    {open.map((p: any) => {
-                                      const profile = VULNERABLE_SERVICES[Number(p.port)];
-                                      return profile ? (
-                                        <div key={p.port} className="p-3 rounded-lg border border-red-500/30 bg-red-500/10">
-                                          <div className="flex flex-wrap items-center gap-2 text-sm">
-                                            <span className="font-mono font-bold text-red-300">port {p.port}</span>
-                                            <span className="text-gray-300 font-medium">{p.service}</span>
-                                            <span className={`text-[10px] px-2 py-0.5 rounded border font-medium uppercase tracking-wide ${VULN_RISK_COLORS[profile.risk] || VULN_RISK_COLORS.MEDIUM}`}>Risk {profile.risk}</span>
-                                          </div>
-                                          <p className="text-xs text-red-200 font-medium mt-1">{profile.title}</p>
-                                          <p className="text-xs text-gray-300 mt-1">{profile.desc}</p>
-                                          {profile.cves.length > 0 && (
-                                            <div className="flex flex-wrap gap-1 mt-2">
-                                              {profile.cves.map((cve) => (
-                                                <span key={cve} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-900 text-purple-300 border border-purple-500/30 font-mono">{cve}</span>
-                                              ))}
-                                            </div>
-                                          )}
-                                          <div className="mt-2 text-xs">
-                                            <p className="text-gray-400 font-medium flex items-center gap-1"><Target className="w-3 h-3" /> Attack vector</p>
-                                            <p className="text-gray-300 mt-0.5">{profile.vector}</p>
-                                          </div>
-                                          <div className="mt-2 text-xs">
-                                            <p className="text-gray-400 font-medium flex items-center gap-1"><Terminal className="w-3 h-3" /> Verification / exploitation steps</p>
-                                            <ol className="list-decimal list-inside mt-0.5 space-y-0.5 text-gray-300">
-                                              {profile.steps.map((s, i) => (
-                                                <li key={i}>{s}</li>
-                                              ))}
-                                            </ol>
-                                          </div>
-                                          {p.banner && <p className="text-[10px] text-gray-500 font-mono mt-2 break-all">Banner: {p.banner}</p>}
-                                        </div>
-                                      ) : (
-                                        <div key={p.port} className="flex items-center gap-2 text-xs px-2 py-1 rounded bg-orange-500/10 text-orange-300 border border-orange-500/30">
-                                          <span className="font-mono w-14 font-bold">{p.port}</span>
-                                          <span className="w-20">{p.service}</span>
-                                          <span className="font-medium text-orange-300">OPEN — no known vuln profile in this build</span>
-                                          {p.banner && <span className="text-gray-400 truncate flex-1" title={p.banner}>{p.banner}</span>}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })()}
+//                     {(function() {
+//                       const top = [...ipQueue].sort((a, b) => b.riskScore - a.riskScore)[0];
+//                       const sevClass = (s: string) => s === 'CRITICAL' ? 'text-red-300 bg-red-500/20 border-red-500/40' : s === 'HIGH' ? 'text-orange-300 bg-orange-500/15 border-orange-500/40' : s === 'MEDIUM' ? 'text-yellow-300 bg-yellow-500/10 border-yellow-500/40' : 'text-green-300 bg-green-500/10 border-green-500/40';
+//                       return (
+//                         <>
+//                           {top && (
+//                             <div className="p-3 rounded-lg border-2 border-red-500/40 bg-red-500/10">
+//                               <div className="flex flex-wrap items-center gap-2 text-xs">
+//                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold uppercase tracking-wide">Top Risk</span>
+//                                 <span className="font-mono font-bold text-red-200">{top.ip}</span>
+//                                 <span className={`px-2 py-0.5 rounded border text-[10px] font-medium uppercase ${sevClass(top.severity)}`}>{top.severity}</span>
+//                                 <span className="text-gray-400">{top.flag} {top.country}</span>
+//                                 <span className="text-gray-500">Risk {top.riskScore}/100</span>
+//                               </div>
+//                               <div className="mt-1 h-1.5 bg-gray-700 rounded overflow-hidden">
+//                                 <div className="h-1.5 rounded" style={{ width: `${top.riskScore}%`, backgroundColor: abuseScoreColor(top.riskScore) }} />
+//                               </div>
+//                               <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
+//                                 <span><span className="text-gray-300 font-medium">{top.abuseScore}%</span> abuse</span>
+//                                 <span>{top.blacklistCount} blacklisted{top.blockedCount ? ` · ${top.blockedCount} blocked` : ''}</span>
+//                                 <span>{top.torExit ? 'Tor exit' : 'No Tor'}</span>
+//                                 <span>URLhaus: {top.urlhausCount}</span>
+//                                 {top.malware && <span className="text-red-300">{top.malware}</span>}
+//                               </div>
+//                             </div>
+//                           )}
+//                           {ipQueue.map((e) => (
+//                             <div key={e.id} className={`px-2.5 py-2 rounded border ${selectedQueue.has(e.id) ? 'bg-cyan-500/10 border-cyan-500/40' : 'bg-gray-800/50 border-gray-700'}`}>
+//                               <div className="flex flex-wrap items-center gap-2 text-xs">
+//                                 <input type="checkbox" checked={selectedQueue.has(e.id)} onChange={() => toggleQueueSelect(e.id)} className="accent-cyan-500" />
+//                                 <span className="font-mono font-bold">{e.ip}</span>
+//                                 <span className={`px-1.5 py-0.5 rounded border text-[10px] font-medium uppercase ${sevClass(e.severity)}`}>{e.severity}</span>
+//                                 <span className="text-gray-400">{e.flag} {e.country}</span>
+//                                 <span className="text-gray-500 ml-auto shrink-0">{timeAgo(e.addedAt)}</span>
+//                               </div>
+//                               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-400 pl-6">
+//                                 <span><span className="text-gray-200 font-medium">{e.abuseScore}%</span> abuse</span>
+//                                 <span>{e.blacklistCount} listed</span>
+//                                 <span>{e.category}</span>
+//                                 <span>URLhaus: {e.urlhausCount}</span>
+//                                 {e.openPorts.length > 0 && <span className="font-mono text-red-300">Ports: {e.openPorts.join(', ')}</span>}
+//                                 {e.malware && <span className="text-red-300">{e.malware}</span>}
+//                               </div>
+//                             </div>
+//                           ))}
+//                         </>
+//                       );
+//                     })()}
+//                   </div>
+//                 )}
+//               </div>
+// 
+//               {/* Results Display */}
+//               {apiData && apiData.data && (
+//                 <div className="space-y-4">
+//                   <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl p-5">
+//                     <h3 className="font-semibold mb-3 flex items-center gap-2">
+//                       <CheckCircle className="w-5 h-5 text-green-400" /> Live Results
+//                       {apiData.fetchedLive && <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded">LIVE DATA</span>}
+//                     </h3>
+//                     
+//                     {/* Status cards: threat level / blacklists / network category */}
+//                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+//                       <div className={`px-3 py-2 rounded-lg border flex items-center gap-2 ${threatBadgeClass(apiData)}`}>
+//                         <AlertTriangle className="w-4 h-4 shrink-0" />
+//                         <div className="min-w-0">
+//                           <div className="text-[10px] uppercase tracking-wide opacity-80">Threat Level</div>
+//                           <div className="font-bold truncate">{apiData.analysis?.threatLevel || 'NORMAL'}</div>
+//                         </div>
+//                       </div>
+//                       <button
+//                         onClick={() => setShowDnsblDetail((v) => !v)}
+//                         className={`px-3 py-2 rounded-lg border flex items-center gap-2 text-left ${(apiData.reputation?.dnsbl?.filter((d: any) => d.listed)?.length || 0) > 0 ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-green-500/10 text-green-300 border-green-500/40'}`}
+//                       >
+//                         <Ban className="w-4 h-4 shrink-0" />
+//                         <div className="min-w-0 flex-1">
+//                           <div className="text-[10px] uppercase tracking-wide opacity-80">Blacklists</div>
+//                           <div className="font-bold truncate">
+//                             {(apiData.reputation?.dnsbl?.filter((d: any) => d.listed)?.length || 0) > 0
+//                               ? `Blacklisted (${apiData.reputation.dnsbl.filter((d: any) => d.listed).length} lists)`
+//                               : 'Not blacklisted'}
+//                           </div>
+//                         </div>
+//                         <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${showDnsblDetail ? 'rotate-180' : ''}`} />
+//                       </button>
+//                       <div className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-800/50 flex items-center gap-2">
+//                         <Wifi className="w-4 h-4 shrink-0 text-blue-400" />
+//                         <div className="min-w-0">
+//                           <div className="text-[10px] uppercase tracking-wide text-gray-500">Network</div>
+//                           <div className="font-bold text-gray-200 truncate">{networkCategory(apiData)}</div>
+//                         </div>
+//                       </div>
+//                     </div>
+// 
+//                     {/* DNSBL detail (toggled from the Blacklists card) */}
+//                     {showDnsblDetail && apiData.reputation && (
+//                       <div className="mb-4 p-3 bg-gray-900/60 rounded-lg border border-gray-700">
+//                         <div className="flex items-center justify-between mb-2">
+//                           <p className="text-xs text-gray-400 font-medium">DNSBL detail — {apiData.reputation.dnsbl.length} zones checked</p>
+//                           <button onClick={() => setShowDnsblDetail(false)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
+//                         </div>
+//                         {(function() {
+//                           const listed = (apiData.reputation.dnsbl || []).filter((d: any) => d.listed);
+//                           const blocked = (apiData.reputation.dnsbl || []).filter((d: any) => d.blocked);
+//                           const flagged = [...listed, ...blocked];
+//                           return flagged.length === 0 ? (
+//                             <p className="text-xs text-green-400">No blacklist hits across {apiData.reputation.dnsbl.length} DNSBL zones.</p>
+//                           ) : (
+//                             <ul className="space-y-1">
+//                               {flagged.map((d: any) => (
+//                                 <li key={d.zone} className={`flex flex-col text-xs px-2 py-1 rounded ${d.listed ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/30'}`}>
+//                                   <span className="flex items-center justify-between gap-2">
+//                                     <span className="font-medium">{d.name} <span className="text-gray-500 font-normal">[{d.group}]</span></span>
+//                                     <span className="font-mono shrink-0">{d.listed ? `LISTED ${d.records.join(',')}` : 'BLOCKED (resolver)'}</span>
+//                                   </span>
+//                                   {d.listed && d.message && (
+//                                     <span className="text-[10px] text-gray-400 break-all mt-0.5">{d.message}</span>
+//                                   )}
+//                                 </li>
+//                               ))}
+//                             </ul>
+//                           );
+//                         })()}
+//                       </div>
+//                     )}
+// 
+//                     <div className="grid grid-cols-2 gap-3">
+//                       {(apiData.data.query || apiData.data.ip) && (
+//                         <>
+//                           <InfoCard label="IP Address" value={apiData.data.query || apiData.data.ip} icon={<Globe className="w-4 h-4" />} />
+//                           <InfoCard label="Hostname (reverse DNS)" value={apiData.data.reverse || 'N/A'} icon={<Network className="w-4 h-4" />} />
+//                           <InfoCard label="Country" value={`${apiData.data.country || 'N/A'} (${apiData.data.countryCode || ''})`} icon={<MapPin className="w-4 h-4" />} />
+//                           <InfoCard label="Region" value={apiData.data.regionName || 'N/A'} icon={<MapPin className="w-4 h-4" />} />
+//                           <InfoCard label="City" value={apiData.data.city || 'N/A'} icon={<Server className="w-4 h-4" />} />
+//                           <InfoCard label="District" value={apiData.data.district || 'N/A'} icon={<MapPin className="w-4 h-4" />} />
+//                           <InfoCard label="Postal Code" value={apiData.data.zip || 'N/A'} icon={<FileCode className="w-4 h-4" />} />
+//                           <InfoCard label="Continent" value={`${apiData.data.continent || 'N/A'} (${apiData.data.continentCode || ''})`} icon={<Globe2 className="w-4 h-4" />} />
+//                           <InfoCard label="ISP" value={apiData.data.isp || 'N/A'} icon={<Wifi className="w-4 h-4" />} />
+//                           <InfoCard label="Organization" value={apiData.data.org || 'N/A'} icon={<Database className="w-4 h-4" />} />
+//                           <InfoCard label="ASN" value={`${apiData.data.as || 'N/A'}${apiData.data.asname ? ` — ${apiData.data.asname}` : ''}`} icon={<Radar className="w-4 h-4" />} />
+//                           <InfoCard label="Latitude" value={apiData.data.lat || 'N/A'} icon={<Target className="w-4 h-4" />} />
+//                           <InfoCard label="Longitude" value={apiData.data.lon || 'N/A'} icon={<Target className="w-4 h-4" />} />
+//                           <InfoCard label="Timezone" value={apiData.data.timezone || 'N/A'} icon={<Clock className="w-4 h-4" />} />
+//                           <InfoCard label="Local Time" value={apiData.data.timezone ? new Intl.DateTimeFormat('en-GB', { timeZone: apiData.data.timezone, dateStyle: 'medium', timeStyle: 'medium' }).format(new Date()) : 'N/A'} icon={<Clock className="w-4 h-4" />} />
+//                           <InfoCard label="Currency" value={apiData.data.currency || 'N/A'} icon={<Database className="w-4 h-4" />} />
+//                         </>
+//                       )}
+//                     </div>
+// 
+//                     {/* Map */}
+//                     {apiData.data.lat && apiData.data.lon && (
+//                       <div className="mt-4 rounded-lg overflow-hidden border border-gray-700">
+//                         <iframe
+//                           title="IP Location Map"
+//                           src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(apiData.data.lon) - 0.1}%2C${Number(apiData.data.lat) - 0.1}%2C${Number(apiData.data.lon) + 0.1}%2C${Number(apiData.data.lat) + 0.1}&layer=mapnik&marker=${apiData.data.lat}%2C${apiData.data.lon}`}
+//                           className="w-full h-64"
+//                           loading="lazy"
+//                         />
+//                       </div>
+//                     )}
+// 
+//                     {apiData.data.location && (
+//                       <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
+//                         <h4 className="text-sm font-medium mb-2">Location Details</h4>
+//                         <p className="text-sm text-gray-300">{apiData.data.location}</p>
+//                       </div>
+//                     )}
+// 
+//                     {/* RDAP / WHOIS ownership */}
+//                     {apiData.data.rdap && (
+//                       <div className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+//                         <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+//                           <Shield className="w-4 h-4 text-green-400" /> Network Ownership (RDAP)
+//                         </h4>
+//                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+//                           {apiData.data.rdap.name && <div><span className="text-gray-400">Network:</span> <span className="font-mono">{apiData.data.rdap.name}</span></div>}
+//                           {apiData.data.rdap.startAddress && apiData.data.rdap.endAddress && <div><span className="text-gray-400">Range:</span> <span className="font-mono">{apiData.data.rdap.startAddress} — {apiData.data.rdap.endAddress}</span></div>}
+//                           {apiData.data.rdap.entities?.length > 0 && <div><span className="text-gray-400">Registrant:</span> <span>{apiData.data.rdap.entities.join(', ')}</span></div>}
+//                           {apiData.data.rdap.country && <div><span className="text-gray-400">Registry Country:</span> <span>{apiData.data.rdap.country}</span></div>}
+//                           {apiData.data.rdap.status?.length > 0 && <div><span className="text-gray-400">Status:</span> <span>{apiData.data.rdap.status.join(', ')}</span></div>}
+//                           {apiData.data.rdap.abuseContacts?.length > 0 && <div><span className="text-gray-400">Abuse Contact:</span> <a href={`mailto:${apiData.data.rdap.abuseContacts[0]}`} className="text-red-400 underline break-all">{apiData.data.rdap.abuseContacts.join(', ')}</a></div>}
+//                         </div>
+//                       </div>
+//                     )}
+// 
+//                     {/* Reputation & Threat Intelligence */}
+//                     {apiData.reputation && (
+//                       <div id="ip-reputation" className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 scroll-mt-4">
+//                         <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+//                           <ShieldAlert className="w-4 h-4 text-red-400" /> Reputation & Threat Intelligence
+//                         </h4>
+//                         {/* VirusTotal Classification */}
+//                         {apiData.reputation?.virusTotal && apiData.reputation.virusTotal.analyzed && (
+//                           <div className="mt-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
+//                             <h5 className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-2">
+//                               <Shield className="w-3.5 h-3.5 text-orange-400" /> VirusTotal Classification
+//                             </h5>
+//                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+//                               <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                 <div className="text-xs text-gray-500 mb-1">Verdict</div>
+//                                 <div className="font-bold text-lg flex items-center gap-2">
+//                                   <span className={`px-2 py-0.5 rounded text-xs ${
+//                                     apiData.reputation.virusTotal.verdict === 'MALICIOUS' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
+//                                     apiData.reputation.virusTotal.verdict === 'SUSPICIOUS' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
+//                                     apiData.reputation.virusTotal.verdict === 'CLEAN' ? 'bg-green-500/20 text-green-400 border border-green-500/40' :
+//                                     'bg-gray-700 text-gray-300 border border-gray-600'
+//                                   }`}>
+//                                     {apiData.reputation.virusTotal.verdict}
+//                                   </span>
+//                                 </div>
+//                               </div>
+//                               <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                 <div className="text-xs text-gray-500 mb-1">Detection</div>
+//                                 <div className="font-bold text-lg">
+//                                   {apiData.reputation.virusTotal.lastAnalysisStats?.malicious || 0} / {apiData.reputation.virusTotal.totalEngines || 0} engines
+//                                 </div>
+//                               </div>
+//                             </div>
+//                             <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+//                               <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                 <div className="text-xs text-gray-500 mb-1">Reputation Score</div>
+//                                 <div className="font-bold text-lg">{apiData.reputation.virusTotal.reputation || 0}</div>
+//                               </div>
+//                               <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                 <div className="text-xs text-gray-500 mb-1">Last Analysis</div>
+//                                 <div className="font-bold text-lg">
+//                                   {apiData.reputation.virusTotal.lastAnalysisDate ? new Date(apiData.reputation.virusTotal.lastAnalysisDate).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A'}
+//                                 </div>
+//                               </div>
+//                             </div>
+//                             <div className="mt-2">
+//                               <a href={apiData.reputation.virusTotal.url} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
+//                                 <ExternalLink className="w-3 h-3" />
+//                                 View on VirusTotal
+//                               </a>
+//                             </div>
+//                           </div>
+//                         )}
+//                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+//                           <div>
+//                             <p className="text-xs text-gray-400 mb-1">DNS Blacklists (DNSBL)</p>
+//                             {(function() {
+//                                 const dnsbl: any[] = apiData.reputation.dnsbl || [];
+//                                 const listed = dnsbl.filter((d: any) => d.listed);
+//                                 const blocked = dnsbl.filter((d: any) => d.blocked);
+//                                 const clean = dnsbl.filter((d: any) => !d.listed && !d.blocked);
+//                                 const groups: string[] = Array.from(new Set(clean.map((d: any) => d.group))).sort();
+//                                 return (
+//                                   <div className="space-y-2">
+//                                     <div className="flex flex-wrap gap-1 text-[11px]">
+//                                       <span className={`px-2 py-0.5 rounded border ${listed.length ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{listed.length} listed</span>
+//                                       <span className={`px-2 py-0.5 rounded border ${blocked.length ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{blocked.length} blocked</span>
+//                                       <span className="px-2 py-0.5 rounded bg-gray-900 text-gray-400 border border-gray-700">{dnsbl.length} lists checked</span>
+//                                     </div>
+//                                     {listed.length === 0 && blocked.length === 0 && (
+//                                       <p className="text-xs text-green-400">No blacklist hits across {dnsbl.length} DNSBL zones.</p>
+//                                     )}
+//                                     {(listed.length > 0 || blocked.length > 0) && (
+//                                       <ul className="space-y-1">
+//                                         {[...listed, ...blocked].map((d: any) => (
+//                                           <li key={d.zone} className={`flex flex-col text-xs px-2 py-1 rounded ${d.listed ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/30'}`}>
+//                                             <span className="flex items-center justify-between gap-2">
+//                                               <span className="font-medium">{d.name} <span className="text-gray-500 font-normal">[{d.group}]</span></span>
+//                                               <span className="font-mono shrink-0">{d.listed ? `LISTED ${d.records.join(',')}` : 'BLOCKED (resolver)'}</span>
+//                                             </span>
+//                                             {d.listed && d.message && (
+//                                               <span className="text-[10px] text-gray-400 break-all mt-0.5">{d.message}</span>
+//                                             )}
+//                                           </li>
+//                                         ))}
+//                                       </ul>
+//                                     )}
+//                                     <details className="text-xs">
+//                                       <summary className="cursor-pointer text-gray-400 hover:text-gray-300">Show all clean lists ({clean.length})</summary>
+//                                       <div className="mt-1.5 space-y-1.5">
+//                                         {groups.map((g: string) => (
+//                                           <div key={g}>
+//                                             <p className="text-[10px] uppercase tracking-wide text-gray-500">{g}</p>
+//                                             <div className="flex flex-wrap gap-1">
+//                                               {clean.filter((d: any) => d.group === g).map((d: any) => (
+//                                                 <span key={d.zone} className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 text-[11px]">{d.name}</span>
+//                                               ))}
+//                                             </div>
+//                                           </div>
+//                                         ))}
+//                                       </div>
+//                                     </details>
+//                                   </div>
+//                                 );
+//                               })()
+//                             }
+//                           </div>
+//                           {/* VirusTotal Classification */}
+//                           {apiData.reputation?.virusTotal && apiData.reputation.virusTotal.analyzed && (
+//                             <div className="mt-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
+//                               <h5 className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-2">
+//                                 <Shield className="w-3.5 h-3.5 text-orange-400" /> VirusTotal Classification
+//                               </h5>
+//                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+//                                 <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                   <div className="text-xs text-gray-500 mb-1">Verdict</div>
+//                                   <div className="font-bold text-lg flex items-center gap-2">
+//                                     <span className={`px-2 py-0.5 rounded text-xs ${
+//                                       apiData.reputation.virusTotal.verdict === 'MALICIOUS' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
+//                                       apiData.reputation.virusTotal.verdict === 'SUSPICIOUS' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
+//                                       apiData.reputation.virusTotal.verdict === 'CLEAN' ? 'bg-green-500/20 text-green-400 border border-green-500/40' :
+//                                       'bg-gray-700 text-gray-300 border border-gray-600'
+//                                     }`}>
+//                                       {apiData.reputation.virusTotal.verdict}
+//                                     </span>
+//                                   </div>
+//                                 </div>
+//                                 <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                   <div className="text-xs text-gray-500 mb-1">Detection</div>
+//                                   <div className="font-bold text-lg">
+//                                     {apiData.reputation.virusTotal.lastAnalysisStats?.malicious || 0} / {apiData.reputation.virusTotal.totalEngines || 0} engines
+//                                   </div>
+//                                 </div>
+//                               </div>
+//                               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+//                                 <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                   <div className="text-xs text-gray-500 mb-1">Reputation Score</div>
+//                                   <div className="font-bold text-lg">{apiData.reputation.virusTotal.reputation || 0}</div>
+//                                 </div>
+//                                 <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                   <div className="text-xs text-gray-500 mb-1">Last Analysis</div>
+//                                   <div className="font-bold text-lg">
+//                                     {apiData.reputation.virusTotal.lastAnalysisDate ? new Date(apiData.reputation.virusTotal.lastAnalysisDate).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A'}
+//                                   </div>
+//                                 </div>
+//                               </div>
+//                               <div className="mt-2">
+//                                 <a href={apiData.reputation.virusTotal.url} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
+//                                   <ExternalLink className="w-3 h-3" />
+//                                   View on VirusTotal
+//                                 </a>
+//                               </div>
+//                             </div>
+//                           )}
+//                         </div>
+//                           </div>
+//                         )}
+//                         {/* VirusTotal Classification */}
+//                         {apiData.reputation?.virusTotal && apiData.reputation.virusTotal.analyzed && (
+//                           <div className="mt-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
+//                             <h5 className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-2">
+//                               <Shield className="w-3.5 h-3.5 text-orange-400" /> VirusTotal Classification
+//                             </h5>
+//                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+//                               <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                 <div className="text-xs text-gray-500 mb-1">Verdict</div>
+//                                 <div className="font-bold text-lg flex items-center gap-2">
+//                                   <span className={`px-2 py-0.5 rounded text-xs ${
+//                                     apiData.reputation.virusTotal.verdict === 'MALICIOUS' ? 'bg-red-500/20 text-red-400 border border-red-500/40' :
+//                                     apiData.reputation.virusTotal.verdict === 'SUSPICIOUS' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' :
+//                                     apiData.reputation.virusTotal.verdict === 'CLEAN' ? 'bg-green-500/20 text-green-400 border border-green-500/40' :
+//                                     'bg-gray-700 text-gray-300 border border-gray-600'
+//                                   }`}>
+//                                     {apiData.reputation.virusTotal.verdict}
+//                                   </span>
+//                                 </div>
+//                               </div>
+//                               <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                 <div className="text-xs text-gray-500 mb-1">Detection</div>
+//                                 <div className="font-bold text-lg">
+//                                   {apiData.reputation.virusTotal.lastAnalysisStats?.malicious || 0} / {apiData.reputation.virusTotal.totalEngines || 0} engines
+//                                 </div>
+//                               </div>
+//                             </div>
+//                             <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+//                               <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                 <div className="text-xs text-gray-500 mb-1">Reputation Score</div>
+//                                 <div className="font-bold text-lg">{apiData.reputation.virusTotal.reputation || 0}</div>
+//                               </div>
+//                               <div className="p-2 bg-gray-900/50 rounded border border-gray-700">
+//                                 <div className="text-xs text-gray-500 mb-1">Last Analysis</div>
+//                                 <div className="font-bold text-lg">
+//                                   {apiData.reputation.virusTotal.lastAnalysisDate ? new Date(apiData.reputation.virusTotal.lastAnalysisDate).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A'}
+//                                 </div>
+//                               </div>
+//                             </div>
+//                             <div className="mt-2">
+//                               <a href={apiData.reputation.virusTotal.url} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
+//                                 <ExternalLink className="w-3 h-3" />
+//                                 View on VirusTotal
+//                               </a>
+//                             </div>
+//                           </div>
+//                         )}
+//                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+//                           <div>
+//                             <p className="text-xs text-gray-400 mb-1">DNS Blacklists (DNSBL)</p>
+//                             {(function() {
+//                                 const dnsbl: any[] = apiData.reputation.dnsbl || [];
+//                                 const listed = dnsbl.filter((d: any) => d.listed);
+//                                 const blocked = dnsbl.filter((d: any) => d.blocked);
+//                                 const clean = dnsbl.filter((d: any) => !d.listed && !d.blocked);
+//                                 const groups: string[] = Array.from(new Set(clean.map((d: any) => d.group))).sort();
+//                                 return (
+//                                   <div className="space-y-2">
+//                                     <div className="flex flex-wrap gap-1 text-[11px]">
+//                                       <span className={`px-2 py-0.5 rounded border ${listed.length ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{listed.length} listed</span>
+//                                       <span className={`px-2 py-0.5 rounded border ${blocked.length ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{blocked.length} blocked</span>
+//                                       <span className="px-2 py-0.5 rounded bg-gray-900 text-gray-400 border border-gray-700">{dnsbl.length} lists checked</span>
+//                                     </div>
+//                                     {listed.length === 0 && blocked.length === 0 && (
+//                                       <p className="text-xs text-green-400">No blacklist hits across {dnsbl.length} DNSBL zones.</p>
+//                                     )}
+//                                     {(listed.length > 0 || blocked.length > 0) && (
+//                                       <ul className="space-y-1">
+//                                         {[...listed, ...blocked].map((d: any) => (
+//                                           <li key={d.zone} className={`flex flex-col text-xs px-2 py-1 rounded ${d.listed ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/30'}`}>
+//                                             <span className="flex items-center justify-between gap-2">
+//                                               <span className="font-medium">{d.name} <span className="text-gray-500 font-normal">[{d.group}]</span></span>
+//                                               <span className="font-mono shrink-0">{d.listed ? `LISTED ${d.records.join(',')}` : 'BLOCKED (resolver)'}</span>
+//                                             </span>
+//                                             {d.listed && d.message && (
+//                                               <span className="text-[10px] text-gray-400 break-all mt-0.5">{d.message}</span>
+//                                             )}
+//                                           </li>
+//                                         ))}
+//                                       </ul>
+//                                     )}
+//                                     <details className="text-xs">
+//                                       <summary className="cursor-pointer text-gray-400 hover:text-gray-300">Show all clean lists ({clean.length})</summary>
+//                                       <div className="mt-1.5 space-y-1.5">
+//                                         {groups.map((g: string) => (
+//                                           <div key={g}>
+//                                             <p className="text-[10px] uppercase tracking-wide text-gray-500">{g}</p>
+//                                             <div className="flex flex-wrap gap-1">
+//                                               {clean.filter((d: any) => d.group === g).map((d: any) => (
+//                                                 <span key={d.zone} className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 text-[11px]">{d.name}</span>
+//                                               ))}
+//                                             </div>
+//                                           </div>
+//                                         ))}
+//                                       </div>
+//                                     </details>
+//                                   </div>
+//                                 );
+//                               })()
+//                           </div>
+//                           <div>
+//                             <p className="text-xs text-gray-400 mb-1">Malicious URL History (URLhaus)</p>
+//                             {apiData.reputation.urlhaus?.urlCount > 0 ? (
+//                               <>
+//                                 <p className="text-sm text-red-400 font-medium mb-2">{apiData.reputation.urlhaus.urlCount} malicious URL(s) associated</p>
+//                                 <ul className="space-y-1 max-h-32 overflow-y-auto">
+//                                   {apiData.reputation.urlhaus.urls.slice(0, 10).map((u: any, i: number) => (
+//                                     <li key={i} className="text-xs font-mono text-red-300 bg-gray-900 rounded px-2 py-1 break-all">
+//                                       {u.url} <span className="text-gray-500">[{u.threat} · {u.dateAdded}]</span>
+//                                     </li>
+//                                   ))}
+//                                 </ul>
+//                               </>
+//                             ) : (
+//                               <p className="text-xs text-green-400">No malicious URLs found on URLhaus</p>
+//                             )}
+//                           </div>
+//                         </div>
+//                       </div>
+//                     )}
+// 
+//                     {/* Certificates / pivoting */}
+//                     {apiData.pivot?.certificates?.length > 0 && (
+//                       <div className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+//                         <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+//                           <Lock className="w-4 h-4 text-blue-400" /> SSL/TLS Certificates & Linked Domains (crt.sh)
+//                         </h4>
+//                         <ul className="space-y-1 max-h-48 overflow-y-auto">
+//                           {apiData.pivot.certificates.slice(0, 25).map((c: any, i: number) => (
+//                             <li key={i} className="text-xs px-2 py-1 bg-gray-900 rounded">
+//                               <span className="font-mono text-blue-300">{c.nameValue}</span>
+//                               {c.issuerName && <span className="text-gray-500"> · {c.issuerName}</span>}
+//                               {c.notBefore && <span className="text-gray-600"> · valid from {c.notBefore.slice(0, 10)}</span>}
+//                             </li>
+//                           ))}
+//                         </ul>
+//                       </div>
+//                     )}
+// 
+//                     {/* Active scan */}
+//                     {apiData.scan?.ports?.length > 0 && (
+//                       <div id="ip-scan" className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 scroll-mt-4">
+//                         <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+//                           <Terminal className="w-4 h-4 text-purple-400" /> Active Scan — Exposed Services
+//                         </h4>
+//                         <p className="text-xs text-gray-400 mb-2">Estimated OS: <span className="text-purple-300 font-medium">{apiData.scan.os}</span></p>
+//                         {(function() {
+//                           const ports = apiData.scan.ports || [];
+//                           const open = ports.filter((p: any) => p.state === 'open');
+//                           const closed = ports.filter((p: any) => p.state === 'closed');
+//                           const filtered = ports.filter((p: any) => p.state === 'filtered');
+//                           return (
+//                             <div className="space-y-3">
+//                               <div className="flex flex-wrap gap-1 text-[11px]">
+//                                 <span className="px-2 py-0.5 rounded bg-gray-900 text-gray-400 border border-gray-700">Scanned {ports.length} ports (yougetsignal-style)</span>
+//                                 <span className={`px-2 py-0.5 rounded border ${open.length ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{open.length} open</span>
+//                                 <span className={`px-2 py-0.5 rounded border ${closed.length ? 'bg-green-500/10 text-green-400 border-green-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{closed.length} closed</span>
+//                                 <span className={`px-2 py-0.5 rounded border ${filtered.length ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/40' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>{filtered.length} filtered/timeout</span>
+//                               </div>
+//                               {open.length === 0 ? (
+//                                 <p className="text-xs text-green-400">No open ports detected on the 20-port probe list. Filtered/closed ports are omitted below.</p>
+//                               ) : (
+//                                 <>
+//                                   <div className="flex flex-wrap gap-1">
+//                                     {open.map((p: any) => (
+//                                       <span key={p.port} className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 text-xs font-mono">{p.port} {p.service}</span>
+//                                     ))}
+//                                   </div>
+//                                   <div className="space-y-2">
+//                                     {open.map((p: any) => {
+//                                       const profile = VULNERABLE_SERVICES[Number(p.port)];
+//                                       return profile ? (
+//                                         <div key={p.port} className="p-3 rounded-lg border border-red-500/30 bg-red-500/10">
+//                                           <div className="flex flex-wrap items-center gap-2 text-sm">
+//                                             <span className="font-mono font-bold text-red-300">port {p.port}</span>
+//                                             <span className="text-gray-300 font-medium">{p.service}</span>
+//                                             <span className={`text-[10px] px-2 py-0.5 rounded border font-medium uppercase tracking-wide ${VULN_RISK_COLORS[profile.risk] || VULN_RISK_COLORS.MEDIUM}`}>Risk {profile.risk}</span>
+//                                           </div>
+//                                           <p className="text-xs text-red-200 font-medium mt-1">{profile.title}</p>
+//                                           <p className="text-xs text-gray-300 mt-1">{profile.desc}</p>
+//                                           {profile.cves.length > 0 && (
+//                                             <div className="flex flex-wrap gap-1 mt-2">
+//                                               {profile.cves.map((cve) => (
+//                                                 <span key={cve} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-900 text-purple-300 border border-purple-500/30 font-mono">{cve}</span>
+//                                               ))}
+//                                             </div>
+//                                           )}
+//                                           <div className="mt-2 text-xs">
+//                                             <p className="text-gray-400 font-medium flex items-center gap-1"><Target className="w-3 h-3" /> Attack vector</p>
+//                                             <p className="text-gray-300 mt-0.5">{profile.vector}</p>
+//                                           </div>
+//                                           <div className="mt-2 text-xs">
+//                                             <p className="text-gray-400 font-medium flex items-center gap-1"><Terminal className="w-3 h-3" /> Verification / exploitation steps</p>
+//                                             <ol className="list-decimal list-inside mt-0.5 space-y-0.5 text-gray-300">
+//                                               {profile.steps.map((s, i) => (
+//                                                 <li key={i}>{s}</li>
+//                                               ))}
+//                                             </ol>
+//                                           </div>
+//                                           {p.banner && <p className="text-[10px] text-gray-500 font-mono mt-2 break-all">Banner: {p.banner}</p>}
+//                                         </div>
+//                                       ) : (
+//                                         <div key={p.port} className="flex items-center gap-2 text-xs px-2 py-1 rounded bg-orange-500/10 text-orange-300 border border-orange-500/30">
+//                                           <span className="font-mono w-14 font-bold">{p.port}</span>
+//                                           <span className="w-20">{p.service}</span>
+//                                           <span className="font-medium text-orange-300">OPEN — no known vuln profile in this build</span>
+//                                           {p.banner && <span className="text-gray-400 truncate flex-1" title={p.banner}>{p.banner}</span>}
+//                                         </div>
+//                                       );
+//                                     })}
+//                                   </div>
+//                                 </>
+//                               )}
+//                             </div>
+//                           );
+//                         })()}
                       </div>
                     )}
 
