@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import DomainIntelPanel from '@/components/domain/DomainIntelPanel';
 import UrlSandboxPanel from '@/components/sandbox/UrlSandboxPanel';
 import UrlScannerPanel from '@/components/url/UrlScannerPanel';
-import TakeDownPanel from '@/components/takedown/TakeDownPanel';
+
 import ModuleErrorBoundary from '@/components/ModuleErrorBoundary';
 
 import { analyzeApkBytes } from '@/lib/intel/fakeapp';
@@ -19,7 +19,7 @@ import {
   Play, Pause, Camera, FileSearch, Smartphone, Globe2, Skull, EyeOff,
   FolderOpen, DownloadCloud, UploadCloud, FileCode, LockOpen, ShieldAlert,
   Network, MessageSquare, ShieldUser, Radio, Presentation, Printer,
-  Send, Layers, Image
+  Layers, Image
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -28,7 +28,7 @@ import {
 } from 'recharts';
 
 // ==================== TYPES ====================
-type TabType = 'dashboard' | 'ip' | 'domain' | 'url' | 'hash' | 'cve' | 'ai' | 'darkweb' | 'threats' | 'mobile' | 'forensics' | 'iocs' | 'export' | 'reports' | 'sources' | 'brand' | 'sandbox' | 'dnsdump' | 'social' | 'exec' | 'fakeapp' | 'takedown' | 'edp';
+type TabType = 'dashboard' | 'ip' | 'domain' | 'url' | 'hash' | 'cve' | 'ai' | 'darkweb' | 'threats' | 'mobile' | 'forensics' | 'iocs' | 'export' | 'reports' | 'sources' | 'brand' | 'sandbox' | 'dnsdump' | 'social' | 'exec' | 'fakeapp' | 'edp';
 type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
 type IOCStatus = 'UNKNOWN' | 'BENIGN' | 'SUSPICIOUS' | 'MALICIOUS';
 
@@ -272,7 +272,7 @@ function buildQueueEntry(apiData: any): IpQueueEntry {
 //     sources: 'Intelligence Sources', brand: 'Brand Protection', sandbox: 'URL Sandbox',
 //     dnsdump: 'DNS Dump', social: 'Telegram & Discord', exec: 'Executive OSINT',
 //     'exec-protection': 'Executive Protection',
-//     fakeapp: 'Fake App Scanner', takedown: 'TakeDown URL', url: 'URL Scanner', sandbox: 'URL Sandbox',
+//     fakeapp: 'Fake App Scanner', url: 'URL Scanner', sandbox: 'URL Sandbox',
 //   };
 // 
 //   const tabLabel = tabLabels[tab] || tab;
@@ -1574,7 +1574,7 @@ const NAV_CATEGORIES: NavCategory[] = [
       { id: 'dnsdump', label: 'DNS Dump', icon: Network, color: 'text-teal-400' },
       { id: 'url', label: 'URL Scanner', icon: ExternalLink, color: 'text-yellow-400' },
       { id: 'sandbox', label: 'URL Sandbox', icon: Zap, color: 'text-lime-400' },
-      { id: 'takedown', label: 'TakeDown URL', icon: Send, color: 'text-orange-400' },
+      
     ],
   },
   {
@@ -6824,26 +6824,7 @@ export default function OSINTPlatform() {
             </div>
           )}
 
-          {/* ==================== TAKE DOWN URL TAB ==================== */}
-          {activeTab === 'takedown' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  <Send className="w-7 h-7 text-orange-400" /> TakeDown URL
-                  <span className="text-sm font-normal text-gray-400">Cargue URLs maliciosas y repórtelas a servicios de seguridad</span>
-                </h2>
-                <button
-                  onClick={() => openPrintReport('takedown', apiData?.data, inputValue)}
-                  className="px-4 py-2 bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border border-orange-500/30 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors no-print"
-                  title="Generar informe imprimible HTML"
-                >
-                  <Printer className="w-4 h-4" />
-                  Informe Imprimible
-                </button>
-              </div>
-              <TakeDownPanel />
-            </div>
-          )}
+          
 
           {/* ==================== DNS DUMP TAB ==================== */}
           {activeTab === 'dnsdump' && (

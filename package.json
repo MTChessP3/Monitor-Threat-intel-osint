@@ -7,8 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:api": "node tests/api-tests.mjs",
-    "worker:takedown": "npx tsx src/scripts/runTakedownWorker.ts"
+    "test:api": "node tests/api-tests.mjs"
   },
   "dependencies": {
     "@devicefarmer/adbkit-apkreader": "^3.2.4",

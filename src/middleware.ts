@@ -5,7 +5,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow auth pages and API routes (they handle their own auth)
-  // Also allow public static assets and the TakeDown module
+  // Also allow public static assets
   if (
     pathname.startsWith('/auth') ||
     pathname.startsWith('/api/auth') ||
@@ -17,9 +17,7 @@ export async function middleware(request: NextRequest) {
     pathname === '/logo.png' ||
     pathname === '/logo-new.png' ||
     pathname === '/site.webmanifest' ||
-    /^\/favicon-\d+x\d+\.png$/.test(pathname) ||
-    pathname.startsWith('/takedown') ||
-    pathname === '/takedown'
+    /^\/favicon-\d+x\d+\.png$/.test(pathname)
   ) {
     return NextResponse.next();
   }
